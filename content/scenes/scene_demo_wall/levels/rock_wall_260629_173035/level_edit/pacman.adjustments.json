@@ -1,0 +1,18 @@
+{
+  "cartridge_id": "pacman",
+  "scene_level": "scene_demo_wall/rock_wall_260629_173035",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "background_view": "final",
+    "grid_scale": 1.2,
+    "invert_main_solid": false,
+    "players": 1,
+    "reference": true,
+    "reference_opacity": 0.3,
+    "show_debug_grid": false,
+    "skin": "classic",
+    "tunnel_fill": 1,
+    "wall_width": 1
+  },
+  "version": "1.0.0"
+}

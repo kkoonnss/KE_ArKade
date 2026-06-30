@@ -1,0 +1,26 @@
+{
+  "cartridge_id": "donkey_kong",
+  "scene_level": "scene_demo_wall/rock_wall_260629_173035",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "add_platforms": true,
+    "background_view": "semantic",
+    "barrel_ladder_chance": 0.3,
+    "bounds_clamp": true,
+    "climb_tolerance": 1,
+    "fire_enemy_count": 1,
+    "gravity": 1.8,
+    "hazard_leniency": 1,
+    "jump_height": 0.6,
+    "level_scale": 0.8,
+    "level_seed": 383,
+    "platform_snap": 1,
+    "platform_spacing": 0.06,
+    "platform_trim": 0.13,
+    "reference": true,
+    "reference_opacity": 0.4,
+    "show_debug_grid": true,
+    "slope_angle": 0.9
+  },
+  "version": "1.0.0"
+}

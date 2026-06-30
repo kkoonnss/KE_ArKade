@@ -1,0 +1,9 @@
+entry_point: main.gd
+game_name: Tron
+schema: cartridge
+splash_screen: splash.png
+status: playable
+thumbnail: thumbnail.png
+version: 1.0.1
+skins: [Classic Tron, Tron, Synthwave Grid]
+

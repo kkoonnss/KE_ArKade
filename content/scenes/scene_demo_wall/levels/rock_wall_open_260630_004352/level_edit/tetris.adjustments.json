@@ -1,0 +1,24 @@
+{
+  "cartridge_id": "tetris",
+  "scene_level": "scene_demo_wall/levels",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "background_view": "collision",
+    "bounds_clamp": true,
+    "density": 2,
+    "fill": false,
+    "grid_scale": 0.9,
+    "group_islands": 0,
+    "invert": false,
+    "organic_behavior": "stick",
+    "players": 2,
+    "reference": true,
+    "reference_opacity": 0.15,
+    "secondary_photo_mix": 0.18,
+    "show_debug_grid": true,
+    "show_outline": true,
+    "spawn_clearance": 0.3,
+    "wall_width": 1.4
+  },
+  "version": "1.0.0"
+}

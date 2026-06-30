@@ -1,0 +1,60 @@
+filters:
+  and:
+    - file.inFolder("30-tasks")
+    - 'stage == 6'
+views:
+  - type: table
+    name: Ready now
+    filters:
+      and:
+        - 'status == "ready"'
+    order:
+      - wave
+      - priority
+      - lane
+      - file.name
+  - type: table
+    name: Foundations (Wave 0)
+    filters:
+      and:
+        - 'wave == 0'
+    order:
+      - priority
+      - lane
+      - status
+      - owner_agent
+  - type: table
+    name: By archetype
+    filters:
+      and:
+        - 'lane == "cartridge"'
+    order:
+      - archetype
+      - wave
+      - status
+      - owner_agent
+  - type: table
+    name: By lane (parallel-safe)
+    order:
+      - lane
+      - status
+      - owner_agent
+      - wave
+  - type: table
+    name: In progress
+    filters:
+      and:
+        - 'status == "in_progress"'
+    order:
+      - lane
+      - owner_agent
+      - archetype
+  - type: table
+    name: Blocked (waiting on deps)
+    filters:
+      and:
+        - 'status == "blocked"'
+    order:
+      - wave
+      - archetype
+      - priority

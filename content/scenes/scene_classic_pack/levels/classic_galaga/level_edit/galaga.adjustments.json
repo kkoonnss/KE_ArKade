@@ -1,0 +1,15 @@
+{
+  "cartridge_id": "galaga",
+  "scene_level": "levels/classic_galaga",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "block_region": false,
+    "bounds_clamp": true,
+    "density": 1,
+    "invert": false,
+    "players": 1,
+    "reference": false,
+    "reference_opacity": 0.15
+  },
+  "version": "1.0.0"
+}

@@ -1,0 +1,21 @@
+{
+  "cartridge_id": "tetris",
+  "scene_level": "levels/classic_tetris",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "background_view": "photo",
+    "bounds_clamp": true,
+    "density": 1,
+    "fill": false,
+    "grid_scale": 1,
+    "invert": false,
+    "organic_behavior": "stick",
+    "reference": true,
+    "reference_opacity": 0.3,
+    "secondary_photo_mix": 0.18,
+    "show_debug_grid": true,
+    "show_outline": true,
+    "wall_width": 1
+  },
+  "version": "1.0.0"
+}

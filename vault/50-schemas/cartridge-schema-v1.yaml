@@ -1,0 +1,72 @@
+# ==========================================================================
+# KE_ArKade — Cartridge Schema v1  (FROZEN interface, instances vary)
+# ==========================================================================
+# A CARTRIDGE is the LOGIC IDENTITY: a packaged game that declares what
+# semantic layers + orientation + player counts it needs, then reads an
+# existing Scene+Level and populates itself with zero on-site authoring.
+#
+# CRITICAL ARCHITECTURE DECISION (locked 2026-06-19):
+#   Cartridges run as a SEPARATE PROCESS. The hub is a LAUNCHER, not a host.
+#   A hung/crashing game cannot take down the operator UI. The hub launches a
+#   game process, hands it a scene+level path + IPC handle, and can kill it.
+#   This is stronger than in-process .pck loading for unattended public installs.
+#
+# Real cartridges live at:
+#   content/cartridges/<cartridge_id>/manifest.yaml  (+ the game binary/pck)
+# ==========================================================================
+
+schema: cartridge
+version: 1.0.0
+status: frozen
+
+required:
+  - cartridge_id
+  - game_name
+  - version
+  - engine
+  - process_model
+  - entry
+  - requires
+
+# MVP ships TWO cartridges that read the SAME untouched map differently:
+#   - pacman ("Lumen Maze", Pac-Man-like): reads `path` as a nav graph.
+#   - tetris ("Neon Stack", Tetris-like): reads `solid` as the WELL/
+#     container boundary; pieces fall toward wall-down. Standout post-MVP:
+#     4-player Neon Stack on one mapped canvas.
+# Racing ("Trace", single-line vector track from an image) = Phase 2.
+example:
+  cartridge_id: pacman
+  game_name: "Lumen Maze"          # original name — homage mechanics, NOT protected IP
+  version: 0.1.0
+  engine: godot                    # godot | (future: raylib for Pi)
+  process_model: separate_process  # locked: hub launches as own OS process
+  entry:
+    # How the hub starts this game. Hub passes scene+level+IPC as args.
+    launch: "godot --path res://cartridges/pacman --"
+    args_contract: "--scene <scene_dir> --level <level_dir> --ipc <socket>"
+  requires:
+    orientation: [wall, floor]     # gravity-agnostic; runs on the wall MVP
+    semantic_classes: [path, spawn, pickup, goal]
+    derived_layers: [navgraph]
+    players: { min: 1, max: 4 }    # MVP may ship 1p; design supports up to 4
+  compatibility:
+    scene_schema: ">=1.0 <2.0"
+    level_schema: ">=1.0 <2.0"
+    palette: ">=1.0 <2.0"
+  operator_flags:
+    supports_keyboard: true        # keyboard = test path, ships day 1
+    supports_controllers: true
+    supports_touch_ui: false
+
+# ---- The IPC contract every cartridge must honor (see INTEGRATION_CONTRACT) -
+ipc:
+  transport: localhost_socket      # newline-delimited JSON, v1
+  hub_to_game:  [load, pause, resume, quit, blank]
+  game_to_hub:  [ready, score, player_joined, error, heartbeat]
+  heartbeat_interval_ms: 1000      # hub kills a game that misses 3 beats
+
+rules:
+  - a cartridge MUST run as its own process and exit cleanly on `quit`
+  - a cartridge MUST emit `heartbeat`; silence => hub force-kills and restores UI
+  - a cartridge MUST NOT write outside content/cartridges/<id>/ and its save dir
+  - a cartridge declares requirements; the HUB decides if a level satisfies them

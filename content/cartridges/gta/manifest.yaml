@@ -1,0 +1,15 @@
+entry_point: main.gd
+game_name: "GTA"
+schema: cartridge
+splash_screen: splash.png
+status: playable
+thumbnail: thumbnail.png
+version: 1.0.0
+requires:
+  orientation: [wall, floor]
+  semantic_classes: [path, solid, spawn, goal, pickup, tracking]
+operator_flags:
+  supports_keyboard: true
+  supports_controllers: true
+  supports_touch_ui: false
+skins: [GTA, Neon City, Classic Topdown]

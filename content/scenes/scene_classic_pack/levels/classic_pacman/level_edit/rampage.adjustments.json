@@ -1,0 +1,15 @@
+{
+  "cartridge_id": "rampage",
+  "scene_level": "levels/classic_pacman",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "block_size": 1.1,
+    "bounds_clamp": true,
+    "density": 1,
+    "invert": false,
+    "reference": false,
+    "reference_opacity": 0.2,
+    "smooth": false
+  },
+  "version": "1.0.0"
+}

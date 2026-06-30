@@ -1,0 +1,1212 @@
+extends Node2D
+
+var tab_menu = null
+
+var ipc_socket: StreamPeerTCP = null
+var scene_dir: String = ""
+var level_dir: String = ""
+var ipc_port: int = 0
+var ipc_host: String = "127.0.0.1"
+
+var heartbeat_timer: float = 0.0
+var read_buffer: String = ""
+
+# Navgraph data
+var graph_nodes = []
+var graph_edges = []
+var players = []
+var pickups = []
+
+var current_node_id = ""
+var target_node_id = ""
+var player_speed = 200.0
+var score = 0
+var active_particles = []
+
+var game_state = "playing" # playing, game_over, win, respawning
+var lives = 3
+var enemies = []
+var original_player_spawns = []
+var original_enemy_spawns = []
+var original_pickups = []
+var player_last_dir = Vector2.RIGHT
+var frightened_timer: float = 0.0
+var frightened_duration: float = 7.5
+var frightened_flash_window: float = 2.0
+var frightened_chain_count: int = 0
+
+
+# Reference Background
+var background_texture: Texture2D = null
+var semantic_texture: Texture2D = null
+var background_opacity: float = 0.15
+var show_background: bool = false
+var reference_opacity_step: float = 0.05
+var background_view: String = "final"
+var show_debug_grid: bool = false
+
+# Visual Skin
+var current_skin: String = "classic" # "classic" or "neon"
+var has_sent_ready: bool = false
+var screenshot_path: String = ""
+var map_w: float = 800.0
+var map_h: float = 600.0
+var scale_factor: float = 1.0
+var offset_x: float = 0.0
+var offset_y: float = 0.0
+var grid_cells = []
+var grid_cell_size_base: float = 32.0
+var grid_cell_size: float = 32.0
+var grid_cols: int = 0
+var grid_rows: int = 0
+var grid_origin: Vector2 = Vector2.ZERO
+var grid_size_scale: float = 1.0
+var classic_wall_width_scale: float = 1.0
+var tunnel_fill: float = 0.0
+var invert_main_solid: bool = false
+var level_name: String = "PAC-MAN"
+var maze_bounds := Rect2(0, 0, 800, 600)
+var walkable_cells := {}
+var grid_min := Vector2i.ZERO
+var grid_max := Vector2i.ZERO
+var play_rect := Rect2(0, 0, 800, 600)
+var use_map_space_layout := false
+
+const PACMAN_GHOST_COLORS = [
+    Color(1.0, 0.16, 0.2),
+    Color(1.0, 0.45, 0.78),
+    Color(0.2, 0.92, 1.0),
+    Color(1.0, 0.67, 0.18)
+]
+
+func _ready():
+    var args = OS.get_cmdline_args()
+    args.append_array(OS.get_cmdline_user_args())
+    print("Cartridge _ready called. Args: ", args)
+    var i = 0
+    while i < args.size():
+        if args[i] == "--scene" and i + 1 < args.size():
+            scene_dir = args[i+1]
+            i += 1
+        elif args[i] == "--level" and i + 1 < args.size():
+            level_dir = args[i+1]
+            i += 1
+        elif args[i] == "--ipc" and i + 1 < args.size():
+            var ipc_str = args[i+1]
+            if ":" in ipc_str:
+                var parts = ipc_str.split(":")
+                ipc_host = parts[0]
+                ipc_port = parts[1].to_int()
+            else:
+                ipc_port = ipc_str.to_int()
+            i += 1
+        elif args[i] == "--screenshot" and i + 1 < args.size():
+            screenshot_path = args[i+1]
+            i += 1
+        elif args[i] == "--skin" and i + 1 < args.size():
+            var skin_arg = args[i+1]
+            if skin_arg == "Classic Pac-Man":
+                current_skin = "classic"
+            else:
+                current_skin = "neon"
+            i += 1
+        i += 1
+
+    print("Parsed level_dir: ", level_dir, " ipc_port: ", ipc_port, " screenshot_path: ", screenshot_path)
+
+    if ipc_port > 0:
+        ipc_socket = StreamPeerTCP.new()
+        ipc_socket.connect_to_host(ipc_host, ipc_port)
+    
+    send_ipc_message({"type": "ready"})
+    var SL = load(_repo_root().path_join("app/shared/shared_loader.gd"))
+    tab_menu = SL.load_tab_menu_script().new()
+    add_child(tab_menu)
+    tab_menu.register_knob_int("players", "Players", 1, 1, 4, 1, "Gameplay")
+    tab_menu.register_knob_enum("skin", "Skin", "classic", ["classic", "neon"], "Gameplay")
+    tab_menu.register_knob_enum("background_view", "Background View", "final", ["final", "photo", "semantic", "secondary"], "Preview")
+    tab_menu.register_knob_bool("reference", "Background Layer", false, "Preview")
+    tab_menu.register_knob_float("reference_opacity", "Background Opacity", 0.15, 0.0, 1.0, 0.05, "Preview")
+    tab_menu.register_knob_bool("show_debug_grid", "Scale Grid Overlay", false, "Preview")
+    tab_menu.register_knob_float("grid_scale", "Grid Resolution", 1.0, 0.6, 1.6, 0.05, "Level")
+    tab_menu.register_knob_float("wall_width", "Wall Width", 1.0, 0.55, 1.65, 0.05, "Level")
+    tab_menu.register_knob_float("tunnel_fill", "Tunnel Fill", 0.0, 0.0, 1.0, 0.05, "Level")
+    tab_menu.register_knob_bool("invert_main_solid", "Invert Main Solid", false, "Level")
+    tab_menu.connect("knob_changed", Callable(self, "_on_knob_changed"))
+    tab_menu.connect("action_triggered", Callable(self, "_on_menu_action"))
+    tab_menu.connect("menu_closed", Callable(self, "_on_menu_closed"))
+    
+    tab_menu.setup("pacman", level_dir, level_name)
+    _apply_settings_from_menu()
+    
+    _load_grid_metadata()
+    load_background()
+    load_level()
+    
+    if screenshot_path != "":
+        await get_tree().create_timer(1.0).timeout
+        var img = get_viewport().get_texture().get_image()
+        img.save_png(screenshot_path)
+        print("Cartridge screenshot saved to: ", screenshot_path)
+        get_tree().quit()
+
+func _input(event):
+    if game_state in ["game_over", "win"]:
+        if (event is InputEventKey and event.pressed and event.keycode == KEY_ENTER) or \
+           (event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_START):
+            _restart_game()
+            return
+            
+func _apply_settings_from_menu():
+    selected_players = tab_menu.get_knob_value("players")
+    current_skin = tab_menu.get_knob_value("skin")
+    background_view = str(tab_menu.get_knob_value("background_view"))
+    show_background = tab_menu.get_knob_value("reference")
+    background_opacity = tab_menu.get_knob_value("reference_opacity")
+    show_debug_grid = bool(tab_menu.get_knob_value("show_debug_grid"))
+    grid_size_scale = tab_menu.get_knob_value("grid_scale")
+    classic_wall_width_scale = tab_menu.get_knob_value("wall_width")
+    tunnel_fill = float(tab_menu.get_knob_value("tunnel_fill"))
+    invert_main_solid = tab_menu.get_knob_value("invert_main_solid")
+
+func _on_knob_changed(knob_id: String, value):
+    _apply_settings_from_menu()
+    if knob_id in ["grid_scale", "invert_main_solid", "tunnel_fill"]:
+        load_level()
+    if knob_id in ["background_view", "reference", "reference_opacity", "show_debug_grid"]:
+        _update_view_transform()
+    queue_redraw()
+
+func _on_menu_action(action_id: String):
+    if action_id == "start":
+        if game_state in ["game_over", "win"]:
+            _restart_game()
+        else:
+            game_state = "playing"
+
+func _on_menu_closed():
+    pass
+
+func load_background():
+    background_texture = null
+    semantic_texture = null
+    map_w = 800.0
+    map_h = 600.0
+    if level_dir == "":
+        _update_view_transform()
+        return
+    var yaml_path = level_dir.path_join("level.yaml")
+    if FileAccess.file_exists(yaml_path):
+        var data = parse_simple_yaml(yaml_path)
+        var bg_file = data.get("reference_image", "")
+        if bg_file != "":
+            var bg_path = level_dir.path_join(bg_file)
+            if FileAccess.file_exists(bg_path):
+                var img = Image.load_from_file(bg_path)
+                if img:
+                    background_texture = ImageTexture.create_from_image(img)
+                    map_w = img.get_width()
+                    map_h = img.get_height()
+        var semantic_file = data.get("semantic_map", "")
+        if semantic_file != "":
+            var semantic_path = level_dir.path_join(semantic_file)
+            if FileAccess.file_exists(semantic_path):
+                var semantic_img = Image.load_from_file(semantic_path)
+                if semantic_img:
+                    semantic_texture = ImageTexture.create_from_image(semantic_img)
+                    if background_texture == null:
+                        map_w = semantic_img.get_width()
+                        map_h = semantic_img.get_height()
+    _load_grid_metadata()
+    _update_view_transform()
+
+func parse_simple_yaml(path: String) -> Dictionary:
+    var data = {}
+    var file = FileAccess.open(path, FileAccess.READ)
+    if not file:
+        return data
+    while not file.eof_reached():
+        var line = file.get_line().strip_edges()
+        if line.begins_with("#") or line == "":
+            continue
+        if ":" in line:
+            var parts = line.split(":", true, 1)
+            var key = parts[0].strip_edges()
+            var val = parts[1].strip_edges()
+            if (val.begins_with("\"") and val.ends_with("\"")) or (val.begins_with("'") and val.ends_with("'")):
+                val = val.substr(1, val.length() - 2)
+            data[key] = val
+    return data
+
+
+func _process(delta):
+    menu_axis_cooldown = max(0.0, menu_axis_cooldown - delta)
+    if frightened_timer > 0.0:
+        frightened_timer = max(0.0, frightened_timer - delta)
+        if frightened_timer <= 0.0:
+            frightened_chain_count = 0
+    _process_ipc(delta)
+    if visible:
+        if tab_menu.overlay_mode == "" and game_state in ["playing", "respawning"]:
+            _process_player(delta)
+            if game_state == "playing":
+                _process_enemies(delta)
+        _process_particles(delta)
+        queue_redraw()
+
+func _process_ipc(delta):
+    if ipc_socket:
+        ipc_socket.poll()
+        if ipc_socket.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+            if not has_sent_ready:
+                has_sent_ready = true
+                send_ipc_message({"type": "ready"})
+            var bytes_available = ipc_socket.get_available_bytes()
+            if bytes_available > 0:
+                var data = ipc_socket.get_string(bytes_available)
+                read_buffer += data
+                var lines = read_buffer.split("\n")
+                if lines.size() > 1:
+                    for j in range(lines.size() - 1):
+                        var line = lines[j].strip_edges()
+                        if line.length() > 0:
+                            handle_ipc_message(line)
+                    read_buffer = lines[lines.size() - 1]
+            
+            heartbeat_timer += delta
+            if heartbeat_timer >= 1.0:
+                heartbeat_timer = 0.0
+                send_ipc_message({"type": "heartbeat"})
+
+func send_ipc_message(msg: Dictionary):
+    if ipc_socket and ipc_socket.get_status() == StreamPeerTCP.STATUS_CONNECTED:
+        var json_str = JSON.stringify(msg) + "\n"
+        ipc_socket.put_data(json_str.to_utf8_buffer())
+
+func handle_ipc_message(msg_str: String):
+    var json = JSON.new()
+    var err = json.parse(msg_str)
+    if err == OK:
+        var msg = json.data
+        if typeof(msg) == TYPE_DICTIONARY:
+            var msg_type = msg.get("type", msg.get("command", ""))
+            if msg_type == "quit":
+                get_tree().quit()
+            elif msg_type == "blank":
+                visible = false
+            elif msg_type == "pause":
+                visible = false
+            elif msg_type == "resume":
+                visible = true
+            elif msg_type == "load":
+                visible = true
+                level_adjustments_loaded = false
+                load_level()
+                load_background()
+                _load_level_adjustments()
+                _update_menu_overlay()
+
+func load_level():
+    if level_dir == "":
+        return
+    _load_grid_metadata()
+    original_player_spawns.clear()
+    original_enemy_spawns.clear()
+    original_pickups.clear()
+    var level_info = parse_simple_yaml(level_dir.path_join("level.yaml"))
+    level_name = str(level_info.get("name", "Pac-Man")).to_upper()
+        
+    var SL = load(_repo_root().path_join("app/shared/shared_loader.gd"))
+    var layout = _build_scaled_layout_from_grid()
+    if layout.is_empty():
+        var adapter = SL.load_adapter_script("maze").new()
+        var knobs = {
+            "grid_size_scale": grid_size_scale,
+            "invert_main_solid": invert_main_solid
+        }
+        layout = adapter.interpret(level_dir, {}, knobs)
+        use_map_space_layout = false
+    
+    grid_cell_size = layout.get("grid_cell_size", 32.0 * grid_size_scale)
+    var resolution_ratio = _resolution_ratio()
+    player_speed = 200.0 * resolution_ratio * resolution_ratio
+    graph_nodes = layout.get("nodes", [])
+    graph_edges = layout.get("edges", [])
+    _rebuild_walkable_cells()
+    _rebuild_maze_bounds()
+    _update_view_transform()
+    
+    players.clear()
+    for p in layout.get("players", []):
+        var p_dict = {"x": p["x"], "y": p["y"], "current_node_id": p.get("id", ""), "target_node_id": "", "alive": true}
+        players.append(p_dict)
+        original_player_spawns.append({"x": p["x"], "y": p["y"], "id": p.get("id", "")})
+        
+    enemies.clear()
+    for e in layout.get("enemies", []):
+        var e_dict = {"x": e["x"], "y": e["y"], "current_node_id": e.get("id", ""), "target_node_id": "", "prev_node_id": "", "speed": 140.0 * resolution_ratio * resolution_ratio}
+        enemies.append(e_dict)
+        original_enemy_spawns.append({"x": e["x"], "y": e["y"], "id": e.get("id", "")})
+        
+    pickups.clear()
+    for pk in layout.get("pickups", []):
+        pickups.append({"x": pk["x"], "y": pk["y"], "power": pk.get("power", false)})
+
+func _rebuild_walkable_cells():
+    walkable_cells.clear()
+    var first = true
+    for n in graph_nodes:
+        if not n.has("gx") or not n.has("gy"):
+            continue
+        var gx = int(n.get("gx", 0))
+        var gy = int(n.get("gy", 0))
+        walkable_cells["%d:%d" % [gx, gy]] = true
+        if first:
+            grid_min = Vector2i(gx, gy)
+            grid_max = Vector2i(gx, gy)
+            first = false
+        else:
+            grid_min.x = min(grid_min.x, gx)
+            grid_min.y = min(grid_min.y, gy)
+            grid_max.x = max(grid_max.x, gx)
+            grid_max.y = max(grid_max.y, gy)
+
+func _rebuild_maze_bounds():
+    if graph_nodes.is_empty():
+        maze_bounds = Rect2(0, 0, 800, 600)
+        return
+    var min_x = INF
+    var min_y = INF
+    var max_x = -INF
+    var max_y = -INF
+    for n in graph_nodes:
+        var px = float(n.get("x", 0.0))
+        var py = float(n.get("y", 0.0))
+        min_x = min(min_x, px)
+        min_y = min(min_y, py)
+        max_x = max(max_x, px)
+        max_y = max(max_y, py)
+    var pad = max(32.0, grid_cell_size * 1.25)
+    maze_bounds = Rect2(min_x - pad, min_y - pad, (max_x - min_x) + pad * 2.0, (max_y - min_y) + pad * 2.0)
+
+func _load_grid_metadata():
+    grid_cols = 0
+    grid_rows = 0
+    grid_cell_size_base = 32.0
+    grid_cells = []
+    play_rect = Rect2(0, 0, map_w, map_h)
+    if level_dir == "":
+        return
+    var grid_path = level_dir.path_join("derived").path_join("grid.json")
+    if not FileAccess.file_exists(grid_path):
+        return
+    var file = FileAccess.open(grid_path, FileAccess.READ)
+    if file == null:
+        return
+    var json = JSON.new()
+    if json.parse(file.get_as_text()) != OK:
+        return
+    var data = json.data
+    if typeof(data) != TYPE_DICTIONARY:
+        return
+    grid_cell_size_base = float(data.get("cell_px", 32.0))
+    grid_cells = data.get("cells", [])
+    grid_rows = grid_cells.size()
+    if grid_rows > 0:
+        grid_cols = grid_cells[0].size()
+
+func _build_scaled_layout_from_grid() -> Dictionary:
+    if grid_rows <= 0 or grid_cols <= 0 or grid_cells.is_empty():
+        return {}
+    use_map_space_layout = true
+    var target_cols = max(4, int(round(float(grid_cols) / max(0.2, grid_size_scale))))
+    var target_rows = max(4, int(round(float(grid_rows) / max(0.2, grid_size_scale))))
+    var frame_rect = _map_rect()
+    var cell_px = min(frame_rect.size.x / float(target_cols), frame_rect.size.y / float(target_rows))
+    var total_w = cell_px * float(target_cols)
+    var total_h = cell_px * float(target_rows)
+    grid_origin = frame_rect.position + Vector2((frame_rect.size.x - total_w) * 0.5, (frame_rect.size.y - total_h) * 0.5)
+    var layout = {
+        "nodes": [],
+        "edges": [],
+        "players": [],
+        "enemies": [],
+        "pickups": [],
+        "grid_cell_size": cell_px
+    }
+    var source_spawn := Vector2i(-1, -1)
+    for sy in range(grid_rows):
+        for sx in range(grid_cols):
+            if int(grid_cells[sy][sx]) == 5:
+                source_spawn = Vector2i(sx, sy)
+                break
+        if source_spawn.x >= 0:
+            break
+    var node_map = {}
+    for gy in range(target_rows):
+        var sy = clampi(int(floor((float(gy) + 0.5) * float(grid_rows) / float(target_rows))), 0, grid_rows - 1)
+        for gx in range(target_cols):
+            var sx = clampi(int(floor((float(gx) + 0.5) * float(grid_cols) / float(target_cols))), 0, grid_cols - 1)
+            var cid = int(grid_cells[sy][sx])
+            var is_solid = cid == 1
+            if invert_main_solid:
+                is_solid = not (cid in [2, 3, 5, 6, 7]) and cid != 1
+            if is_solid:
+                continue
+            var px = grid_origin.x + gx * cell_px + cell_px * 0.5
+            var py = grid_origin.y + gy * cell_px + cell_px * 0.5
+            var node_id = "%d_%d" % [gx, gy]
+            var node = {
+                "id": node_id,
+                "x": px,
+                "y": py,
+                "gx": gx,
+                "gy": gy,
+                "class_id": cid,
+                "type": "path"
+            }
+            layout["nodes"].append(node)
+            node_map["%d:%d" % [gx, gy]] = node
+            if cid in [2, 7] or (cid in [0, 8, 9] and gx % 2 == 0 and gy % 2 == 0):
+                layout["pickups"].append({"x": px, "y": py})
+    var spawn_gx = -1
+    var spawn_gy = -1
+    if source_spawn.x >= 0:
+        spawn_gx = clampi(int(round((float(source_spawn.x) + 0.5) * float(target_cols) / float(grid_cols) - 0.5)), 0, target_cols - 1)
+        spawn_gy = clampi(int(round((float(source_spawn.y) + 0.5) * float(target_rows) / float(grid_rows) - 0.5)), 0, target_rows - 1)
+    _apply_tunnel_fill_mask(layout, node_map, target_cols, target_rows, spawn_gx if source_spawn.x >= 0 else -1, spawn_gy if source_spawn.x >= 0 else -1)
+    node_map.clear()
+    for n in layout["nodes"]:
+        node_map["%d:%d" % [int(n["gx"]), int(n["gy"])]] = n
+    if source_spawn.x >= 0:
+        var remap_spawn_key = "%d:%d" % [spawn_gx, spawn_gy]
+        if node_map.has(remap_spawn_key):
+            var spawn_node = node_map[remap_spawn_key]
+            layout["players"].append({"x": spawn_node["x"], "y": spawn_node["y"], "id": spawn_node["id"]})
+    if layout["players"].is_empty() and not layout["nodes"].is_empty():
+        var first = layout["nodes"][0]
+        layout["players"].append({"x": first["x"], "y": first["y"], "id": first["id"]})
+    layout["edges"].clear()
+    for gy in range(target_rows):
+        for gx in range(target_cols):
+            var key = "%d:%d" % [gx, gy]
+            if not node_map.has(key):
+                continue
+            for dir in [Vector2i(1, 0), Vector2i(0, 1)]:
+                var other_key = "%d:%d" % [gx + dir.x, gy + dir.y]
+                if node_map.has(other_key):
+                    layout["edges"].append({
+                        "source": node_map[key]["id"],
+                        "target": node_map[other_key]["id"],
+                        "weight": cell_px
+                    })
+    if not layout["nodes"].is_empty():
+        var player_pos = Vector2(layout["players"][0]["x"], layout["players"][0]["y"])
+        var far_nodes = []
+        for n in layout["nodes"]:
+            if Vector2(n["x"], n["y"]).distance_to(player_pos) > cell_px * 6.0:
+                far_nodes.append(n)
+        if far_nodes.is_empty():
+            far_nodes = layout["nodes"]
+        for i in range(4):
+            var n = far_nodes[(i * max(1, far_nodes.size() / 4)) % far_nodes.size()]
+            layout["enemies"].append({"x": n["x"], "y": n["y"], "id": n["id"]})
+    _assign_power_pellets(layout)
+    return layout
+
+func _apply_tunnel_fill_mask(layout: Dictionary, node_map: Dictionary, target_cols: int, target_rows: int, spawn_gx: int, spawn_gy: int):
+    if tunnel_fill <= 0.01:
+        return
+    var keep = _build_tunnel_fill_keep(node_map, target_cols, target_rows, spawn_gx, spawn_gy)
+    if keep.is_empty():
+        return
+    var filtered_nodes = []
+    for n in layout["nodes"]:
+        var key = "%d:%d" % [int(n["gx"]), int(n["gy"])]
+        if keep.has(key):
+            filtered_nodes.append(n)
+    layout["nodes"] = filtered_nodes
+    var filtered_pickups = []
+    for p in layout["pickups"]:
+        var best_key = _nearest_layout_key(float(p["x"]), float(p["y"]), node_map)
+        if best_key != "" and keep.has(best_key):
+            filtered_pickups.append(p)
+    layout["pickups"] = filtered_pickups
+
+func _build_tunnel_fill_keep(node_map: Dictionary, target_cols: int, target_rows: int, spawn_gx: int, spawn_gy: int) -> Dictionary:
+    var open := {}
+    for key in node_map.keys():
+        open[str(key)] = true
+    if open.is_empty():
+        return {}
+    var protected := {}
+    if spawn_gx >= 0 and spawn_gy >= 0:
+        for oy in range(-1, 2):
+            for ox in range(-1, 2):
+                protected["%d:%d" % [spawn_gx + ox, spawn_gy + oy]] = true
+    var original_count = open.size()
+    var max_remove = int(round(float(original_count) * clamp(tunnel_fill * 0.72, 0.0, 0.72)))
+    var removed = 0
+    var pass_count = 0
+    while removed < max_remove and pass_count < 24:
+        var candidates = []
+        for key in open.keys():
+            if protected.has(key):
+                continue
+            var cell = _key_to_cell(str(key))
+            var neighbors = _open_neighbors(cell.x, cell.y, open, "")
+            var degree = neighbors.size()
+            if degree < 2:
+                continue
+            var left = open.has("%d:%d" % [cell.x - 1, cell.y])
+            var right = open.has("%d:%d" % [cell.x + 1, cell.y])
+            var up = open.has("%d:%d" % [cell.x, cell.y - 1])
+            var down = open.has("%d:%d" % [cell.x, cell.y + 1])
+            var in_block = _open_block_count(cell.x, cell.y, open) > 0
+            if not (in_block or (left and right) or (up and down) or degree >= 3):
+                continue
+            var score = 0
+            if in_block:
+                score += 6
+            if left and right:
+                score += 3
+            if up and down:
+                score += 3
+            score += degree
+            score += ((cell.x + cell.y + pass_count) % 2)
+            candidates.append({"cell": cell, "score": score})
+        if candidates.is_empty():
+            break
+        candidates.sort_custom(func(a, b):
+            if int(a["score"]) == int(b["score"]):
+                var ac: Vector2i = a["cell"]
+                var bc: Vector2i = b["cell"]
+                if ac.y == bc.y:
+                    return ac.x < bc.x
+                return ac.y < bc.y
+            return int(a["score"]) > int(b["score"])
+        )
+        var changed = false
+        for item in candidates:
+            if removed >= max_remove:
+                break
+            var cell: Vector2i = item["cell"]
+            var key = "%d:%d" % [cell.x, cell.y]
+            if not open.has(key) or protected.has(key):
+                continue
+            if not _can_remove_tunnel_cell(cell.x, cell.y, open):
+                continue
+            open.erase(key)
+            removed += 1
+            changed = true
+        if not changed:
+            break
+        pass_count += 1
+    return open
+
+func _nearest_layout_key(px: float, py: float, node_map: Dictionary) -> String:
+    var best_key = ""
+    var best_d = INF
+    for key in node_map.keys():
+        var n = node_map[key]
+        var d = Vector2(float(n["x"]), float(n["y"])).distance_squared_to(Vector2(px, py))
+        if d < best_d:
+            best_d = d
+            best_key = str(key)
+    return best_key
+
+func _key_to_cell(key: String) -> Vector2i:
+    var parts = key.split(":")
+    if parts.size() != 2:
+        return Vector2i.ZERO
+    return Vector2i(int(parts[0]), int(parts[1]))
+
+func _open_neighbors(gx: int, gy: int, open: Dictionary, skip_key: String) -> Array:
+    var out = []
+    for dir in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+        var nx = gx + dir.x
+        var ny = gy + dir.y
+        var key = "%d:%d" % [nx, ny]
+        if key == skip_key:
+            continue
+        if open.has(key):
+            out.append(Vector2i(nx, ny))
+    return out
+
+func _open_block_count(gx: int, gy: int, open: Dictionary) -> int:
+    var count = 0
+    for oy in [-1, 0]:
+        for ox in [-1, 0]:
+            var a = "%d:%d" % [gx + ox, gy + oy]
+            var b = "%d:%d" % [gx + ox + 1, gy + oy]
+            var c = "%d:%d" % [gx + ox, gy + oy + 1]
+            var d = "%d:%d" % [gx + ox + 1, gy + oy + 1]
+            if open.has(a) and open.has(b) and open.has(c) and open.has(d):
+                count += 1
+    return count
+
+func _can_remove_tunnel_cell(gx: int, gy: int, open: Dictionary) -> bool:
+    var key = "%d:%d" % [gx, gy]
+    var neighbors = _open_neighbors(gx, gy, open, key)
+    if neighbors.size() < 2:
+        return false
+    var start: Vector2i = neighbors[0]
+    var queue = [start]
+    var visited := {}
+    visited["%d:%d" % [start.x, start.y]] = true
+    while not queue.is_empty():
+        var cur: Vector2i = queue.pop_front()
+        for next in _open_neighbors(cur.x, cur.y, open, key):
+            var next_key = "%d:%d" % [next.x, next.y]
+            if visited.has(next_key):
+                continue
+            visited[next_key] = true
+            queue.append(next)
+    for n in neighbors:
+        if not visited.has("%d:%d" % [n.x, n.y]):
+            return false
+    return true
+
+func _assign_power_pellets(layout: Dictionary):
+    var all_pickups = layout.get("pickups", [])
+    if all_pickups.is_empty():
+        return
+    var min_x = INF
+    var min_y = INF
+    var max_x = -INF
+    var max_y = -INF
+    for p in all_pickups:
+        min_x = min(min_x, float(p["x"]))
+        min_y = min(min_y, float(p["y"]))
+        max_x = max(max_x, float(p["x"]))
+        max_y = max(max_y, float(p["y"]))
+    var corners = [Vector2(min_x, min_y), Vector2(max_x, min_y), Vector2(min_x, max_y), Vector2(max_x, max_y)]
+    var used = {}
+    for corner in corners:
+        var best = -1
+        var best_d = INF
+        for idx in range(all_pickups.size()):
+            if used.has(idx):
+                continue
+            var d = Vector2(float(all_pickups[idx]["x"]), float(all_pickups[idx]["y"])).distance_squared_to(corner)
+            if d < best_d:
+                best_d = d
+                best = idx
+        if best != -1:
+            all_pickups[best]["power"] = true
+            used[best] = true
+
+func _map_rect() -> Rect2:
+    return Rect2(0, 0, map_w, map_h)
+
+func _content_rect() -> Rect2:
+    if background_texture != null or semantic_texture != null:
+        return _map_rect()
+    return maze_bounds
+
+func _update_view_transform():
+    var viewport = get_viewport_rect().size
+    if viewport.x <= 0.0 or viewport.y <= 0.0:
+        scale_factor = 1.0
+        offset_x = 0.0
+        offset_y = 0.0
+        return
+    var content = _content_rect()
+    var pad = 56.0
+    var fit_w = max(1.0, viewport.x - pad * 2.0)
+    var fit_h = max(1.0, viewport.y - pad * 2.0)
+    var content_w = max(1.0, content.size.x)
+    var content_h = max(1.0, content.size.y)
+    scale_factor = min(fit_w / content_w, fit_h / content_h)
+    offset_x = pad + (fit_w - content_w * scale_factor) * 0.5 - content.position.x * scale_factor
+    offset_y = pad + (fit_h - content_h * scale_factor) * 0.5 - content.position.y * scale_factor
+
+func _world_to_map(pos: Vector2) -> Vector2:
+    if use_map_space_layout:
+        return pos
+    if grid_cols > 0 and grid_rows > 0 and map_w > 0.0 and map_h > 0.0 and grid_cell_size > 0.0:
+        var total_w = float(grid_cols) * grid_cell_size
+        var total_h = float(grid_rows) * grid_cell_size
+        if total_w > 0.0 and total_h > 0.0:
+            return Vector2((pos.x / total_w) * map_w, (pos.y / total_h) * map_h)
+    return pos
+
+func _map_to_screen(pos: Vector2) -> Vector2:
+    return Vector2(pos.x * scale_factor + offset_x, pos.y * scale_factor + offset_y)
+
+func _world_to_screen(pos: Vector2) -> Vector2:
+    return _map_to_screen(_world_to_map(pos))
+
+func _map_rect_to_screen(rect: Rect2) -> Rect2:
+    return Rect2(_map_to_screen(rect.position), rect.size * scale_factor)
+
+func _world_rect_to_screen(rect: Rect2) -> Rect2:
+    var mapped_pos = _world_to_map(rect.position)
+    var mapped_size = rect.size
+    if grid_cols > 0 and grid_rows > 0 and map_w > 0.0 and map_h > 0.0 and grid_cell_size > 0.0:
+        var total_w = float(grid_cols) * grid_cell_size
+        var total_h = float(grid_rows) * grid_cell_size
+        if total_w > 0.0 and total_h > 0.0:
+            mapped_size = Vector2((rect.size.x / total_w) * map_w, (rect.size.y / total_h) * map_h)
+    return Rect2(_map_to_screen(mapped_pos), mapped_size * scale_factor)
+
+func _scaled_radius(radius: float) -> float:
+    return max(1.0, radius * scale_factor)
+
+func _scaled_width(width: float) -> float:
+    return max(1.0, width * scale_factor)
+
+func _resolution_ratio() -> float:
+    return grid_cell_size / max(1.0, grid_cell_size_base)
+
+func _active_background_texture() -> Texture2D:
+    if background_view == "semantic" and semantic_texture != null:
+        return semantic_texture
+    if background_view == "secondary" and semantic_texture != null:
+        return semantic_texture
+    if background_view == "photo" and background_texture != null:
+        return background_texture
+    return background_texture if background_texture != null else semantic_texture
+
+func _draw_alignment_grid():
+    var content = _content_rect()
+    var grid_color = Color(0.6, 0.68, 0.74, 0.14)
+    var step = max(16.0, map_w / max(1, grid_cols)) if grid_cols > 0 and map_w > 0.0 else max(32.0, grid_cell_size)
+    var start_x = floor(content.position.x / step) * step
+    var end_x = content.position.x + content.size.x
+    var start_y = floor(content.position.y / step) * step
+    var end_y = content.position.y + content.size.y
+    var x = start_x
+    while x <= end_x:
+        var a = _map_to_screen(Vector2(x, content.position.y)) if content == _map_rect() else _world_to_screen(Vector2(x, content.position.y))
+        var b = _map_to_screen(Vector2(x, end_y)) if content == _map_rect() else _world_to_screen(Vector2(x, end_y))
+        draw_line(a, b, grid_color, 1.0, true)
+        x += step
+    var y = start_y
+    while y <= end_y:
+        var c = _map_to_screen(Vector2(content.position.x, y)) if content == _map_rect() else _world_to_screen(Vector2(content.position.x, y))
+        var d = _map_to_screen(Vector2(end_x, y)) if content == _map_rect() else _world_to_screen(Vector2(end_x, y))
+        draw_line(c, d, grid_color, 1.0, true)
+        y += step
+
+func _repo_root() -> String:
+    var d = ProjectSettings.globalize_path("res://").replace("\\","/").simplify_path()
+    for _i in range(10):
+        if DirAccess.dir_exists_absolute(d.path_join("app/shared")): return d
+        var p = d.get_base_dir()
+        if p == d or p == "": break
+        d = p
+    return ""
+
+var selected_players = 1
+var menu_axis_cooldown = 0.0
+var level_adjustments_loaded = false
+
+
+
+func _get_node(node_id: String):
+    for n in graph_nodes:
+        if str(n.get("id", "")) == str(node_id):
+            return n
+    return null
+
+func _get_best_neighbor(node_id: String, dir: Vector2) -> String:
+    var best_id = ""
+    var best_dot = -1.0
+    for edge in graph_edges:
+        var other_id = ""
+        if str(edge.get("source", "")) == str(node_id):
+            other_id = str(edge.get("target", ""))
+        elif str(edge.get("target", "")) == str(node_id):
+            other_id = str(edge.get("source", ""))
+            
+        if other_id != "":
+            var other_node = _get_node(other_id)
+            var current_node = _get_node(node_id)
+            if other_node and current_node:
+                var npos = Vector2(other_node.get("x", 0), other_node.get("y", 0))
+                var mpos = Vector2(current_node.get("x", 0), current_node.get("y", 0))
+                var to_node = (npos - mpos).normalized()
+                var d = to_node.dot(dir)
+                if d > best_dot and d > 0.5:
+                    best_dot = d
+                    best_id = other_id
+    return best_id
+
+func spawn_particle_burst(pos: Vector2, color: Color, count: int):
+    for i in range(count):
+        active_particles.append({
+            "pos": pos,
+            "vel": Vector2.RIGHT.rotated(randf() * TAU) * randf_range(24.0, 110.0),
+            "life": randf_range(0.25, 0.55),
+            "max_life": 0.55,
+            "color": color,
+            "radius": randf_range(1.5, 4.0)
+        })
+
+func _draw():
+    _update_view_transform()
+    draw_rect(get_viewport_rect(), Color.BLACK, true)
+    var content_rect = _map_rect_to_screen(_content_rect()) if _content_rect() == _map_rect() else _world_rect_to_screen(_content_rect())
+    draw_rect(content_rect, Color(0.01, 0.01, 0.02, 1.0), true)
+    var preview_texture = _active_background_texture()
+    if background_view != "final" and preview_texture != null:
+        draw_texture_rect(preview_texture, _map_rect_to_screen(_map_rect()), false, Color.WHITE)
+    elif show_background and preview_texture != null:
+        draw_texture_rect(preview_texture, _map_rect_to_screen(_map_rect()), false, Color(1, 1, 1, background_opacity))
+    if show_debug_grid:
+        _draw_alignment_grid()
+    _draw_maze_skin()
+    _draw_pickups()
+    _draw_enemies()
+    _draw_players()
+    _draw_particles()
+    _draw_hud()
+
+func _draw_maze_skin():
+    if walkable_cells.is_empty():
+        return
+    var wall_color = Color(0.04, 0.2, 1.0)
+    var edge_color = Color(0.22, 0.5, 1.0)
+    var resolution_ratio = _resolution_ratio()
+    var outer_width = 7.0 * classic_wall_width_scale * resolution_ratio
+    var inner_width = 2.2 * classic_wall_width_scale * resolution_ratio
+    var segments = _collect_merged_wall_segments()
+    var corners = {}
+    for seg in segments:
+        _draw_wall_segment(seg["a"], seg["b"], wall_color, edge_color, outer_width, inner_width)
+        var a_key = "%0.2f:%0.2f" % [seg["a"].x, seg["a"].y]
+        var b_key = "%0.2f:%0.2f" % [seg["b"].x, seg["b"].y]
+        corners[a_key] = seg["a"]
+        corners[b_key] = seg["b"]
+    for corner in corners.values():
+        _draw_wall_corner(corner, outer_width * 0.5, wall_color, edge_color)
+
+func _has_walkable_cell(gx: int, gy: int) -> bool:
+    return walkable_cells.has("%d:%d" % [gx, gy])
+
+func _collect_merged_wall_segments() -> Array:
+    var horizontal = {}
+    var vertical = {}
+    for key in walkable_cells.keys():
+        var parts = str(key).split(":")
+        var gx = int(parts[0])
+        var gy = int(parts[1])
+        if not _has_walkable_cell(gx, gy - 1):
+            _add_unit_segment(horizontal, gy, gx, gx + 1)
+        if not _has_walkable_cell(gx, gy + 1):
+            _add_unit_segment(horizontal, gy + 1, gx, gx + 1)
+        if not _has_walkable_cell(gx - 1, gy):
+            _add_unit_segment(vertical, gx, gy, gy + 1)
+        if not _has_walkable_cell(gx + 1, gy):
+            _add_unit_segment(vertical, gx + 1, gy, gy + 1)
+    var merged = []
+    for y_key in horizontal.keys():
+        var runs = horizontal[y_key]
+        runs.sort_custom(func(a, b): return int(a[0]) < int(b[0]))
+        var cur_start = int(runs[0][0])
+        var cur_end = int(runs[0][1])
+        for i in range(1, runs.size()):
+            var run = runs[i]
+            if int(run[0]) <= cur_end:
+                cur_end = max(cur_end, int(run[1]))
+            else:
+                var ay = grid_origin.y + int(y_key) * grid_cell_size if use_map_space_layout else int(y_key) * grid_cell_size
+                var ax = grid_origin.x + cur_start * grid_cell_size if use_map_space_layout else cur_start * grid_cell_size
+                var bx = grid_origin.x + cur_end * grid_cell_size if use_map_space_layout else cur_end * grid_cell_size
+                merged.append({"a": Vector2(ax, ay), "b": Vector2(bx, ay)})
+                cur_start = int(run[0])
+                cur_end = int(run[1])
+        var end_ay = grid_origin.y + int(y_key) * grid_cell_size if use_map_space_layout else int(y_key) * grid_cell_size
+        var end_ax = grid_origin.x + cur_start * grid_cell_size if use_map_space_layout else cur_start * grid_cell_size
+        var end_bx = grid_origin.x + cur_end * grid_cell_size if use_map_space_layout else cur_end * grid_cell_size
+        merged.append({"a": Vector2(end_ax, end_ay), "b": Vector2(end_bx, end_ay)})
+    for x_key in vertical.keys():
+        var runs_v = vertical[x_key]
+        runs_v.sort_custom(func(a, b): return int(a[0]) < int(b[0]))
+        var cur_v_start = int(runs_v[0][0])
+        var cur_v_end = int(runs_v[0][1])
+        for i in range(1, runs_v.size()):
+            var run_v = runs_v[i]
+            if int(run_v[0]) <= cur_v_end:
+                cur_v_end = max(cur_v_end, int(run_v[1]))
+            else:
+                var vx = grid_origin.x + int(x_key) * grid_cell_size if use_map_space_layout else int(x_key) * grid_cell_size
+                var va = grid_origin.y + cur_v_start * grid_cell_size if use_map_space_layout else cur_v_start * grid_cell_size
+                var vb = grid_origin.y + cur_v_end * grid_cell_size if use_map_space_layout else cur_v_end * grid_cell_size
+                merged.append({"a": Vector2(vx, va), "b": Vector2(vx, vb)})
+                cur_v_start = int(run_v[0])
+                cur_v_end = int(run_v[1])
+        var end_vx = grid_origin.x + int(x_key) * grid_cell_size if use_map_space_layout else int(x_key) * grid_cell_size
+        var end_va = grid_origin.y + cur_v_start * grid_cell_size if use_map_space_layout else cur_v_start * grid_cell_size
+        var end_vb = grid_origin.y + cur_v_end * grid_cell_size if use_map_space_layout else cur_v_end * grid_cell_size
+        merged.append({"a": Vector2(end_vx, end_va), "b": Vector2(end_vx, end_vb)})
+    return merged
+
+func _add_unit_segment(bucket: Dictionary, axis: int, start_val: int, end_val: int):
+    if not bucket.has(axis):
+        bucket[axis] = []
+    bucket[axis].append([start_val, end_val])
+
+func _draw_wall_segment(a: Vector2, b: Vector2, wall_color: Color, edge_color: Color, outer_width: float, inner_width: float):
+    draw_line(_world_to_screen(a), _world_to_screen(b), wall_color, _scaled_width(outer_width), true)
+    draw_line(_world_to_screen(a), _world_to_screen(b), edge_color, _scaled_width(inner_width), true)
+
+func _draw_wall_corner(pos: Vector2, radius: float, wall_color: Color, edge_color: Color):
+    var screen_pos = _world_to_screen(pos)
+    draw_circle(screen_pos, _scaled_radius(radius), wall_color)
+    draw_circle(screen_pos, _scaled_radius(max(1.0, radius * 0.34)), edge_color)
+
+func _draw_pickups():
+    var resolution_ratio = _resolution_ratio()
+    for pk in pickups:
+        var pos = _world_to_screen(Vector2(pk["x"], pk["y"]))
+        if pk.get("power", false):
+            draw_circle(pos, _scaled_radius(7.0 * resolution_ratio), Color.WHITE)
+        else:
+            draw_circle(pos, _scaled_radius(2.1 * resolution_ratio), Color.WHITE)
+
+func _draw_enemies():
+    for i in range(enemies.size()):
+        var e = enemies[i]
+        _draw_ghost(_world_to_screen(Vector2(e["x"], e["y"])), PACMAN_GHOST_COLORS[i % PACMAN_GHOST_COLORS.size()], frightened_timer > 0.0)
+
+func _draw_players():
+    for p in players:
+        if p.get("alive", true):
+            _draw_pacman(_world_to_screen(Vector2(p["x"], p["y"])), player_last_dir)
+
+func _draw_pacman(pos: Vector2, dir: Vector2):
+    var angle = dir.angle() if dir.length_squared() > 0.0 else 0.0
+    var mouth = 0.26 + 0.14 * abs(sin(Time.get_ticks_msec() / 120.0))
+    var points = PackedVector2Array()
+    points.append(pos)
+    var start_angle = angle + mouth
+    var end_angle = angle + TAU - mouth
+    var radius = _scaled_radius(13.0 * _resolution_ratio())
+    var steps = 22
+    for i in range(steps + 1):
+        var t = lerpf(start_angle, end_angle, float(i) / float(steps))
+        points.append(pos + Vector2.RIGHT.rotated(t) * radius)
+    draw_colored_polygon(points, Color(1.0, 0.92, 0.08))
+
+func _draw_ghost(pos: Vector2, color: Color, frightened: bool):
+    var body = Color(0.22, 0.46, 1.0) if frightened else color
+    var ratio = _resolution_ratio()
+    var rect = Rect2(pos - Vector2(_scaled_radius(11 * ratio), _scaled_radius(10 * ratio)), Vector2(_scaled_radius(22 * ratio), _scaled_radius(22 * ratio)))
+    draw_rect(Rect2(rect.position + Vector2(0, _scaled_radius(6 * ratio)), Vector2(rect.size.x, rect.size.y - _scaled_radius(6 * ratio))), body, true)
+    draw_circle(pos + Vector2(0, _scaled_radius(1 * ratio)), _scaled_radius(11.0 * ratio), body)
+    var foot_y = pos.y + _scaled_radius(12.0 * ratio)
+    for i in range(4):
+        draw_circle(Vector2(pos.x - _scaled_radius(8 * ratio) + i * _scaled_radius(5.3 * ratio), foot_y), _scaled_radius(2.7 * ratio), body)
+    var eye_white = Color.WHITE
+    var pupil = Color(0.04, 0.08, 0.2) if frightened else Color(0.0, 0.16, 0.62)
+    draw_circle(pos + Vector2(-_scaled_radius(4 * ratio), -_scaled_radius(2 * ratio)), _scaled_radius(3.0 * ratio), eye_white)
+    draw_circle(pos + Vector2(_scaled_radius(4 * ratio), -_scaled_radius(2 * ratio)), _scaled_radius(3.0 * ratio), eye_white)
+    draw_circle(pos + Vector2(-_scaled_radius(3 * ratio), -_scaled_radius(1 * ratio)), _scaled_radius(1.2 * ratio), pupil)
+    draw_circle(pos + Vector2(_scaled_radius(5 * ratio), -_scaled_radius(1 * ratio)), _scaled_radius(1.2 * ratio), pupil)
+
+func _draw_particles():
+    for p in active_particles:
+        var a = float(p["life"]) / max(0.001, float(p["max_life"]))
+        var c = p["color"]
+        draw_circle(_world_to_screen(p["pos"]), _scaled_radius(float(p["radius"]) * a), Color(c.r, c.g, c.b, a))
+
+func _draw_hud():
+    draw_string(ThemeDB.fallback_font, Vector2(20, 40), "SCORE: " + str(score), HORIZONTAL_ALIGNMENT_LEFT, -1, 32, Color.WHITE)
+    draw_string(ThemeDB.fallback_font, Vector2(20, 80), "LIVES: " + str(lives), HORIZONTAL_ALIGNMENT_LEFT, -1, 32, Color.WHITE)
+    if game_state == "game_over":
+        var center = _world_to_screen(maze_bounds.position + maze_bounds.size * 0.5)
+        draw_string(ThemeDB.fallback_font, center, "GAME OVER", HORIZONTAL_ALIGNMENT_CENTER, -1, 48, Color.RED)
+    elif game_state == "win":
+        var center_win = _world_to_screen(maze_bounds.position + maze_bounds.size * 0.5)
+        draw_string(ThemeDB.fallback_font, center_win, "YOU WIN!", HORIZONTAL_ALIGNMENT_CENTER, -1, 48, Color.GREEN)
+
+
+func _process_player(delta):
+    for i in range(players.size()):
+        var p = players[i]
+        if not p.get("alive", true):
+            continue
+            
+        var pos = Vector2(p["x"], p["y"])
+        var p_target_node_id = p.get("target_node_id", "")
+        var p_current_node_id = p.get("current_node_id", "")
+        
+        if p_target_node_id == "":
+            var dir = Vector2.ZERO
+            
+            # Controller
+            var jx = Input.get_joy_axis(SharedLoader.get_joy_id(i), JOY_AXIS_LEFT_X)
+            var jy = Input.get_joy_axis(SharedLoader.get_joy_id(i), JOY_AXIS_LEFT_Y)
+            if abs(jx) > 0.5: dir = Vector2(sign(jx), 0)
+            elif abs(jy) > 0.5: dir = Vector2(0, sign(jy))
+            
+            # DPAD Controller fallback
+            if dir == Vector2.ZERO:
+                if Input.is_joy_button_pressed(SharedLoader.get_joy_id(i), JOY_BUTTON_DPAD_RIGHT): dir = Vector2(1, 0)
+                elif Input.is_joy_button_pressed(SharedLoader.get_joy_id(i), JOY_BUTTON_DPAD_LEFT): dir = Vector2(-1, 0)
+                elif Input.is_joy_button_pressed(SharedLoader.get_joy_id(i), JOY_BUTTON_DPAD_DOWN): dir = Vector2(0, 1)
+                elif Input.is_joy_button_pressed(SharedLoader.get_joy_id(i), JOY_BUTTON_DPAD_UP): dir = Vector2(0, -1)
+            
+            # Keyboard fallback for player 0
+            if i == 0 and dir == Vector2.ZERO:
+                if Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_D) or Input.is_action_pressed("ui_right"):
+                    dir = Vector2(1, 0)
+                elif Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_A) or Input.is_action_pressed("ui_left"):
+                    dir = Vector2(-1, 0)
+                elif Input.is_key_pressed(KEY_DOWN) or Input.is_key_pressed(KEY_S) or Input.is_action_pressed("ui_down"):
+                    dir = Vector2(0, 1)
+                elif Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_W) or Input.is_action_pressed("ui_up"):
+                    dir = Vector2(0, -1)
+            
+            if dir != Vector2.ZERO and p_current_node_id != "":
+                player_last_dir = dir
+                var best_neighbor = _get_best_neighbor(p_current_node_id, dir)
+                if best_neighbor != "":
+                    p["target_node_id"] = best_neighbor
+                    p_target_node_id = best_neighbor
+                    
+        if p_target_node_id != "":
+            var target_node = _get_node(p_target_node_id)
+            if target_node:
+                var target_pos = Vector2(target_node.get("x", 0), target_node.get("y", 0))
+                var move_vec = target_pos - pos
+                if move_vec.length() <= player_speed * delta:
+                    pos = target_pos
+                    p["current_node_id"] = p_target_node_id
+                    p["target_node_id"] = ""
+                else:
+                    pos += move_vec.normalized() * player_speed * delta
+                    
+        p["x"] = pos.x
+        p["y"] = pos.y
+        
+        # Check Pickups
+        for j in range(pickups.size() - 1, -1, -1):
+            var pickup = pickups[j]
+            if pos.distance_to(Vector2(pickup["x"], pickup["y"])) < 15.0:
+                var pickup_pos = Vector2(pickup["x"], pickup["y"])
+                pickups.remove_at(j)
+                spawn_particle_burst(pickup_pos, Color.YELLOW, 15)
+                score += 10
+                send_ipc_message({"type": "score", "data": {"player": i + 1, "score": score}})
+                
+                if pickups.size() == 0:
+                    game_state = "win"
+                    send_ipc_message({"type": "state", "data": {"state": "win"}})
+
+func _get_degree(node_id: String) -> int:
+    var deg = 0
+    for edge in graph_edges:
+        if str(edge.get("source", "")) == node_id or str(edge.get("target", "")) == node_id:
+            deg += 1
+    return deg
+
+func _process_enemies(delta):
+    for i in range(enemies.size()):
+        var e = enemies[i]
+        var pos = Vector2(e["x"], e["y"])
+        var e_target_node_id = e.get("target_node_id", "")
+        var e_current_node_id = e.get("current_node_id", "")
+        
+        if e_target_node_id == "":
+            var possible = []
+            var node = _get_node(e_current_node_id)
+            if node:
+                for edge in graph_edges:
+                    var other_id = ""
+                    if str(edge.get("source", "")) == e_current_node_id:
+                        other_id = str(edge.get("target", ""))
+                    elif str(edge.get("target", "")) == e_current_node_id:
+                        other_id = str(edge.get("source", ""))
+                    if other_id != "":
+                        if other_id != e.get("prev_node_id", "") or _get_degree(e_current_node_id) == 1:
+                            possible.append(other_id)
+            if possible.size() > 0:
+                e["target_node_id"] = possible[randi() % possible.size()]
+                e_target_node_id = e["target_node_id"]
+        
+        if e_target_node_id != "":
+            var target_node = _get_node(e_target_node_id)
+            if target_node:
+                var target_pos = Vector2(target_node.get("x", 0), target_node.get("y", 0))
+                var move_vec = target_pos - pos
+                if move_vec.length() <= e["speed"] * delta:
+                    pos = target_pos
+                    e["prev_node_id"] = e_current_node_id
+                    e["current_node_id"] = e_target_node_id
+                    e["target_node_id"] = ""
+                else:
+                    pos += move_vec.normalized() * e["speed"] * delta
+        
+        e["x"] = pos.x
+        e["y"] = pos.y
+        
+        # Check collision with players
+        for j in range(players.size()):
+            var p = players[j]
+            if p.get("alive", true):
+                if pos.distance_to(Vector2(p["x"], p["y"])) < 20.0:
+                    _on_player_caught(j)
+
+func _on_player_caught(player_idx):
+    var p = players[player_idx]
+    spawn_particle_burst(Vector2(p["x"], p["y"]), Color.RED, 30)
+    p["alive"] = false
+    
+    var any_alive = false
+    for pl in players:
+        if pl.get("alive", true):
+            any_alive = true
+            
+    if not any_alive:
+        lives -= 1
+        if lives > 0:
+            game_state = "respawning"
+            var t = get_tree().create_timer(1.5)
+            t.connect("timeout", Callable(self, "_respawn_all"))
+        else:
+            game_state = "game_over"
+            send_ipc_message({"type": "state", "data": {"state": "game_over"}})
+
+func _respawn_all():
+    if lives <= 0: return
+    game_state = "playing"
+    
+    for i in range(players.size()):
+        if i < original_player_spawns.size():
+            var sp = original_player_spawns[i]
+            players[i].x = sp["x"]
+            players[i].y = sp["y"]
+            players[i].current_node_id = sp["id"]
+            players[i].target_node_id = ""
+            players[i].alive = true
+            
+    for i in range(enemies.size()):
+        if i < original_enemy_spawns.size():
+            var sp = original_enemy_spawns[i]
+            enemies[i].x = sp["x"]
+            enemies[i].y = sp["y"]
+            enemies[i].current_node_id = sp["id"]
+            enemies[i].target_node_id = ""
+            enemies[i].prev_node_id = ""
+
+func _restart_game():
+    score = 0
+    lives = 3
+    game_state = "playing"
+    send_ipc_message({"type": "score", "data": {"player": 1, "score": score}})
+    pickups = original_pickups.duplicate(true)
+    _respawn_all()
+func _process_particles(delta):
+    for i in range(active_particles.size() - 1, -1, -1):
+        var p = active_particles[i]
+        p["life"] = float(p["life"]) - delta
+        if float(p["life"]) <= 0.0:
+            active_particles.remove_at(i)
+            continue
+        p["pos"] = Vector2(p["pos"]) + Vector2(p["vel"]) * delta
+        p["vel"] = Vector2(p["vel"]) * 0.92
+func _load_level_adjustments(): pass
+func _update_menu_overlay(): pass

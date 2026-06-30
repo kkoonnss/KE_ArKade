@@ -1,0 +1,271 @@
+Godot Engine v4.3.stable.official.77dcf97d8 - https://godotengine.org
+Vulkan 1.4.325 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 3090
+
+Hub IPC Server listening on port: 50000
+Selected scene: scene_demo_wall
+Selected level: demo_level
+[10:20:07] Launching game: block_stack on level demo_level
+[10:20:07] Launching: C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/Godot_v4.3-stable_win64.exe --path C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/cartridges/block_stack --scene C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/scenes/scene_demo_wall --level C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/scenes/scene_demo_wall/levels/demo_level --ipc 50000
+[10:20:09] Cartridge connected to socket
+[10:20:10] Received: {"type":"heartbeat"}
+[10:20:11] Received: {"type":"heartbeat"}
+[10:20:12] Received: {"type":"heartbeat"}
+[10:20:13] Received: {"type":"heartbeat"}
+[10:20:14] Received: {"type":"heartbeat"}
+[10:20:15] Received: {"type":"heartbeat"}
+[10:20:16] Received: {"type":"heartbeat"}
+[10:20:17] Received: {"type":"heartbeat"}
+[10:20:18] Received: {"type":"heartbeat"}
+[10:20:19] Received: {"type":"heartbeat"}
+[10:20:20] Received: {"type":"heartbeat"}
+[10:20:21] Received: {"type":"heartbeat"}
+[10:20:22] Received: {"type":"heartbeat"}
+[10:20:23] Received: {"type":"heartbeat"}
+[10:20:24] Received: {"type":"heartbeat"}
+[10:20:25] Received: {"type":"heartbeat"}
+[10:20:26] Received: {"type":"heartbeat"}
+[10:20:27] Received: {"type":"heartbeat"}
+[10:20:28] Received: {"type":"heartbeat"}
+[10:20:29] Received: {"type":"heartbeat"}
+[10:20:30] Received: {"type":"heartbeat"}
+[10:20:31] Received: {"type":"heartbeat"}
+[10:20:32] Received: {"type":"heartbeat"}
+[10:20:33] Received: {"type":"heartbeat"}
+[10:20:34] Received: {"type":"heartbeat"}
+[10:20:35] Received: {"type":"heartbeat"}
+[10:20:36] Received: {"type":"heartbeat"}
+[10:20:37] Received: {"type":"heartbeat"}
+[10:20:38] Received: {"type":"heartbeat"}
+[10:20:39] Received: {"type":"heartbeat"}
+[10:20:40] Received: {"type":"heartbeat"}
+[10:20:41] Received: {"type":"heartbeat"}
+[10:20:42] Received: {"type":"heartbeat"}
+[10:20:43] Received: {"type":"heartbeat"}
+[10:20:44] Received: {"type":"heartbeat"}
+[10:20:45] Received: {"type":"heartbeat"}
+[10:20:46] Received: {"type":"heartbeat"}
+[10:20:47] Received: {"type":"heartbeat"}
+[10:20:48] Received: {"type":"heartbeat"}
+[10:20:49] Received: {"type":"heartbeat"}
+[10:20:50] Received: {"type":"heartbeat"}
+[10:20:51] Received: {"type":"heartbeat"}
+[10:20:52] Received: {"type":"heartbeat"}
+[10:20:53] Received: {"type":"heartbeat"}
+[10:20:54] Received: {"type":"heartbeat"}
+[10:20:55] Received: {"type":"heartbeat"}
+[10:20:56] Received: {"type":"heartbeat"}
+[10:20:57] Received: {"type":"heartbeat"}
+[10:20:58] Received: {"type":"heartbeat"}
+[10:20:59] Received: {"type":"heartbeat"}
+[10:21:00] Received: {"type":"heartbeat"}
+[10:21:01] Received: {"type":"heartbeat"}
+[10:21:02] Received: {"type":"heartbeat"}
+[10:21:03] Received: {"type":"heartbeat"}
+[10:21:04] Received: {"type":"heartbeat"}
+[10:21:05] Received: {"type":"heartbeat"}
+[10:21:06] Received: {"type":"heartbeat"}
+[10:21:07] Received: {"type":"heartbeat"}
+[10:21:08] Received: {"type":"heartbeat"}
+[10:21:09] Received: {"type":"heartbeat"}
+[10:21:10] Received: {"type":"heartbeat"}
+[10:21:11] Received: {"type":"heartbeat"}
+[10:21:12] Received: {"type":"heartbeat"}
+[10:21:13] Received: {"type":"heartbeat"}
+[10:21:14] Received: {"type":"heartbeat"}
+[10:21:15] Received: {"type":"heartbeat"}
+[10:21:16] Received: {"type":"heartbeat"}
+[10:21:17] Received: {"type":"heartbeat"}
+[10:21:18] Received: {"type":"heartbeat"}
+[10:21:19] Received: {"type":"heartbeat"}
+[10:21:20] Received: {"type":"heartbeat"}
+[10:21:21] Received: {"type":"heartbeat"}
+[10:21:22] Received: {"type":"heartbeat"}
+[10:21:23] Received: {"type":"heartbeat"}
+[10:21:24] Received: {"type":"heartbeat"}
+[10:21:26] Received: {"type":"heartbeat"}
+[10:21:27] Received: {"type":"heartbeat"}
+[10:21:28] Received: {"type":"heartbeat"}
+[10:21:29] Received: {"type":"heartbeat"}
+[10:21:30] Received: {"type":"heartbeat"}
+[10:21:31] Received: {"type":"heartbeat"}
+[10:21:32] Received: {"type":"heartbeat"}
+[10:21:33] Received: {"type":"heartbeat"}
+[10:21:34] Received: {"type":"heartbeat"}
+[10:21:35] Received: {"type":"heartbeat"}
+USER ERROR: Condition "!is_open()" is true. Returning: -1
+   at: get_available_bytes (drivers/unix/net_socket_posix.cpp:743)
+[10:21:36] Process exited externally (clean exit)
+Cartridge exited clean: true
+Selected level: demo_level
+[10:21:38] Launching game: boomer_man on level demo_level
+[10:21:38] Launching: C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/Godot_v4.3-stable_win64.exe --path C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/cartridges/boomer_man --scene C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/scenes/scene_demo_wall --level C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/scenes/scene_demo_wall/levels/demo_level --ipc 50000
+[10:21:40] Cartridge connected to socket
+[10:21:41] Received: {"type":"heartbeat"}
+[10:21:42] Received: {"type":"heartbeat"}
+[10:21:43] Received: {"type":"heartbeat"}
+[10:21:44] Received: {"type":"heartbeat"}
+[10:21:45] Received: {"type":"heartbeat"}
+[10:21:46] Received: {"type":"heartbeat"}
+[10:21:47] Received: {"type":"heartbeat"}
+[10:21:48] Received: {"type":"heartbeat"}
+[10:21:49] Received: {"type":"heartbeat"}
+[10:21:50] Received: {"type":"heartbeat"}
+[10:21:51] Received: {"type":"heartbeat"}
+[10:21:52] Received: {"type":"heartbeat"}
+[10:21:53] Received: {"type":"heartbeat"}
+[10:21:54] Received: {"type":"heartbeat"}
+[10:21:55] Received: {"type":"heartbeat"}
+[10:21:55] Received: {"data":{"player":1,"score":50},"type":"score"}
+[10:21:55] Received: {"data":{"player":1,"score":0},"type":"score"}
+[10:21:56] Received: {"data":{"player":1,"score":0},"type":"score"}
+[10:21:56] Received: {"type":"heartbeat"}
+[10:21:57] Received: {"type":"heartbeat"}
+[10:21:58] Received: {"type":"heartbeat"}
+[10:21:59] Received: {"type":"heartbeat"}
+[10:22:00] Received: {"type":"heartbeat"}
+[10:22:01] Received: {"type":"heartbeat"}
+[10:22:02] Received: {"type":"heartbeat"}
+[10:22:03] Received: {"type":"heartbeat"}
+[10:22:04] Received: {"type":"heartbeat"}
+[10:22:05] Received: {"type":"heartbeat"}
+[10:22:05] Received: {"score":0,"type":"finished"}
+[10:22:06] Received: {"type":"heartbeat"}
+[10:22:07] Received: {"type":"heartbeat"}
+[10:22:08] Received: {"type":"heartbeat"}
+[10:22:09] Received: {"data":{"player":1,"score":0},"type":"score"}
+[10:22:09] Received: {"type":"heartbeat"}
+[10:22:10] Received: {"type":"heartbeat"}
+[10:22:11] Received: {"data":{"player":1,"score":0},"type":"score"}
+[10:22:11] Received: {"type":"heartbeat"}
+[10:22:12] Received: {"type":"heartbeat"}
+[10:22:13] Received: {"type":"heartbeat"}
+USER ERROR: Condition "!is_open()" is true. Returning: -1
+   at: get_available_bytes (drivers/unix/net_socket_posix.cpp:743)
+[10:22:14] Process exited externally (clean exit)
+Cartridge exited clean: true
+Selected scene: scene_demo_wall
+Selected level: demo_level
+[10:22:20] Launching game: robo_frogger on level demo_level
+[10:22:20] Launching: C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/Godot_v4.3-stable_win64.exe --path C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/cartridges/robo_frogger --scene C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/scenes/scene_demo_wall --level C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/scenes/scene_demo_wall/levels/demo_level --ipc 50000
+[10:22:22] Cartridge connected to socket
+[10:22:23] Received: {"type":"heartbeat"}
+[10:22:24] Received: {"type":"heartbeat"}
+[10:22:25] Received: {"type":"heartbeat"}
+[10:22:26] Received: {"type":"heartbeat"}
+[10:22:27] Received: {"type":"heartbeat"}
+[10:22:28] Received: {"type":"heartbeat"}
+[10:22:29] Received: {"type":"heartbeat"}
+[10:22:29] Received: {"data":{"player":1,"score":0},"type":"score"}
+[10:22:30] Received: {"type":"heartbeat"}
+[10:22:31] Received: {"type":"heartbeat"}
+[10:22:32] Received: {"data":{"player":1,"score":0},"type":"score"}
+[10:22:32] Received: {"type":"heartbeat"}
+[10:22:33] Received: {"type":"heartbeat"}
+[10:22:34] Received: {"type":"heartbeat"}
+[10:22:35] Received: {"data":{"player":1,"score":500},"type":"score"}
+[10:22:35] Received: {"type":"heartbeat"}
+[10:22:36] Received: {"type":"heartbeat"}
+[10:22:37] Received: {"type":"heartbeat"}
+[10:22:38] Received: {"type":"heartbeat"}
+[10:22:39] Received: {"data":{"player":1,"score":1000},"type":"score"}
+[10:22:39] Received: {"type":"heartbeat"}
+[10:22:40] Received: {"type":"heartbeat"}
+[10:22:41] Received: {"type":"heartbeat"}
+[10:22:42] Received: {"type":"heartbeat"}
+[10:22:43] Received: {"type":"heartbeat"}
+[10:22:44] Received: {"type":"heartbeat"}
+[10:22:45] Received: {"type":"heartbeat"}
+[10:22:46] Received: {"type":"heartbeat"}
+[10:22:47] Received: {"type":"heartbeat"}
+[10:22:48] Received: {"type":"heartbeat"}
+[10:22:49] Received: {"type":"heartbeat"}
+[10:22:50] Received: {"type":"heartbeat"}
+[10:22:51] Received: {"type":"heartbeat"}
+[10:22:52] Received: {"type":"heartbeat"}
+USER ERROR: Condition "!is_open()" is true. Returning: -1
+   at: get_available_bytes (drivers/unix/net_socket_posix.cpp:743)
+[10:22:53] Process exited externally (clean exit)
+Cartridge exited clean: true
+Selected level: demo_level
+[10:22:55] Launching game: boomer_man on level demo_level
+[10:22:55] Launching: C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/Godot_v4.3-stable_win64.exe --path C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/cartridges/boomer_man --scene C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/scenes/scene_demo_wall --level C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/scenes/scene_demo_wall/levels/demo_level --ipc 50000
+[10:22:57] Cartridge connected to socket
+[10:22:58] Received: {"type":"heartbeat"}
+[10:22:59] Received: {"type":"heartbeat"}
+[10:23:00] Received: {"type":"heartbeat"}
+[10:23:01] Received: {"type":"heartbeat"}
+[10:23:02] Received: {"type":"heartbeat"}
+[10:23:03] Received: {"type":"heartbeat"}
+[10:23:04] Received: {"type":"heartbeat"}
+[10:23:05] Received: {"type":"heartbeat"}
+[10:23:06] Received: {"type":"heartbeat"}
+USER ERROR: Condition "!is_open()" is true. Returning: -1
+   at: get_available_bytes (drivers/unix/net_socket_posix.cpp:743)
+[10:23:07] Process exited externally (clean exit)
+Cartridge exited clean: true
+Selected level: demo_level
+[10:23:11] Launching game: maze_chase on level demo_level
+[10:23:11] Launching: C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/Godot_v4.3-stable_win64.exe --path C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/cartridges/maze_chase --scene C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/scenes/scene_demo_wall --level C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/scenes/scene_demo_wall/levels/demo_level --ipc 50000
+[10:23:13] Cartridge connected to socket
+[10:23:13] Received: {"data":{"player":1,"score":100},"type":"score"}
+[10:23:14] Received: {"type":"heartbeat"}
+[10:23:15] Received: {"data":{"player":1,"score":200},"type":"score"}
+[10:23:15] Received: {"data":{"player":1,"score":300},"type":"score"}
+[10:23:15] Received: {"data":{"player":1,"score":400},"type":"score"}
+[10:23:15] Received: {"data":{"player":1,"score":500},"type":"score"}
+[10:23:15] Received: {"type":"heartbeat"}
+[10:23:15] Received: {"data":{"player":1,"score":600},"type":"score"}
+[10:23:16] Received: {"data":{"player":1,"score":700},"type":"score"}
+[10:23:16] Received: {"type":"heartbeat"}
+[10:23:17] Received: {"type":"heartbeat"}
+[10:23:18] Received: {"type":"heartbeat"}
+[10:23:19] Received: {"type":"heartbeat"}
+[10:23:20] Received: {"type":"heartbeat"}
+[10:23:21] Received: {"type":"heartbeat"}
+[10:23:22] Received: {"type":"heartbeat"}
+[10:23:23] Received: {"type":"heartbeat"}
+[10:23:24] Received: {"type":"heartbeat"}
+[10:23:25] Received: {"type":"heartbeat"}
+[10:23:26] Received: {"type":"heartbeat"}
+[10:23:27] Received: {"type":"heartbeat"}
+USER ERROR: Condition "!is_open()" is true. Returning: -1
+   at: get_available_bytes (drivers/unix/net_socket_posix.cpp:743)
+[10:23:28] Process exited externally (clean exit)
+Cartridge exited clean: true
+Selected scene: scene_demo_wall
+Selected level: demo_level
+[10:23:38] Launching game: trace on level demo_level
+[10:23:38] Launching: C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/Godot_v4.3-stable_win64.exe --path C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/cartridges/trace --scene C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/scenes/scene_demo_wall --level C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../content/scenes/scene_demo_wall/levels/demo_level --ipc 50000
+[10:23:40] Cartridge connected to socket
+[10:23:41] Received: {"type":"heartbeat"}
+[10:23:42] Received: {"data":{"lap":2,"time":1.95138066666666},"type":"score"}
+[10:23:42] Received: {"data":{"lap":3,"time":2.00138066666666},"type":"score"}
+[10:23:42] Received: {"type":"heartbeat"}
+[10:23:42] Received: {"data":{"lap":4,"time":2.05138066666666},"type":"score"}
+[10:23:42] Received: {"time":2.05138066666666,"type":"finished"}
+[10:23:43] Received: {"type":"heartbeat"}
+[10:23:44] Received: {"type":"heartbeat"}
+[10:23:45] Received: {"type":"heartbeat"}
+[10:23:46] Received: {"type":"heartbeat"}
+[10:23:47] Received: {"type":"heartbeat"}
+[10:23:48] Received: {"type":"heartbeat"}
+[10:23:49] Received: {"type":"heartbeat"}
+[10:23:50] Received: {"type":"heartbeat"}
+[10:23:51] Received: {"type":"heartbeat"}
+[10:23:52] Received: {"type":"heartbeat"}
+[10:23:53] Received: {"type":"heartbeat"}
+[10:23:54] Received: {"type":"heartbeat"}
+[10:23:55] Received: {"type":"heartbeat"}
+[10:23:56] Received: {"type":"heartbeat"}
+[10:23:57] Received: {"type":"heartbeat"}
+[10:23:58] Received: {"type":"heartbeat"}
+[10:23:59] Received: {"type":"heartbeat"}
+[10:24:00] Received: {"type":"heartbeat"}
+[10:24:01] Received: {"type":"heartbeat"}
+USER ERROR: Condition "!is_open()" is true. Returning: -1
+   at: get_available_bytes (drivers/unix/net_socket_posix.cpp:743)
+[10:24:02] Process exited externally (clean exit)
+Cartridge exited clean: true
+Selected scene: scene_demo_wall
+Selected level: demo_level
+Launching level editor: C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade/app/hub/../../app/tools/level_authoring/author.py

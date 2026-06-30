@@ -1,0 +1,4 @@
+name: classic_gta
+reference_image: semantic_map.png
+orientation: wall
+semantic_classes: [path, solid, spawn, goal, pickup, tracking]

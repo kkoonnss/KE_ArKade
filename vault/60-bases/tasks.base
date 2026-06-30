@@ -1,0 +1,26 @@
+filters:
+  and:
+    - file.inFolder("30-tasks")
+views:
+  - type: table
+    name: Ready
+    filters:
+      and:
+        - 'status == "ready"'
+    order:
+      - priority
+      - lane
+      - file.name
+  - type: table
+    name: In progress
+    filters:
+      and:
+        - 'status == "in_progress"'
+    order:
+      - lane
+      - owner_agent
+  - type: table
+    name: All by lane
+    order:
+      - lane
+      - status

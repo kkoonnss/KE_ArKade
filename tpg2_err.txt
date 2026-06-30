@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Variable "show_background" has the same name as a previously declared variable.
+          at: GDScript::reload (res://content/cartridges/pacman/main.gd:307)
+ERROR: Failed to load script "res://content/cartridges/pacman/main.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript.cpp:2936)

@@ -1,0 +1,5 @@
+name: classic_rampage
+reference_image: semantic_map.png
+orientation: wall
+semantic_classes: [path, solid]
+derived_layers: [occupancy, grid]

@@ -1,0 +1,27 @@
+{
+  "cartridge_id": "paperboy",
+  "scene_level": "levels/classic_paperboy",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "bounds_clamp": true,
+    "delivery_side_bias": 0.1,
+    "density": 1.7,
+    "grid_scale": 0.9,
+    "house_setback": 1,
+    "house_spacing": 1.75,
+    "invert": false,
+    "lane_spacing": 1.1,
+    "lane_width": 1,
+    "movement_scale": 1.35,
+    "reference": false,
+    "reference_opacity": 0.18,
+    "safe_zone_padding": 1.2,
+    "shoulder_width": 1.35,
+    "show_debug_grid": true,
+    "subscriber_ratio": 0.75,
+    "target_spread": 1.05,
+    "throw_distance": 1.6,
+    "yard_depth": 1.8
+  },
+  "version": "1.0.0"
+}

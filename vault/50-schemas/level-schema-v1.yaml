@@ -1,0 +1,66 @@
+# ==========================================================================
+# KE_ArKade — Level Schema v1  (FROZEN interface, instances vary)
+# ==========================================================================
+# A LEVEL is the SEMANTIC IDENTITY of a space: an interchangeable content
+# variant bound to ONE scene. It owns the semantic map + derived layers.
+# Swapping levels inside a scene must take < 10s and never re-calibrates.
+#
+# Real levels live at:
+#   content/scenes/<scene_id>/levels/<level_id>/level.yaml
+# ==========================================================================
+
+schema: level
+version: 1.0.0
+status: frozen
+
+required:
+  - level_id
+  - scene_id
+  - semantic_map
+  - palette_schema
+  - status
+
+example:
+  level_id: level_maze_a
+  scene_id: scene_warehouse_floor
+  semantic_map: semantic_map.png          # indexed/painted source the compiler reads
+  palette_schema: ../../../../vault/50-schemas/semantic-palette-v1.yaml
+  # orientation is INHERITED from the parent scene; never redeclared here.
+
+  # Per-genre procedural adapter knobs. A cartridge reads only the block(s)
+  # it understands; unknown blocks are ignored.
+  procedural:
+    grid:                               # v1.1 additive — gridification (ratified 2026-06-19)
+      cell_px: 32                       # cell size for grid.json; a cartridge may override
+    maze:
+      path_graph: skeleton              # how to extract the nav graph from `path`
+      junction_merge_px: 6
+    collect:
+      pickup_density: medium            # how `pickup` seeds are distributed
+      spawn_from: spawn
+    racer:                              # example future genre
+      centerline_mode: skeleton
+      checkpoint_count: 8
+
+  # Outputs baked by the compiler so the runtime never does CV at play time.
+  derived:
+    occupancy: derived/occupancy.png
+    navgraph: derived/navgraph.json
+    container: derived/container.json             # well/boundary for Neon Stack
+    grid: derived/grid.json                       # v1.1 additive — cell matrix for 8-bit/cell games
+    platform_edges: derived/platform_edges.json   # only meaningful for wall scenes
+
+  # Optional hand-authored overlays for creative intent the algorithm can't infer.
+  overlays:
+    one_way_gates: overlays/gates.png
+    secret_tunnels: overlays/tunnels.png
+
+  thumbnail: thumb.png
+  status: playable                       # draft | derived | playable | broken
+
+rules:
+  - scene_id must reference an existing scene
+  - semantic_map must decode cleanly against palette v1 (no unmatched pixels under policy=error)
+  - derived/ files are build artifacts; never hand-edited
+  - a cartridge is only launchable on this level if its `requires` (classes +
+    derived_layers + orientation) are all satisfied — checked by the hub before launch

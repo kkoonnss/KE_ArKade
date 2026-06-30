@@ -1,0 +1,2 @@
+Godot_v4.3-stable_*.exe filter=lfs diff=lfs merge=lfs -text
+godot.zip filter=lfs diff=lfs merge=lfs -text

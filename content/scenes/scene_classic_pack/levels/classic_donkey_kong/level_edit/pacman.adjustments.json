@@ -1,0 +1,15 @@
+{
+  "cartridge_id": "pacman",
+  "scene_level": "levels/classic_donkey_kong",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "grid_scale": 1,
+    "invert_main_solid": false,
+    "players": 1,
+    "reference": false,
+    "reference_opacity": 0.15,
+    "skin": "classic",
+    "wall_width": 1
+  },
+  "version": "1.0.0"
+}

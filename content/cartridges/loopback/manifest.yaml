@@ -1,0 +1,15 @@
+schema: cartridge
+version: 1.0.1
+cartridge_id: loopback
+game_name: "Loopback Stub"
+version: "0.1.0"
+engine: godot
+process_model: separate_process
+entry:
+  launch: "godot --path res:// --"
+  args_contract: "--scene <scene_dir> --level <level_dir> --ipc <socket>"
+requires:
+  orientation: [wall]
+  semantic_classes: []
+  derived_layers: []
+  players: { min: 1, max: 1 }

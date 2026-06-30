@@ -1,0 +1,2 @@
+SCRIPT ERROR: Invalid call. Nonexistent function 'do_something' in base 'Nil'.
+          at: _init (res://test_crash.gd:4)

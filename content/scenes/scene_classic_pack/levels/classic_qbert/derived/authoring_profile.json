@@ -1,0 +1,25 @@
+{
+  "compiler": {
+    "cell_px": 32,
+    "derived_files": [
+      "navgraph.json",
+      "container.json",
+      "grid.json",
+      "occupancy.png",
+      "platform_edges.json",
+      "track_centerline.json",
+      "authoring_profile.json"
+    ],
+    "entry_point": "app/tools/arena_compiler/compile_level.py",
+    "image_size": {
+      "height": 960,
+      "width": 1280
+    },
+    "source": "derived/occupancy.png",
+    "source_kind": "legacy_occupancy"
+  },
+  "intent": "compile_all_derived",
+  "level_id": "classic_qbert",
+  "schema": "authoring_profile",
+  "version": "1.0.0"
+}

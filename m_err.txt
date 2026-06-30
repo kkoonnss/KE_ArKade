@@ -1,0 +1,4 @@
+SCRIPT ERROR: Parse Error: Could not find base class "AdapterBase".
+          at: GDScript::reload (res://app/shared/adapters/maze.gd:1)
+ERROR: Failed to load script "res://app/shared/adapters/maze.gd" with error "Parse error".
+   at: load (modules/gdscript/gdscript.cpp:2936)

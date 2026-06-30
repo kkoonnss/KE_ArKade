@@ -1,0 +1,13 @@
+{
+  "cartridge_id": "paperboy",
+  "scene_level": "levels/classic_pacman",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "bounds_clamp": true,
+    "density": 1,
+    "grid_scale": 1,
+    "invert": false,
+    "reference": false
+  },
+  "version": "1.0.0"
+}

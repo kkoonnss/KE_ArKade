@@ -1,0 +1,57 @@
+# ==========================================================================
+# KE_ArKade — Scene Schema v1  (FROZEN interface, instances vary)
+# ==========================================================================
+# A SCENE is the PHYSICAL IDENTITY of a space and the authoritative source of
+# truth for alignment. Projector internal memories are a convenience layer
+# only; this file is the master. One scene -> many levels.
+#
+# This file documents the contract. Real scenes live at:
+#   content/scenes/<scene_id>/scene.yaml
+# ==========================================================================
+
+schema: scene
+version: 1.0.0
+status: frozen
+
+# ---- contract (required fields a valid scene.yaml MUST provide) ----------
+required:
+  - scene_id
+  - venue_name
+  - orientation            # floor | wall | table  (NEW in v1 — see palette note)
+  - output_profile
+  - current_calibration
+  - controller_profile
+  - status
+
+# ---- example instance (MVP target = wall) --------------------------------
+example:
+  scene_id: scene_demo_wall
+  venue_name: Studio Wall
+  orientation: wall                  # MVP = wall. floor | table are Phase 2+
+  output_profile:
+    display_index: 1
+    native_resolution: [1280, 720]
+    projector_class: short_throw     # short_throw | long_throw | ust
+    placement_notes: "Taped at ceiling mark B; optical-first, keystone last."
+  camera_profile:
+    enabled: false                   # MVP = no camera; Phase 2 flips this on
+    calibration_file: calibration/camera_intrinsics.yaml
+  current_calibration:
+    method: manual_4point            # manual_4point | charuco (Phase 2) | structured_light (R&D)
+    file: calibration/current.yaml
+    last_verified: 2026-06-19
+  controller_profile:
+    max_players: 4                   # input layer designed for up to 4 local players
+    default_devices: [keyboard, xbox, snes_clone]
+    player_bindings_file: calibration/players.yaml
+  notes:
+    - Return venue.
+    - Keep projector authoritative in this file, not in projector memory.
+  status: verified                   # draft | calibrating | verified | retired
+
+# ---- validation rules (enforced by QA / Sonnet lane) ---------------------
+rules:
+  - orientation must be one of [floor, wall, table]
+  - output_profile.native_resolution must be [w, h] ints
+  - controller_profile.max_players in 1..4
+  - a scene with status=verified MUST have a current_calibration.file that exists

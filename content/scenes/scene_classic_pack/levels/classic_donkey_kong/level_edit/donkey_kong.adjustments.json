@@ -1,0 +1,26 @@
+{
+  "cartridge_id": "donkey_kong",
+  "scene_level": "levels/classic_donkey_kong",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "add_platforms": true,
+    "background_view": "final",
+    "barrel_ladder_chance": 0.5,
+    "bounds_clamp": true,
+    "climb_tolerance": 0.5,
+    "fire_enemy_count": 3,
+    "gravity": 1,
+    "hazard_leniency": 0.7,
+    "jump_height": 1,
+    "level_scale": 0.4,
+    "level_seed": 1235,
+    "platform_snap": 0.8,
+    "platform_spacing": 0.11,
+    "platform_trim": 0.09,
+    "reference": false,
+    "reference_opacity": 0.15,
+    "show_debug_grid": false,
+    "slope_angle": 3
+  },
+  "version": "1.0.0"
+}

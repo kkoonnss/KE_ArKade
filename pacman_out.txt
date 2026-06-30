@@ -1,0 +1,4 @@
+Godot Engine v4.3.stable.official.77dcf97d8 - https://godotengine.org
+
+Cartridge _ready called. Args: []
+Parsed level_dir:  ipc_port: 0 screenshot_path: 

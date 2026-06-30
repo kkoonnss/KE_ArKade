@@ -1,0 +1,23 @@
+cartridge_id: bomberman
+game_name: Bomberman
+status: playable
+version: 0.1.0
+engine: godot
+process_model: separate_process
+entry:
+  launch: "godot --path . --"
+  args_contract: "--scene <scene_dir> --level <level_dir> --ipc <socket>"
+requires:
+  orientation: [wall, floor]
+  semantic_classes: [path, solid, spawn, pickup]
+  derived_layers: [navgraph]
+  players: { min: 1, max: 4 }
+compatibility:
+  scene_schema: ">=1.0 <2.0"
+  level_schema: ">=1.0 <2.0"
+  palette: ">=1.0 <2.0"
+operator_flags:
+  supports_keyboard: true
+  supports_controllers: true
+  supports_touch_ui: false
+skins: [Classic Bomber Man, Neon Blast, Boomer Man]

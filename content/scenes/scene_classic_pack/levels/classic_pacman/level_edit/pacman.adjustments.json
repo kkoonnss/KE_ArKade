@@ -1,0 +1,17 @@
+{
+  "cartridge_id": "pacman",
+  "scene_level": "levels/classic_pacman",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "background_view": "final",
+    "grid_scale": 1.35,
+    "invert_main_solid": false,
+    "players": 1,
+    "reference": false,
+    "reference_opacity": 0.3,
+    "show_debug_grid": true,
+    "skin": "classic",
+    "wall_width": 0.75
+  },
+  "version": "1.0.0"
+}

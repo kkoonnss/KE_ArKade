@@ -1,0 +1,11 @@
+{
+  "down_direction": {
+    "x": 0,
+    "y": 1
+  },
+  "spawn_lip": {
+    "x": 640,
+    "y": 0
+  },
+  "well_polygon": []
+}

@@ -1,0 +1,8 @@
+entry_point: main.gd
+game_name: Asteroids
+schema: cartridge
+splash_screen: splash.png
+status: playable
+thumbnail: thumbnail.png
+version: 1.1.0
+skins: [Classic Vector, Neon Asteroids, Vaporwave]

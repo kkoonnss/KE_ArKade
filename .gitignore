@@ -1,0 +1,8 @@
+# Godot and Python build artifacts
+.godot/
+__pycache__/
+*.pyc
+
+# Test output exclusions
+out_*
+app/tools/tests/out_*

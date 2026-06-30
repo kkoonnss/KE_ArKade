@@ -1,0 +1,24 @@
+{
+  "cartridge_id": "tetris",
+  "scene_level": "scene_demo_wall/rock_wall_260629_173035",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "background_view": "collision",
+    "bounds_clamp": true,
+    "density": 1,
+    "fill": false,
+    "grid_scale": 0.6,
+    "group_islands": 0,
+    "invert": false,
+    "organic_behavior": "stick",
+    "players": 1,
+    "reference": true,
+    "reference_opacity": 0,
+    "secondary_photo_mix": 0.6,
+    "show_debug_grid": true,
+    "show_outline": true,
+    "spawn_clearance": 0,
+    "wall_width": 1.3
+  },
+  "version": "1.0.0"
+}

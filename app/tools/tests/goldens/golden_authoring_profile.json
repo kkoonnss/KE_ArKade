@@ -1,0 +1,25 @@
+{
+  "compiler": {
+    "cell_px": 32,
+    "derived_files": [
+      "navgraph.json",
+      "container.json",
+      "grid.json",
+      "occupancy.png",
+      "platform_edges.json",
+      "track_centerline.json",
+      "authoring_profile.json"
+    ],
+    "entry_point": "app/tools/arena_compiler/compile_level.py",
+    "image_size": {
+      "height": 100,
+      "width": 100
+    },
+    "source": "semantic_map.png",
+    "source_kind": "semantic_map"
+  },
+  "intent": "compile_all_derived",
+  "level_id": "fixture_level",
+  "schema": "authoring_profile",
+  "version": "1.0.0"
+}

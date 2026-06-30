@@ -1,0 +1,11 @@
+config_version=5
+
+[application]
+
+config/name="Loopback_Cartridge"
+run/main_scene="res://loopback.tscn"
+config/features=PackedStringArray("4.3", "Forward Plus")
+
+[display]
+window/size/viewport_width=1920
+window/size/viewport_height=1080

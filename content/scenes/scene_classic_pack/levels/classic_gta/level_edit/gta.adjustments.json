@@ -1,0 +1,13 @@
+{
+  "cartridge_id": "gta",
+  "scene_level": "levels/classic_gta",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "block_size": 1,
+    "bounds_clamp": true,
+    "density": 1,
+    "invert": false,
+    "smooth": false
+  },
+  "version": "1.0.0"
+}
