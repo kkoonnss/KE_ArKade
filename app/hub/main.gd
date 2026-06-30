@@ -48,6 +48,7 @@ var active_nav_btn: Button = null
 var dialog_scroll_vbox: VBoxContainer
 
 func _ready():
+	if scenes_grid is GridContainer: scenes_grid.columns = 3
 	init_styling()
 	load_favorites()
 	if launcher: launcher.cartridge_exited.connect(_on_cartridge_exited)
@@ -344,25 +345,11 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 
 	var skin_names = _get_skin_list(cart.manifest, game_name)
 
-	var display_title = current_skin if current_skin != "" and current_skin != default_skin else game_name
+	var display_title = game_name.replace("Classic ", "")
 
 
 
-	var prev_skin_btn = Button.new()
-
-	prev_skin_btn.text = "<"
-
-	prev_skin_btn.custom_minimum_size = Vector2(36, 36)
-
-	prev_skin_btn.pressed.connect(func():
-
-		_cycle_skin(cart_id, skin_names, -1)
-
-	)
-
-	row.add_child(prev_skin_btn)
-
-	style_grid_button(prev_skin_btn)
+	
 
 
 
@@ -388,14 +375,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 
 
 
-	var next_skin_btn = Button.new()
-	next_skin_btn.text = ">"
-	next_skin_btn.custom_minimum_size = Vector2(36, 36)
-	next_skin_btn.pressed.connect(func():
-		_cycle_skin(cart_id, skin_names, 1)
-	)
-	row.add_child(next_skin_btn)
-	style_grid_button(next_skin_btn)
+	
 
 
 func _create_level_card(level_name: String, levels_dir: String, container: Control, display_index: int = -1):
@@ -571,7 +551,7 @@ func _create_level_card(level_name: String, levels_dir: String, container: Contr
 	text_container.add_child(top_text_spacer)
 	
 	var title_lbl = Label.new()
-	title_lbl.text = classic_name if is_classic_skin else active_skin_name
+	title_lbl.text = classic_name.replace("Classic ", "")
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -579,16 +559,7 @@ func _create_level_card(level_name: String, levels_dir: String, container: Contr
 	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	text_container.add_child(title_lbl)
 	
-	if not is_classic_skin:
-		var sub_lbl = Label.new()
-		sub_lbl.text = "(" + classic_name + ")"
-		sub_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		sub_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		sub_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		sub_lbl.add_theme_font_size_override("font_size", 14)
-		sub_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
-		sub_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		text_container.add_child(sub_lbl)
+	
 
 	var bottom_text_spacer = Control.new()
 	bottom_text_spacer.custom_minimum_size = Vector2(0, 4)
@@ -892,7 +863,9 @@ func get_level_classic_name(level_name: String) -> String:
 
 	
 
-	var display_name = level_name.replace("classic_", "").capitalize()
+	var display_name = level_name.replace("classic_", "").capitalize().replace("Classic ", "")
+	if display_name == "Scene Pack": display_name = "Classic Pack"
+	if level_name.to_lower() == "scene_pack": display_name = "Classic Pack"
 
 	if cart_id != "":
 
