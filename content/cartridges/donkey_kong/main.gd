@@ -59,6 +59,7 @@ var current_extra_fill = 0.5
 var current_ladder_density = 1.0
 var current_max_ladder_length = 300.0
 var current_semantic_threshold = 0.5
+var current_map_bridge_type = "platforms"
 var logical_w = 1920.0
 var logical_h = 1080.0
 var barrel_spawner = {}
@@ -216,7 +217,8 @@ func _build_ui():
     tab_menu.register_knob_float("extra_fill", "Extra Fill %", 0.5, 0.0, 1.0, 0.05, "Secondary")
     tab_menu.register_knob_float("ladder_density", "Ladder Density", 1.0, 0.0, 2.0, 0.1, "Secondary")
     tab_menu.register_knob_float("max_ladder_length", "Max Ladder Len", 300.0, 50.0, 800.0, 25.0, "Secondary")
-    tab_menu.register_knob_float("semantic_threshold", "Semantic Threshold", 0.5, 0.0, 1.0, 0.05, "Secondary")
+    tab_menu.register_knob_enum("map_bridge_type", "Map Bridge Type", current_map_bridge_type, ["platforms", "bridges"], "Secondary")
+	tab_menu.register_knob_float("semantic_threshold", "Semantic Threshold", 0.5, 0.0, 1.0, 0.05, "Secondary")
     tab_menu.register_knob_enum("background_view", "Background View", background_view, ["final", "photo", "semantic"], "Preview")
     tab_menu.register_knob_bool("reference", "Background Layer", show_reference, "Preview")
     tab_menu.register_knob_float("reference_opacity", "Background Opacity", reference_opacity, 0.0, 1.0, 0.05, "Preview")
@@ -272,7 +274,11 @@ func _on_knob_changed(knob_id: String, value):
         current_max_ladder_length = float(value)
         load_level()
         reset_game()
-    elif knob_id == "semantic_threshold":
+    elif knob_id == "map_bridge_type":
+		current_map_bridge_type = str(value)
+		load_level()
+		reset_game()
+	elif knob_id == "semantic_threshold":
         current_semantic_threshold = float(value)
         load_level()
         reset_game()
@@ -465,38 +471,38 @@ func reset_game():
 
 
 func _add_dynamic_ladder(x: float, y_approx: float):
-    var y_top = _platform_y(Vector2(x, y_approx))
-    var y_bot = logical_h * 1.5
-    for p in platforms:
-        var r = p["rect"]
-        if x >= r.position.x and x <= r.position.x + r.size.x:
-            var t = clamp((x - r.position.x) / max(1.0, r.size.x), 0.0, 1.0)
-            var py = lerp(p["y_left"], p["y_right"], t)
-            if py > y_top + 10 and py < y_bot:
-                y_bot = py
-    if y_bot < logical_h * 1.5:
-        var length = y_bot - y_top
-        if length > current_max_ladder_length:
-            broken_ladders.append(Rect2(x, y_top, 6, current_max_ladder_length))
-        else:
-            ladders.append(Rect2(x, y_top, 6, length))
+	var y_top = _platform_y(Vector2(x, y_approx))
+	var y_bot = logical_h * 1.5
+	for p in platforms:
+		var r = p["rect"]
+		if x >= r.position.x and x <= r.position.x + r.size.x:
+			var t = clamp((x - r.position.x) / max(1.0, r.size.x), 0.0, 1.0)
+			var py = lerp(p["y_left"], p["y_right"], t)
+			if py > y_top + 10 and py < y_bot:
+				y_bot = py
+	if y_bot < logical_h * 1.5:
+		var length = y_bot - y_top
+		if length > current_max_ladder_length:
+			ladders.append(Rect2(x, y_top, 6, current_max_ladder_length))
+		else:
+			ladders.append(Rect2(x, y_top, 6, length))
 
 func _add_dynamic_broken_ladder(x: float, y_approx: float):
-    var y_top = _platform_y(Vector2(x, y_approx))
-    var y_bot = logical_h * 1.5
-    for p in platforms:
-        var r = p["rect"]
-        if x >= r.position.x and x <= r.position.x + r.size.x:
-            var t = clamp((x - r.position.x) / max(1.0, r.size.x), 0.0, 1.0)
-            var py = lerp(p["y_left"], p["y_right"], t)
-            if py > y_top + 10 and py < y_bot:
-                y_bot = py
-    if y_bot < logical_h * 1.5:
-        var length = y_bot - y_top
-        if length > current_max_ladder_length:
-            broken_ladders.append(Rect2(x, y_top, 6, current_max_ladder_length))
-        else:
-            broken_ladders.append(Rect2(x, y_top, 6, length))
+	var y_top = _platform_y(Vector2(x, y_approx))
+	var y_bot = logical_h * 1.5
+	for p in platforms:
+		var r = p["rect"]
+		if x >= r.position.x and x <= r.position.x + r.size.x:
+			var t = clamp((x - r.position.x) / max(1.0, r.size.x), 0.0, 1.0)
+			var py = lerp(p["y_left"], p["y_right"], t)
+			if py > y_top + 10 and py < y_bot:
+				y_bot = py
+	if y_bot < logical_h * 1.5:
+		var length = y_bot - y_top
+		if length > current_max_ladder_length:
+			broken_ladders.append(Rect2(x, y_top, 6, current_max_ladder_length))
+		else:
+			broken_ladders.append(Rect2(x, y_top, 6, length))
 
 func _setup_classic_donkey_kong():
     platforms.clear()
@@ -508,169 +514,22 @@ func _setup_classic_donkey_kong():
     
     var s = current_slope_angle
     var trim = logical_w * current_platform_trim
-    
-    var rng = RandomNumberGenerator.new()
-    if current_level_seed < 0:
-        rng.randomize()
-    else:
-        rng.seed = current_level_seed
-        
-    var tier_spacing = logical_h * current_platform_spacing
-    var num_tiers = int((logical_h * 0.95) / tier_spacing)
-    num_tiers = max(3, num_tiers)
-    
-    # FORCE num_tiers to be ODD so top sloped tier (num_tiers - 1) is EVEN (slopes down to RIGHT)
-    if num_tiers % 2 == 0:
-        num_tiers -= 1
-    
-    for i in range(num_tiers):
-        var is_even = (i % 2 == 0)
-        var y_center = logical_h * 0.94 - i * tier_spacing
-        var t_left = y_center
-        var t_right = y_center
-        
-        if is_even:
-            t_left -= logical_h * 0.02 * s
-            t_right += logical_h * 0.02 * s
-        else:
-            t_left += logical_h * 0.02 * s
-            t_right -= logical_h * 0.02 * s
-            
-        var p_left = logical_w * 0.1
-        var p_right = logical_w * 0.9
-        
-        if i == 0:
-            pass
-        else:
-            if is_even:
-                p_right -= trim
-            else:
-                p_left += trim
-                
-        _add_platform(Rect2(p_left, min(t_left, t_right), p_right - p_left, 5), t_left, t_right)
-        
-        if i < num_tiers - 1:
-            var lx = 0.0
-            if is_even:
-                lx = logical_w * rng.randf_range(0.15, 0.25)
-            else:
-                lx = logical_w * rng.randf_range(0.75, 0.85)
-                
-            _add_dynamic_ladder(lx, y_center - 10)
-            
-            if rng.randf() < 0.6:
-                var bx = logical_w * rng.randf_range(0.40, 0.60)
-                _add_dynamic_broken_ladder(bx, y_center - 10)
-                
-            if rng.randf() < 0.5:
-                var ex = logical_w * rng.randf_range(0.35, 0.65)
-                _add_dynamic_ladder(ex, y_center - 10)
-                
-    var top_i = num_tiers - 1
-    var top_y = logical_h * 0.94 - top_i * tier_spacing
-    var goal_y = top_y - tier_spacing
-    
-    # Top sloped tier (top_i) is EVEN, so it slopes down to RIGHT.
-    # Player reaches the LEFT side (high side).
-    # DK is on FAR LEFT. Goal is in MIDDLE LEFT.
-    
-    _add_platform(Rect2(logical_w * 0.10, goal_y, logical_w * 0.15, 5), goal_y, goal_y)
-    barrel_spawner = {"pos": Vector2(logical_w * 0.20, goal_y - 20), "vel_x": 120}
-    
-    _add_platform(Rect2(logical_w * 0.35, goal_y, logical_w * 0.25, 5), goal_y, goal_y)
-    items.append({"pos": Vector2(logical_w * 0.45, goal_y - 20), "kind": "goal"})
-    
-    # Ladder up to goal from the high left side of the top sloped tier
-    _add_dynamic_ladder(logical_w * 0.45, goal_y - 5)
-    
-    var fcount = current_fire_enemy_count
-    for i in range(fcount):
-        var ftier = rng.randi_range(1, max(1, num_tiers - 1))
-        var fy = logical_h * 0.94 - ftier * tier_spacing
-        fire_guys.append({"tier": ftier, "pos": Vector2(logical_w * 0.5, fy), "vel": Vector2(100, 0)})
-        
-    player_spawn = Vector2(logical_w * 0.85, logical_h * 0.92)
+		var slope = (current_slope_angle * 10)
+		
+		if current_map_bridge_type == "bridges":
+			trim = 0.0
+			slope = 0.0
 
-func _setup_platforms():
-    if level_dir.get_file().begins_with("classic") or level_dir.ends_with("classic"):
-        _setup_classic_donkey_kong()
-        return
-    _setup_custom_donkey_kong()
+		if dir == 1:
+			max_x -= trim
+		else:
+			min_x += trim
+		if max_x <= min_x + 10: continue
 
-func _setup_custom_donkey_kong():
-    platforms.clear()
-    ladders.clear()
-    broken_ladders.clear()
-    walls.clear()
-    fire_guys.clear()
-    items.clear()
-    
-    var rng = RandomNumberGenerator.new()
-    if current_level_seed < 0:
-        rng.randomize()
-    else:
-        rng.seed = current_level_seed
-        
-    var cs = max(0.1, current_level_scale)
-    
-    # 1. Custom Walls (Islands)
-    if grid.size() > 0:
-        for y in range(grid.size()):
-            var row = grid[y]
-            for x in range(row.size()):
-                if row[x] == 1: # Solid
-                    var wx = (x * cell_px) / cs
-                    var wy = (y * cell_px) / cs
-                    var ws = cell_px / cs
-                    walls.append(Rect2(wx, wy, ws, ws))
-    
-    # 2. Custom Platforms
-    var extracted_platforms = []
-    if grid.size() > 0:
-        for y in range(1, grid.size()):
-            var current_platform_start_x = -1
-            for x in range(grid[y].size()):
-                var is_solid = grid[y][x] == 1
-                var is_top_edge = is_solid and grid[y-1][x] != 1
-                if is_top_edge:
-                    if current_platform_start_x == -1:
-                        current_platform_start_x = x
-                else:
-                    if current_platform_start_x != -1:
-                        var px1 = current_platform_start_x * cell_px
-                        var px2 = x * cell_px
-                        var py = y * cell_px
-                        extracted_platforms.append({"p1": Vector2(px1, py), "p2": Vector2(px2, py)})
-                        current_platform_start_x = -1
-            if current_platform_start_x != -1:
-                var px1 = current_platform_start_x * cell_px
-                var px2 = grid[y].size() * cell_px
-                var py = y * cell_px
-                extracted_platforms.append({"p1": Vector2(px1, py), "p2": Vector2(px2, py)})
-                
-    var sorted_platforms = []
-    for p in extracted_platforms:
-        sorted_platforms.append(p)
-    sorted_platforms.sort_custom(func(a, b): return a["p1"].y < b["p1"].y)
-    
-    var dir = 1
-    for p in sorted_platforms:
-        var min_x = min(p["p1"].x, p["p2"].x) / cs
-        var max_x = max(p["p1"].x, p["p2"].x) / cs
-        var py = p["p1"].y / cs
-        
-        var trim = logical_w * current_platform_trim
-        if dir == 1:
-            max_x -= trim
-        else:
-            min_x += trim
-        if max_x <= min_x + 10: continue
-        
-        var y_left = py
-        var y_right = py
-        var slope = (current_slope_angle * 10)
-        y_left -= dir * slope
-        y_right += dir * slope
+		var y_left = py
+		var y_right = py
+		y_left -= dir * slope
+		y_right += dir * slope
         
         _add_platform(Rect2(min_x, min(y_left, y_right), max_x - min_x, 5), y_left, y_right)
         dir *= -1
@@ -693,17 +552,22 @@ func _setup_custom_donkey_kong():
                 for j in range(num_fillers):
                     var py = p_top["rect"].position.y + filler_spacing * (j + 1)
                     var trim = logical_w * current_platform_trim
-                    var min_x = 0.0
-                    var max_x = logical_w
-                    if dir == 1:
-                        max_x -= trim
-                    else:
-                        min_x += trim
-                    var y_left = py
-                    var y_right = py
-                    var slope = (current_slope_angle * 10)
-                    y_left -= dir * slope
-                    y_right += dir * slope
+		var slope = (current_slope_angle * 10)
+		
+		if current_map_bridge_type == "bridges":
+			trim = 0.0
+			slope = 0.0
+
+		if dir == 1:
+			max_x -= trim
+		else:
+			min_x += trim
+		if max_x <= min_x + 10: continue
+
+		var y_left = py
+		var y_right = py
+		y_left -= dir * slope
+		y_right += dir * slope
                     procedural_platforms.append({"rect": Rect2(min_x, min(y_left, y_right), max_x - min_x, 5), "y_left": y_left, "y_right": y_right})
                     dir *= -1
         
@@ -717,17 +581,22 @@ func _setup_custom_donkey_kong():
             for j in range(num_bottom_fillers):
                 var py = last_p["rect"].position.y + filler_spacing * (j + 1)
                 var trim = logical_w * current_platform_trim
-                var min_x = 0.0
-                var max_x = logical_w
-                if dir == 1:
-                    max_x -= trim
-                else:
-                    min_x += trim
-                var y_left = py
-                var y_right = py
-                var slope = (current_slope_angle * 10)
-                y_left -= dir * slope
-                y_right += dir * slope
+		var slope = (current_slope_angle * 10)
+		
+		if current_map_bridge_type == "bridges":
+			trim = 0.0
+			slope = 0.0
+
+		if dir == 1:
+			max_x -= trim
+		else:
+			min_x += trim
+		if max_x <= min_x + 10: continue
+
+		var y_left = py
+		var y_right = py
+		y_left -= dir * slope
+		y_right += dir * slope
                 procedural_platforms.append({"rect": Rect2(min_x, min(y_left, y_right), max_x - min_x, 5), "y_left": y_left, "y_right": y_right})
                 dir *= -1
                 
@@ -741,17 +610,22 @@ func _setup_custom_donkey_kong():
             for j in range(num_top_fillers):
                 var py = (logical_h * 0.05) + filler_spacing * (j + 1)
                 var trim = logical_w * current_platform_trim
-                var min_x = 0.0
-                var max_x = logical_w
-                if dir == 1:
-                    max_x -= trim
-                else:
-                    min_x += trim
-                var y_left = py
-                var y_right = py
-                var slope = (current_slope_angle * 10)
-                y_left -= dir * slope
-                y_right += dir * slope
+		var slope = (current_slope_angle * 10)
+		
+		if current_map_bridge_type == "bridges":
+			trim = 0.0
+			slope = 0.0
+
+		if dir == 1:
+			max_x -= trim
+		else:
+			min_x += trim
+		if max_x <= min_x + 10: continue
+
+		var y_left = py
+		var y_right = py
+		y_left -= dir * slope
+		y_right += dir * slope
                 procedural_platforms.append({"rect": Rect2(min_x, min(y_left, y_right), max_x - min_x, 5), "y_left": y_left, "y_right": y_right})
                 dir *= -1
                 
@@ -1135,14 +1009,12 @@ func _tick_barrel(delta):
             barrels.remove_at(i)
             continue
         for p in dk_players:
-            if p.get("dead", false): continue
-            var d = b["pos"].distance_to(p["pos"])
-            var p_rect = Rect2(p["pos"].x - 6, p["pos"].y - 12, 12, 12)
-            var b_rect = Rect2(b["pos"].x - 6, b["pos"].y - 12, 12, 12)
-            if p_rect.intersects(b_rect):
-                p["dead"] = true
-                _lose_life()
-            elif d < 38 and p["vel"].y < -20 and not b["jumped"]:
+			if p.get("dead", false): continue
+			var d = b["pos"].distance_to(p["pos"])
+			if d < 18:
+				p["dead"] = true
+				_lose_life()
+			elif d < 38 and p["vel"].y < -20 and not b["jumped"]:
                 b["jumped"] = true
                 score += 100
                 _emit_score()
@@ -2070,18 +1942,22 @@ func _spawn_food():
     food_cell = _find_nearest_walkable_cell(Vector2i(2, 2))
 
 func _lose_life():
-    lives -= 1
-    _burst(player.get("pos", Vector2(logical_w * 0.5, logical_h * 0.5)), C_RED, 24)
-    if lives <= 0:
-        state = "game_over"
-        send_ipc_message({"type": "state", "data": {"state": "game_over"}})
-    else:
-        if game_id == "donkey_kong" and player_spawn != Vector2.ZERO:
-            player["pos"] = player_spawn
-        else:
-            player["pos"] = _safe_pos(Vector2(logical_w * 0.18, logical_h * 0.78))
-        player["vel"] = Vector2.ZERO
-        send_ipc_message({"type": "state", "data": {"state": "life_lost", "lives": lives}})
+	lives -= 1
+	_burst(player.get("pos", Vector2(logical_w * 0.5, logical_h * 0.5)), C_RED, 24)
+	if lives <= 0:
+		state = "game_over"
+		send_ipc_message({"type": "state", "data": {"state": "game_over"}})
+	else:
+		if game_id == "donkey_kong" and player_spawn != Vector2.ZERO:
+			for i in range(dk_players.size()):
+				dk_players[i]["pos"] = player_spawn
+				dk_players[i]["vel"] = Vector2.ZERO
+				dk_players[i]["on_ground"] = false
+				dk_players[i]["dead"] = false
+		else:
+			player["pos"] = _safe_pos(Vector2(logical_w * 0.18, logical_h * 0.78))
+		player["vel"] = Vector2.ZERO
+		send_ipc_message({"type": "state", "data": {"state": "life_lost", "lives": lives}})
 
 func _win_wave():
     score += 500
