@@ -31,73 +31,146 @@ var scroll_vbox: VBoxContainer
 var active_nav_btn: Button = null
 var dialog_scroll_vbox: VBoxContainer
 
-var debug_logs: Array[String] = []
-var debug_panel: VBoxContainer = null
-var log_refresh_timer: float = 0.0
-@onready var main_panel = $UI/Content/MainPanel
-var splash_overlay: ColorRect
-var design_screen_scene = preload("res://design_screen.tscn")
-var content_vbox: VBoxContainer
-var last_launch_time: float = 0.0
+func _ready():
+	panic_overlay.visible = false
+	if panic_btn: panic_btn.pressed.connect(_on_panic_pressed)
+	if restore_btn: restore_btn.pressed.connect(_on_restore_pressed)
+	
+	var nav = $UI/Content/SideNav
+	if nav.has_node("ScenesBtn"): nav.get_node("ScenesBtn").pressed.connect(display_scenes)
+	if nav.has_node("GamesBtn"): nav.get_node("GamesBtn").pressed.connect(display_games)
+	if nav.has_node("LevelsBtn"): nav.get_node("LevelsBtn").pressed.connect(display_levels)
+	if nav.has_node("DesignBtn"): nav.get_node("DesignBtn").pressed.connect(_on_design_nav_pressed)
+	if nav.has_node("CalibrateBtn"): nav.get_node("CalibrateBtn").pressed.connect(_on_launch_calibration_tool)
+	if nav.has_node("TestPatternBtn"): nav.get_node("TestPatternBtn").pressed.connect(_on_test_pattern_pressed)
+	
+	display_scenes()
 
-# Styling Theme
-var color_black = Color(0, 0, 0, 1)
-var color_surface1 = Color(0.04, 0.04, 0.04, 1) # #0A0A0A
-var color_surface2 = Color(0.07, 0.08, 0.09, 1) # #111418
-var color_ink_white = Color(1, 1, 1, 1)
-var color_ink_dim = Color(0.6, 0.63, 0.65, 1) # #9AA0A6
-var color_cyan = Color(0.0, 0.9, 1.0, 1) # #00E5FF
-var color_panic_red = Color(1.0, 0.18, 0.3, 1)
-var color_border_default = Color(1, 1, 1, 0.14)
+func clear_main_panel():
+	for child in scenes_grid.get_children():
+		child.queue_free()
 
-var style_panel: StyleBoxFlat
-		display_games()
-		await get_tree().create_timer(1.0).timeout
+func set_active_nav(active_btn: Button):
+	active_nav_btn = active_btn
 
-	elif mode == "nav":
-		await get_tree().create_timer(2.0).timeout
-		
-	elif mode == "picker":
-		# Select first scene
-		_on_scene_selected("scene_demo_wall")
-		await get_tree().create_timer(0.5).timeout
-		# Select first level
-		_on_level_selected("demo_level")
-		await get_tree().create_timer(1.0).timeout
-		
-	elif mode == "panic":
-		# Trigger panic black
-		_on_panic_pressed()
-		await get_tree().create_timer(0.5).timeout
-		
-	elif mode == "service" or mode == "log":
-		# Navigate to Log tab
-		display_service_panel()
-		await get_tree().create_timer(2.0).timeout
-		
-	elif mode == "restore":
-		# Populate log with simulated crash & restore logs
-		log_debug("Launching game: pacman on level demo_level")
-		log_debug("Cartridge connected to socket")
-		log_debug("Received: {\"type\":\"heartbeat\"}")
-		log_debug("Process exited externally (abnormal exit)")
-		log_debug("Crash/timeout detected after 5.42s, restoring last known good...")
-		log_debug("Launching game: pacman on level demo_level")
-		display_service_panel()
-		await get_tree().create_timer(0.5).timeout
-
-	# Capture and save
-	var img = get_viewport().get_texture().get_image()
-	img.save_png(path)
-	print("Auto screenshot (", mode, ") saved to: ", path)
-	get_tree().quit()
-
+func display_scenes():
+	clear_main_panel()
+	var base_dir = ProjectSettings.globalize_path("res://").path_join("../../content/scenes")
+	var dir = DirAccess.open(base_dir)
+	if dir:
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			if dir.current_is_dir() and not file_name.begins_with("."):
+				var btn = Button.new()
+				btn.text = file_name.capitalize()
+				style_grid_button(btn)
+				btn.pressed.connect(func(): _on_scene_selected(file_name))
+				scenes_grid.add_child(btn)
+			file_name = dir.get_next()
 
 
 func style_grid_button(btn: Button):
-	btn.add_theme_stylebox_override("normal", style_btn_normal)
-	btn.add_theme_stylebox_override("hover", style_btn_hover)
-	btn.add_theme_stylebox_override("pressed", style_btn_pressed)
-	btn.add_theme_color_override("font_color", color_ink_dim)
-	btn.add_theme_color_override("font_hover_color", color_ink_white)
-	btn.add_theme_color_override("font_pressed_color", color_black)
+	btn.custom_minimum_size = Vector2(240, 160)
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0.15, 0.15, 0.18, 1.0)
+	style.corner_radius_top_left = 12
+	style.corner_radius_top_right = 12
+	style.corner_radius_bottom_left = 12
+	style.corner_radius_bottom_right = 12
+	style.border_width_bottom = 4
+	style.border_color = Color(0.1, 0.1, 0.1, 1.0)
+	btn.add_theme_stylebox_override("normal", style)
+	
+	var hover = style.duplicate()
+	hover.bg_color = Color(0.2, 0.2, 0.25, 1.0)
+	btn.add_theme_stylebox_override("hover", hover)
+	
+	var pressed = style.duplicate()
+	pressed.bg_color = Color(0.1, 0.1, 0.12, 1.0)
+	pressed.border_width_bottom = 0
+	btn.add_theme_stylebox_override("pressed", pressed)
+	
+	btn.add_theme_font_size_override("font_size", 24)
+
+func _on_scene_selected(scene_name: String):
+	current_scene = scene_name
+	display_levels()
+
+func display_levels():
+	clear_main_panel()
+	var base_dir = ProjectSettings.globalize_path("res://").path_join("../../content/scenes").path_join(current_scene).path_join("levels")
+	var dir = DirAccess.open(base_dir)
+	if dir:
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			if dir.current_is_dir() and not file_name.begins_with("."):
+				var btn = Button.new()
+				btn.text = file_name.capitalize()
+				style_grid_button(btn)
+				btn.pressed.connect(func(): _on_level_selected(file_name))
+				scenes_grid.add_child(btn)
+			file_name = dir.get_next()
+
+func _on_level_selected(level_name: String):
+	selected_level_name = level_name
+	display_games()
+
+func display_games():
+	clear_main_panel()
+	var base_dir = ProjectSettings.globalize_path("res://").path_join("../../content/cartridges")
+	var dir = DirAccess.open(base_dir)
+	if dir:
+		dir.list_dir_begin()
+		var file_name = dir.get_next()
+		while file_name != "":
+			if dir.current_is_dir() and not file_name.begins_with("."):
+				var btn = Button.new()
+				btn.text = file_name.capitalize()
+				style_grid_button(btn)
+				btn.pressed.connect(func(): _launch_game(file_name))
+				scenes_grid.add_child(btn)
+			file_name = dir.get_next()
+
+func _launch_game(cart_id: String):
+	last_known_level = selected_level_name
+	last_known_cartridge = cart_id
+	var base_dir = ProjectSettings.globalize_path("res://").path_join("../..")
+	var scene_dir = base_dir.path_join("content/scenes").path_join(current_scene)
+	var level_dir = scene_dir.path_join("levels").path_join(selected_level_name)
+	var cart_dir = base_dir.path_join("content/cartridges").path_join(cart_id)
+	
+	var launch_cmd = "Godot_v4.3-stable_win64.exe"
+	var args_template = "--path \"" + cart_dir + "\" --scene \"" + scene_dir + "\" --level \"" + level_dir + "\""
+	
+	if launcher:
+		launcher.launch(launch_cmd, args_template, scene_dir, level_dir)
+
+func log_debug(msg: String):
+	print(msg)
+
+func _on_panic_pressed():
+	is_panic = not is_panic
+	panic_overlay.visible = is_panic
+	if is_panic and launcher:
+		launcher.kill_cartridge()
+
+func _on_restore_pressed():
+	if last_known_cartridge != "":
+		_launch_game(last_known_cartridge)
+
+func _on_design_nav_pressed():
+	pass
+
+func _on_launch_calibration_tool():
+	pass
+
+func _on_test_pattern_pressed():
+	pass
+
+func parse_simple_yaml(path: String) -> Dictionary:
+	return {}
+
+func _get_repo_root() -> String:
+	return ProjectSettings.globalize_path("res://").path_join("../..")
