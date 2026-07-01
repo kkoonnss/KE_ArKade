@@ -432,7 +432,10 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 func _create_level_card(level_name: String, levels_dir: String, container: Control, display_index: int = -1, is_scene: bool = false):
 	var btn = Button.new()
 	btn.custom_minimum_size = Vector2(256, 284)
-	btn.pressed.connect(func(): _on_level_selected(level_name))
+	if is_scene:
+		btn.pressed.connect(func(): _on_scene_selected(level_name))
+	else:
+		btn.pressed.connect(func(): _on_level_selected(level_name))
 	container.add_child(btn)
 
 	var margin = MarginContainer.new()
