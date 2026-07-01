@@ -12,6 +12,7 @@ var last_known_level = ""
 var last_known_cartridge = ""
 
 var current_scene = ""
+var ipc_log_lines = []
 var viewing_levels = false
 var last_launch_time = 0.0
 var color_black = Color(0, 0, 0, 1)
@@ -62,7 +63,9 @@ func _ready():
 		
 	init_styling()
 	load_favorites()
-	if launcher: launcher.cartridge_exited.connect(_on_cartridge_exited)
+	if launcher: 
+		launcher.cartridge_exited.connect(_on_cartridge_exited)
+		launcher.ipc_log.connect(_on_ipc_log)
 	
 	panic_overlay.visible = false
 	if panic_btn: panic_btn.pressed.connect(_on_panic_pressed)
@@ -75,6 +78,9 @@ func _ready():
 	if nav.has_node("DesignBtn"): nav.get_node("DesignBtn").pressed.connect(_on_design_nav_pressed)
 	if nav.has_node("CalibrateBtn"): nav.get_node("CalibrateBtn").pressed.connect(_on_launch_calibration_tool)
 	if nav.has_node("TestPatternBtn"): nav.get_node("TestPatternBtn").pressed.connect(_on_test_pattern_pressed)
+	if nav.has_node("ServiceBtn"): nav.get_node("ServiceBtn").pressed.connect(_on_log_pressed)
+	var topbar = $UI/TopBar
+	if topbar and topbar.has_node("HelpBtn"): topbar.get_node("HelpBtn").pressed.connect(_on_help_pressed)
 	
 	if nav.has_node("SortFavBtn"): nav.get_node("SortFavBtn").toggled.connect(_on_sort_favorites_toggled)
 	
@@ -240,7 +246,7 @@ func _launch_game(cart_id: String):
 	var cart_dir = base_dir.path_join("content/cartridges").path_join(cart_id)
 	
 	var launch_cmd = "Godot_v4.3-stable_win64.exe"
-	var args_template = "--path \"" + cart_dir + "\" --scene \"" + scene_dir + "\" --level \"" + level_dir + "\""
+	var args_template = "--path \"" + cart_dir + "\" -- --scene \"" + scene_dir + "\" --level \"" + level_dir + "\" --ipc <socket>"
 	
 	if launcher:
 		launcher.launch(launch_cmd, args_template, scene_dir, level_dir)
@@ -271,11 +277,68 @@ func _on_design_nav_pressed():
 	var design = load("res://design_screen.tscn").instantiate()
 	$UI/Content/MainPanel.add_child(design)
 
+func _on_ipc_log(msg: String):
+	ipc_log_lines.append(msg)
+	if ipc_log_lines.size() > 50:
+		ipc_log_lines.pop_front()
+
+func _show_placeholder_overlay(title_text: String, content_text: String = "Coming soon"):
+	var overlay = ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.8)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	
+	var panel = PanelContainer.new()
+	var style = StyleBoxFlat.new()
+	style.bg_color = color_surface2
+	style.border_width_bottom = 2
+	style.border_color = color_cyan
+	style.content_margin_left = 32
+	style.content_margin_right = 32
+	style.content_margin_top = 32
+	style.content_margin_bottom = 32
+	panel.add_theme_stylebox_override("panel", style)
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 24)
+	
+	var title = Label.new()
+	title.text = title_text
+	title.add_theme_font_size_override("font_size", 32)
+	title.add_theme_color_override("font_color", color_cyan)
+	vbox.add_child(title)
+	
+	var content = Label.new()
+	content.text = content_text
+	content.add_theme_font_size_override("font_size", 20)
+	vbox.add_child(content)
+	
+	var close_btn = Button.new()
+	close_btn.text = "Close"
+	close_btn.custom_minimum_size = Vector2(120, 48)
+	close_btn.add_theme_font_size_override("font_size", 20)
+	close_btn.pressed.connect(func(): overlay.queue_free())
+	vbox.add_child(close_btn)
+	
+	panel.add_child(vbox)
+	overlay.add_child(panel)
+	
+	$UI.add_child(overlay)
+
 func _on_launch_calibration_tool():
-	pass
+	_show_placeholder_overlay("Calibration", "Calibration tool coming soon.")
 
 func _on_test_pattern_pressed():
-	pass
+	_show_placeholder_overlay("Test Pattern", "Test patterns coming soon.")
+
+func _on_log_pressed():
+	var log_text = "\n".join(ipc_log_lines)
+	if log_text == "": log_text = "No logs yet."
+	_show_placeholder_overlay("IPC Log", log_text)
+
+func _on_help_pressed():
+	var help_text = "Nav buttons:\n\n- Scenes: Pick a background scene.\n- Levels: Pick a level variation.\n- Games: Pick a game to launch.\n- Design: Edit palettes/thumbnails.\n- Calibrate: Coming soon.\n- Log: View IPC logs."
+	_show_placeholder_overlay("Help", help_text)
 
 func parse_simple_yaml(path: String) -> Dictionary:
 	return {}
