@@ -92,15 +92,27 @@ func display_scenes():
 	clear_main_panel()
 	var base_dir = ProjectSettings.globalize_path("res://").path_join("../../content/scenes")
 	var dir = DirAccess.open(base_dir)
+	var scenes = []
 	if dir:
 		dir.list_dir_begin()
 		var file_name = dir.get_next()
-		var index = 0
 		while file_name != "":
 			if dir.current_is_dir() and not file_name.begins_with("."): 
-				_create_level_card(file_name, base_dir, scenes_grid, index)
-				index += 1
+				scenes.append(file_name)
 			file_name = dir.get_next()
+			
+	scenes.sort_custom(func(a, b):
+		var a_is_classic = (a == "scene_classic_pack" or "classic" in a.to_lower())
+		var b_is_classic = (b == "scene_classic_pack" or "classic" in b.to_lower())
+		if a_is_classic and not b_is_classic:
+			return true
+		if b_is_classic and not a_is_classic:
+			return false
+		return a < b
+	)
+	
+	for i in range(scenes.size()):
+		_create_level_card(scenes[i], base_dir, scenes_grid, i)
 func style_grid_button(btn: Button):
 	btn.custom_minimum_size = Vector2(240, 160)
 	var style = StyleBoxFlat.new()
