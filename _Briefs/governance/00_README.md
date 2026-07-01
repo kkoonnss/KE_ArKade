@@ -34,6 +34,7 @@ If you are an orchestrator picking up the chair, also read
 | 05 | [[05_ORCHESTRATOR_RUNBOOK]] | "How do I hold the orchestrator chair? Cold start, sweep, dispatch, handoff." | orchestrators |
 | 06 | [[06_VAULT_HYGIENE]] | "What keeps the vault honest? What are the tracked hygiene failures?" | orchestrators (and all agents indirectly) |
 | 07 | [[07_GIT_GOVERNANCE]] | "How is git used as backup + time machine? What's the .gitignore? Commit cadence?" | every agent (snapshots), orchestrator (tags), GitHub-integration agent (remote) |
+| 08 | [[08_NEW_SESSION_SEED]] | "How does Kons start a fresh Opus thread in one paste?" | Kons + incoming orchestrators |
 
 ---
 

@@ -9,7 +9,10 @@ session_end: 2026-06-30T~20:30Z (last hub commit before governance pass)
 task_id: (informal — hub post-corruption regression fix)
 lane: hub
 lock_held: hub-design
-status: pending_kons_verify
+status: done
+closed_at: 2026-06-30
+closed_by: opus_orchestrator
+kons_confirmation: "2026-06-30 — Kons confirmed tabs load and thumbnails/favorites render in the live hub. Minor layout polish outstanding, deferred to Wave 3 (non-blocking)."
 pre_edit_commit: ec63df1 (previous hub-restore commit)
 close_commits:
   - c277267 "Tweak Hub UI to fix grid layout and simplify classic labels"

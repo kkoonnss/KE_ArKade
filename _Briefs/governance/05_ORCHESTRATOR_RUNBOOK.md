@@ -225,7 +225,64 @@ You, too, have lane discipline.
   history. Direct `git` execution is allowed for the orchestrator's
   sweep/snapshot duties even though it's "writes."
 
-## 9. When to ask Kons vs. decide
+## 9a. QC cadence (Sonnet sub-agent pattern)
+
+The orchestrator does not verify every gate personally. It spawns Sonnet
+4.6 sub-agents (via the Agent tool) for cold, narrow validation passes.
+This is the "belt AND suspenders" layer that makes Kons's "efficiency =
+me not finding bugs" possible.
+
+**QC pass triggers (spawn a Sonnet sub-agent when any of these fire):**
+
+1. **Batch of 3+ cartridge returns.** After 3 or more agents claim
+   `status: done` on cart tickets in the same window, spawn one Sonnet
+   sub-agent to cold-re-run the cartridge gate
+   (`02_VERIFICATION_GATES.md` §2) on ALL of them. If the sub-agent
+   disagrees with any claim, that claim is downgraded to
+   `pending_kons_verify`.
+2. **Hub commit without an accompanying receipt.** Spawn a Sonnet
+   sub-agent to reconstruct the receipt from the commit + `AGENT_SYNC.md`.
+   Same pattern as the Jun 28-30 corruption reconstruction — automate it.
+3. **Weekly hygiene sweep.** Spawn a Sonnet sub-agent to run every check
+   in `06_VAULT_HYGIENE.md` §7 (lock sweep, status reconciliation,
+   handoff completeness, repo-root cruft) and file a hygiene report at
+   `vault/40-agent-runs/hygiene_sweep_<YYYY-MM-DD>.md`.
+4. **Pre-cascade validation.** Before dispatching a large parallel batch
+   (6+ agents), spawn a Sonnet sub-agent to grep-verify that every
+   ticket the batch depends on is actually `done` with valid receipt.
+5. **Cross-cartridge consistency.** Every N ticket closes (N=5 default),
+   spawn a Sonnet sub-agent to grep for pattern drift across the cart
+   family (e.g. "all maze carts use SharedLoader the same way"). Drift
+   opens a Wave-3 ticket.
+
+**Sub-agent briefing shape:**
+
+Every sub-agent gets: the four mandatory reads (`01_LANES`, `02_VERIFICATION_GATES`,
+`03_RECOVERY_PROTOCOL`, `04_AGENT_HANDOFF_TEMPLATE`), plus its specific
+scope. It writes a receipt like any other agent. It closes.
+
+**Model routing:**
+
+- Orchestrator chair: **Opus 4.8, extended thinking**. Judgment lane.
+- QC sub-agents (grep, gate re-runs, receipt reconstruction): **Sonnet 4.6**.
+- Fast pattern checks (dead-simple existence/count): **Haiku 4.5** where
+  the task truly does not need reasoning.
+
+The point: the orchestrator is expensive-but-rare, the QC is cheap-and-often.
+Both are needed. Neither can be skipped without regressing to Jun 28-30.
+
+## 9b. Sub-agent budget guidance
+
+Kons rations Claude credits. To make the QC pattern affordable:
+
+- Prefer **one sub-agent per QC pass**, not one per artifact. A Sonnet
+  sub-agent can grep 22 cartridges in a single session.
+- Bundle QC triggers. If the weekly sweep and a batch-of-3-return
+  validation both fire on the same day, one sub-agent handles both.
+- Use Haiku where the check is grep-count-shaped and Sonnet only when
+  interpretation is needed.
+
+## 10. When to ask Kons vs. decide
 
 Ask Kons when:
 - A schema change or contract change has a creative impact (game feel,

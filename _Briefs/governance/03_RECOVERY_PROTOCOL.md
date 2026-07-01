@@ -85,6 +85,13 @@ commit. This bounds the blast radius if anything goes sideways mid-session.
 The orchestrator (or a scheduled task) tags `daily/<YYYY-MM-DD>` once per
 day, regardless of session activity. Cheap, durable, never wrong to have.
 
+### 2.5 Per-week backup snapshot (orchestrator)
+
+The orchestrator tags `week/<YYYY-Www>` (ISO week) once per week. This is
+the "larger increment" backup — the coarse marker Kons's small-vs-large
+versioning concern maps to. When the GitHub remote lands, weekly tags are
+the minimum push cadence.
+
 ## 3. The forbidden patterns (already in `01_LANES.md` §2)
 
 - `multi_replace_file_content` without the §1.1 sanity check.
