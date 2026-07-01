@@ -144,7 +144,10 @@ func style_grid_button(btn: Button):
 
 func _on_scene_selected(scene_name: String):
 	current_scene = scene_name
-	display_levels()
+	if scene_name == "scene_classic_pack":
+		display_games()
+	else:
+		display_levels()
 
 func display_levels():
 	clear_main_panel()
@@ -161,20 +164,6 @@ func display_levels():
 			file_name = dir.get_next()
 func _on_level_selected(level_name: String):
 	selected_level_name = level_name
-	
-	if current_scene == "scene_classic_pack":
-		var cart_id = ""
-		if level_name == "classic_on_track":
-			cart_id = "on_track"
-		else:
-			cart_id = level_name.replace("classic_", "")
-			
-		var base_dir = ProjectSettings.globalize_path("res://").path_join("../../")
-		var cart_path = base_dir.path_join("content/cartridges").path_join(cart_id)
-		if DirAccess.dir_exists_absolute(cart_path):
-			_launch_game(cart_id)
-			return
-			
 	display_games()
 
 func display_games():
@@ -235,9 +224,10 @@ func display_games():
 			_create_game_card(game, grid, game.absolute_index)
 
 func _launch_game(cart_id: String):
-	if cart_id in ["tetris", "pacman", "bomberman", "frogger", "asteroids", "tron", "on_track", "rampage", "gta"]:
-		current_scene = "scene_classic_pack"
-		selected_level_name = "classic_" + cart_id
+	if current_scene == "" or current_scene == "scene_classic_pack":
+		if cart_id in ["tetris", "pacman", "bomberman", "frogger", "asteroids", "tron", "on_track", "rampage", "gta"]:
+			current_scene = "scene_classic_pack"
+			selected_level_name = "classic_" + cart_id
 		
 	if current_scene == "" or selected_level_name == "":
 		current_scene = "scene_demo_wall"
