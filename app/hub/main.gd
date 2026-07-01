@@ -384,7 +384,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	var arrow_style = StyleBoxFlat.new()
 	arrow_style.bg_color = Color(0,0,0, 0.4)
 	prev_skin_btn.add_theme_stylebox_override("normal", arrow_style)
-	prev_skin_btn.position = Vector2(0, 100 - 24)
+	prev_skin_btn.set_anchors_and_offsets_preset(Control.PRESET_CENTER_LEFT)
 	prev_skin_btn.pressed.connect(func():
 		_cycle_skin(cart_id, skins, -1)
 	)
@@ -395,7 +395,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	next_skin_btn.custom_minimum_size = Vector2(36, 48)
 	next_skin_btn.add_theme_font_size_override("font_size", 24)
 	next_skin_btn.add_theme_stylebox_override("normal", arrow_style)
-	next_skin_btn.position = Vector2(244 - 36, 100 - 24)
+	next_skin_btn.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
 	next_skin_btn.pressed.connect(func():
 		_cycle_skin(cart_id, skins, 1)
 	)
