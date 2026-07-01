@@ -143,6 +143,20 @@ func display_levels():
 			file_name = dir.get_next()
 func _on_level_selected(level_name: String):
 	selected_level_name = level_name
+	
+	if current_scene == "scene_classic_pack":
+		var cart_id = ""
+		if level_name == "classic_on_track":
+			cart_id = "on_track"
+		else:
+			cart_id = level_name.replace("classic_", "")
+			
+		var base_dir = ProjectSettings.globalize_path("res://").path_join("../../")
+		var cart_path = base_dir.path_join("content/cartridges").path_join(cart_id)
+		if DirAccess.dir_exists_absolute(cart_path):
+			_launch_game(cart_id)
+			return
+			
 	display_games()
 
 func display_games():
@@ -845,8 +859,8 @@ func get_level_classic_name(level_name: String) -> String:
 	
 
 	var display_name = level_name.replace("classic_", "").capitalize().replace("Classic ", "")
-	if display_name == "Scene Pack": display_name = "Classic Pack"
-	if level_name.to_lower() == "scene_pack": display_name = "Classic Pack"
+	if level_name == "scene_classic_pack":
+		display_name = "Classic Pack"
 
 	if cart_id != "":
 
