@@ -240,7 +240,7 @@ func _launch_game(cart_id: String):
 		
 	last_known_level = selected_level_name
 	last_known_cartridge = cart_id
-	var base_dir = ProjectSettings.globalize_path("res://").path_join("../..")
+	var base_dir = ProjectSettings.globalize_path("res://").path_join("../..").simplify_path()
 	var scene_dir = base_dir.path_join("content/scenes").path_join(current_scene)
 	var level_dir = scene_dir.path_join("levels").path_join(selected_level_name)
 	var cart_dir = base_dir.path_join("content/cartridges").path_join(cart_id)

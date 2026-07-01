@@ -126,6 +126,9 @@ func launch(launch_cmd: String, args_template: String, scene_dir: String, level_
 		
 	emit_signal("ipc_log", "Launching: " + final_cmd)
 	
+	emit_signal("ipc_log", "DEBUG EXE: " + exe)
+	emit_signal("ipc_log", "DEBUG ARGS: " + str(args))
+	emit_signal("ipc_log", "DEBUG CWD: " + OS.get_executable_path().get_base_dir())
 	active_pid = OS.create_process(exe, args)
 	if active_pid > 0:
 		running = true
