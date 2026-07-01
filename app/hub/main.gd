@@ -359,7 +359,11 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	fav_btn.add_theme_stylebox_override("hover", fav_style)
 	fav_btn.add_theme_stylebox_override("pressed", fav_style)
 	fav_btn.add_theme_stylebox_override("focus", fav_style)
-	fav_btn.position = Vector2(244 - 36 - 4, 4)
+	fav_btn.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	fav_btn.offset_left = -40
+	fav_btn.offset_right = -4
+	fav_btn.offset_top = 4
+	fav_btn.offset_bottom = 40
 	fav_btn.pressed.connect(func():
 		toggle_favorite(cart_id)
 		display_games()
@@ -373,7 +377,9 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	var arrow_style = StyleBoxFlat.new()
 	arrow_style.bg_color = Color(0,0,0, 0.4)
 	prev_skin_btn.add_theme_stylebox_override("normal", arrow_style)
-	prev_skin_btn.set_anchors_and_offsets_preset(Control.PRESET_CENTER_LEFT)
+	prev_skin_btn.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	prev_skin_btn.offset_left = 0
+	prev_skin_btn.offset_right = 36
 	prev_skin_btn.pressed.connect(func():
 		_cycle_skin(cart_id, skins, -1)
 	)
@@ -384,7 +390,9 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	next_skin_btn.custom_minimum_size = Vector2(36, 48)
 	next_skin_btn.add_theme_font_size_override("font_size", 24)
 	next_skin_btn.add_theme_stylebox_override("normal", arrow_style)
-	next_skin_btn.set_anchors_and_offsets_preset(Control.PRESET_CENTER_RIGHT)
+	next_skin_btn.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
+	next_skin_btn.offset_left = -36
+	next_skin_btn.offset_right = 0
 	next_skin_btn.pressed.connect(func():
 		_cycle_skin(cart_id, skins, 1)
 	)
