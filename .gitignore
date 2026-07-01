@@ -6,3 +6,84 @@ __pycache__/
 # Test output exclusions
 out_*
 app/tools/tests/out_*
+
+# ============================================================
+# RECOVERY / SCRATCH (added 2026-06-30 governance pass)
+# Origin: Jun 28-30 hub corruption left ~100 throwaway scripts and
+# diagnostic dumps in repo root. See _Briefs/governance/07_GIT_GOVERNANCE.md
+# and _Briefs/governance/03_RECOVERY_PROTOCOL.md.
+# ============================================================
+
+# Throwaway recovery/patch scripts at repo root
+/fix_*.py
+/patch_*.py
+/recover*.py
+/stitch*.py
+/port_hub*.py
+/add_multiplayer.py
+/add_preview_menu.py
+/rebuild_*.py
+/refactor_*.py
+/implement_*.py
+/integrate_*.py
+/tile_*.py
+/gap_fill.py
+/gen_seed.py
+/clean_*.py
+/clean_stitched.py
+/smart_*.py
+/visual_*.py
+/find_main_gd_history.py
+/debug_runner.py
+/remove_duplicate.py
+
+# Recovery artifacts at repo root
+/recovered_*.gd
+/stitched_*.gd
+/main_backup.gd
+/main_dump*.txt
+/extracted_funcs.txt
+/recover_log.txt
+
+# Diagnostic output dumps at repo root
+/*_err.txt
+/*_err[0-9]*.txt
+/*_out.txt
+/*_out[0-9]*.txt
+/*_err.log
+/*_out.log
+/*_qc.err.log
+/*_qc.out.log
+/godot_log.txt
+/godot_err.txt
+/godot_out.txt
+/run_test.txt
+/syntax_err*.txt
+/syntax_out*.txt
+/pg_err*.txt
+/pg_out*.txt
+
+# Test scaffolds at repo root (scratch, not production)
+/test_*.gd
+/test_load.gd
+/test_loader.gd
+/test_repo_root.gd
+/test_crash.gd
+/test_pacman_gal.gd
+/test_dk_classic.gd
+
+# IDE and OS junk
+.vs/
+.idea/
+*.iml
+Thumbs.db
+.DS_Store
+
+# Scratch directory (intentional throwaway space — see 03_RECOVERY_PROTOCOL.md §4.5)
+scratch/
+
+# Large binaries that should be installed separately, not committed
+# (see 07_GIT_GOVERNANCE.md §5 — temporarily allowed until install step lands)
+# godot.zip
+# Godot_v4.3-stable_win64.exe
+# Godot_v4.3-stable_win64_console.exe

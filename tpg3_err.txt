@@ -1,8 +1,0 @@
-SCRIPT ERROR: Parse Error: Function "_process_particles()" not found in base self.
-          at: GDScript::reload (res://content/cartridges/pacman/main.gd:205)
-SCRIPT ERROR: Parse Error: Function "_load_level_adjustments()" not found in base self.
-          at: GDScript::reload (res://content/cartridges/pacman/main.gd:257)
-SCRIPT ERROR: Parse Error: Function "_update_menu_overlay()" not found in base self.
-          at: GDScript::reload (res://content/cartridges/pacman/main.gd:258)
-ERROR: Failed to load script "res://content/cartridges/pacman/main.gd" with error "Parse error".
-   at: load (modules/gdscript/gdscript.cpp:2936)

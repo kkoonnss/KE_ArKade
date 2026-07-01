@@ -1,82 +1,196 @@
 # HANDOFF — KE_ArKade Stage 6 (Universal Level Interpretation + Editor)
 
-**For:** the incoming orchestrator (Opus). **As of:** 2026-06-27.
-**Read these first:** this file → `PLAN_interpretation-and-editor.md` (strategy) →
-`INTEGRATION_CONTRACT.md` (ownership) → `DISPATCH.md` (kickoff prompts + the recipe).
+**For:** the incoming orchestrator (Opus or another Claude thread). **As of:** 2026-06-30.
+**Read these first, in this exact order:**
+
+1. **This file** (current state of the chair).
+2. **`_Briefs/governance/00_README.md`** (the governance pack — NEW, landed today).
+3. **`_Briefs/governance/05_ORCHESTRATOR_RUNBOOK.md`** §1 cold-start protocol.
+4. **`_Briefs/governance/01_LANES.md`** + **`02_VERIFICATION_GATES.md`** + **`03_RECOVERY_PROTOCOL.md`** (the contracts you enforce).
+5. **`PLAN_interpretation-and-editor.md`** (Stage 6 strategy — still active).
+6. **`DISPATCH.md`** (cartridge kickoff prompts — adapt with the new mandatory governance reads).
+
 **Board:** `vault/60-bases/interpretation.base` (Obsidian Base over `vault/30-tasks/TASK-INT-*`).
 
 ---
 
-## Your role & the fleet model
-- **You = Opus orchestrator.** Kons keeps Claude credits for orchestration; do NOT spawn Claude sub-agents. You write tickets, route work, and VERIFY — the build is done by two external fleets Kons runs and reports back from:
-  - **Codex** → Python / `app/tools/**` (compiler, CV/derive backend).
-  - **Antigravity** → Godot / GDScript: `app/hub/**`, `app/shared/**`, and the cartridges.
-- Kons pastes the prompts you write into agent instances and replies "done." **Keep the same agent on the same games** (his preference).
-- Communicate with Kons in plain English, short. Technical detail goes in tickets, not chat.
+## What just changed (2026-06-30 governance pass)
 
-## THE #1 RULE (learned the hard way this session)
-**A ticket marked `done` is NOT proof.** Agents repeatedly marked things done without compiling or launching. Before you trust "done" or cascade dependent work, **verify by real output**:
-- Code gate (you can run this via `mcp__workspace__bash` on the repo mount): `grep` that the actual integration exists.
-- **You cannot launch Godot** — Kons is the visual check. Ask him to launch the specific screen/game and confirm.
-- Caveat: the bash mount can lag; for fresh edits prefer Read/Grep on the host path.
+The Jun 28-30 hub `main.gd` corruption + 3-day silent recovery exposed a
+real gap in the discipline system: it held on the happy path and broke the
+moment things went sideways. The pack at `_Briefs/governance/` closes that
+gap. It is now the contract every agent and orchestrator reads on cold-start.
 
-## The load-bearing technical fact (do not relitigate)
-Every cartridge AND the hub are **separate Godot projects** — `res://` = that project's own folder, so `app/shared` is OUTSIDE it. Therefore:
-- **NEVER** use global `class_name` (e.g. `RegionAdapter.new()`, `TabMenu.new()`) or `res://`-relative preloads to reach shared code from a cartridge/hub — it won't resolve → crash/flash-loop.
-- **ALWAYS** load shared scripts at runtime via repo-root resolution: `app/shared/shared_loader.gd` (`SharedLoader.load_adapter_script("<arch>")`, `load_tab_menu_script()`). The hub uses `_get_repo_root()` the same way.
-- **Canonical copy-me model:** `content/cartridges/gta/main.gd`. The exact recipe is in `DISPATCH.md`.
+**Pack contents (8 docs, all in `_Briefs/governance/`):**
 
-## The cartridge gate (every game must pass before "done")
-1. `grep -E "SharedLoader" content/cartridges/<game>/` → hits.
-2. `grep -E "Adapter\.new\(\)|TabMenu\.new\(\)" content/cartridges/<game>/` → EMPTY.
-3. No `content/cartridges/<game>/adapter_base.gd` (no copied shared files).
-4. Kons launches it: no flashing, reads the map, Tab menu opens.
-
----
-
-## Where we are
-
-### Foundation — DONE (INT-00..INT-07) + two in flight
-| Ticket | What | Status |
+| # | Document | Audience |
 |---|---|---|
-| INT-00 | compile-all-derived (`app/tools/arena_compiler/compile_level.py` + batch) | done |
-| INT-01 | 7 archetype adapters in `app/shared/adapters/` | done |
-| INT-02 | map-fit ops + shared `TabMenu` shell (`app/shared/controls/`) | done |
-| INT-03 | Design screen in hub | done |
-| INT-04 | Design screen controller+mouse input | done |
-| INT-05 | **SharedLoader standard** + gta retrofit (the linchpin) | done |
-| INT-06 | hub content panels (Scenes/Games/Levels) populate | done |
-| INT-07 | Design screen blank fix + Calibrate cleanup | done |
-| **INT-08** | Design "Save" must actually compile derived/ + verify (was lying about success) | **in_progress (Antigravity)** |
-| **INT-09** | restore auto-derive preset dropdown in Design screen | **in_progress (Antigravity, same hub-design lock as INT-08, sequential)** |
+| 00 | `00_README.md` | Everyone (the index) |
+| 01 | `01_LANES.md` | Every agent (where to write, forbidden patterns, escalation, the 6-agent parallel pattern) |
+| 02 | `02_VERIFICATION_GATES.md` | Every agent (what "done" means per lane) |
+| 03 | `03_RECOVERY_PROTOCOL.md` | Every agent (pre-edit snapshots, the `multi_replace` trap, receipt-during-firefight rule) |
+| 04 | `04_AGENT_HANDOFF_TEMPLATE.md` | Every agent (the receipt format, scales to 6 parallel agents) |
+| 05 | `05_ORCHESTRATOR_RUNBOOK.md` | Orchestrators (cold-start, sweep, dispatch, chair handoff) |
+| 06 | `06_VAULT_HYGIENE.md` | Orchestrators + indirectly all agents (tracked hygiene failures, sweep cadence) |
+| 07 | `07_GIT_GOVERNANCE.md` | All agents + the GitHub-integration agent (.gitignore, commit cadence, snapshot rule) |
 
-INT-08 + INT-09 are the SAME Antigravity instance on `design_screen.gd` under the `hub-design` lock — must stay one hub instance, sequential. Verify INT-08 by: author a level in Design → save → confirm `derived/grid.json` exists → launch a game on it.
+**Cleanup also done in this pass:**
 
-### Cartridges (32 games; `loopback` excluded)
-- **DONE + gate-clean (SharedLoader):** gta (canonical), pacman, tetris, donkey_kong, rampage, asteroids, paperboy. *(pacman + asteroids passed the code gate but still need Kons's launch confirmation.)*
-- **DONE but BESPOKE (work, need cleanup):** galaga, frogger, on_track — they read the map with their own code + carry a local `adapter_base.gd`. Small follow-on: convert to SharedLoader/adapters + delete local copy (logged in OPEN_QUESTIONS). rampage's earlier misalignment came from this same bespoke pattern, fixed by switching to the region adapter — apply the same lesson here.
-- **READY — the cascade (22 games):** dispatched as two bundles (recipe + gate in `DISPATCH.md`):
-  - **Antigravity (13):** maze → snake, tron, gauntlet, dig_dug, marble_madness, qbert · well_fill → breakout, bomberman, centipede, pong · platform → lunar_lander, burger_time, bubble_bobble
-  - **Codex (9):** arena → space_invaders, robotron_2084, smash_tv, defender, missile_command, battlezone, joust, tempest · lane → tapper
-  - One game per instance, fully parallel (each its own folder). Confirm with Kons whether these are already running; verify each via the gate as they return.
+- `.gitignore` patched to keep ~100 throwaway recovery scripts + dumps out
+  of git going forward.
+- Recovery receipt reconstructed retrospectively at
+  `vault/40-agent-runs/recovery_hub_main_gd_2026-06-28.md`.
+- `OPEN_QUESTIONS.md` updated with the corruption RCA + the pacman/tetris/dk
+  gate gap + the cleanup-script status.
+- Cleanup script issued for Kons (one-shot CMD) at
+  `_Briefs/governance/scripts/cleanup_2026-06-30.cmd` — deletes 8 stale
+  locks, moves the throwaway scripts to `scratch/recovery-2026-06-28/`,
+  commits, tags `daily/2026-06-30`. Sandbox lacks delete permission so
+  the orchestrator could not execute it directly.
+
+**What did NOT get touched:** any `.gd`, `.py`, frozen schemas, cartridge
+folders, hub code. This was a governance-only pass.
 
 ---
 
-## Your immediate next moves
-1. Confirm INT-08 actually produces `derived/` on save + INT-09 preset dropdown works (Kons launches Design).
-2. Get Kons's launch confirmation on pacman + asteroids; if good, the SharedLoader pattern is fully proven.
-3. Drive the 22-game cascade to completion, grep-gating each returned game.
-4. Then **Wave 3 = per-game polish/tuning** (alignment, knob ranges) + the galaga/frogger/on_track cleanup. Generate Wave-3 tickets per game as Wave-2 closes.
+## Your role & the fleet model (unchanged from 2026-06-27)
 
-## Open decisions (in `vault/40-agent-runs/OPEN_QUESTIONS.md`)
-- Archetype assignments are sensible defaults — adjust if a game plays better as another type.
-- Wave-3 polish ordering (likely "venue hit" games: Pac-Man, Bomberman, 4p Tetris, Frogger).
-- Freeze `app/shared/**` adapter contracts (treat like schemas — changes route through you) now that 7+ games depend on them.
-- Raspberry Pi: design is Pi-portable; **defer Pi perf tuning to Phase 3**, don't let it tax this stage.
+- **You = Opus orchestrator** (or another Claude thread holding the chair).
+  Kons keeps Claude credits for orchestration; do NOT spawn Claude
+  sub-agents for code work without his green light. You write tickets,
+  route work, verify — the build is done by external fleets:
+  - **Codex** → Python / `app/tools/**` + script-driven cart fixes + the
+    GitHub-integration work currently in flight.
+  - **Antigravity** → Godot / GDScript: `app/hub/**`, `app/shared/**`, and
+    the cartridges. Currently on the post-corruption thumbnails/favorites
+    fix.
+- Kons routinely runs **up to 6 parallel agents** on cartridges. The lane
+  system supports this by construction (`01_LANES.md` §2b). Six locks,
+  six folders, six agents — collision-free.
+- Communicate with Kons in plain English, short. Technical detail goes in
+  tickets and the governance pack, not chat.
 
-## Gotchas / norms
-- Schemas in `vault/50-schemas/` are FROZEN; only the orchestrator changes them.
-- Cartridges run as separate processes; hub is the launcher (crash isolation is non-negotiable).
-- One agent per folder/lock at a time; `app/hub` work shares the `hub-design` lock.
-- Design system is law: black base, thin white structure, cyan-led neon; homage names only.
-- The arena compiler runs fine headless (cv2+numpy). If Kons's in-hub save can't generate derived, it's usually a `python` PATH / opencv issue on his machine (that's part of INT-08).
+---
+
+## The #1 rule (re-asserted, now codified)
+
+**A ticket marked `done` is NOT proof.** This is now `02_VERIFICATION_GATES.md`
+§1. Before any "done" is accepted or cascaded, the gate runs. Real-output
+evidence. Grep results. Screenshot paths. Lock release. Status flip with
+`closed_at` + `closing_receipt`. No exceptions.
+
+---
+
+## Where we are (state of the build)
+
+### Foundations (INT-00..INT-07) — done
+
+All foundation tickets landed pre-corruption. SharedLoader standard set.
+
+### Hub work (INT-08, INT-09) — `in_progress` per ticket, status drift
+
+Tickets still mark `in_progress` but pre-corruption signals were that
+Antigravity was closing them. Reality: the corruption hit
+`app/hub/main.gd` during this work, then the recovery campaign took over.
+Status is genuinely uncertain. **Verification needed:**
+
+- Launch the Design screen, paint anything, hit Save.
+- Confirm `derived/grid.json` is written.
+- Confirm preset dropdown is restored.
+
+Only after that does the orchestrator flip status to `done`. Until then,
+`pending_kons_verify` is the honest answer.
+
+Additionally: Kons reported on 2026-06-30 that **thumbnails and favorites
+appear missing in the live hub UI**, even though `app/hub/main.gd` has the
+relevant code (favorites array on line 37, thumbnail loaders around lines
+307+ and 502+). An Antigravity thread was dispatched to fix. That session
+should produce a real receipt under
+`vault/40-agent-runs/antigravity_hub_thumbnails_<date>.md` — verify on
+return.
+
+### Cartridges (32 games; loopback excluded)
+
+| Status | Games | Notes |
+|---|---|---|
+| `done` + SharedLoader gate-clean (verified) | gta, rampage, asteroids, paperboy | SharedLoader present, no class_name reach, no local adapter_base.gd |
+| `done` but pre-INT-05 (no SharedLoader) — needs Wave-3 retrofit | pacman, tetris, donkey_kong | HANDOFF previously called these "gate-clean" — incorrect. They predate INT-05 and read maps directly. |
+| `done` but BESPOKE — needs Wave-3 retrofit | galaga, frogger, on_track | Each carries a local `adapter_base.gd`. Convert to SharedLoader. |
+| `ready` — the 22-game Wave-2 cascade | snake, tron, gauntlet, dig_dug, marble_madness, qbert, breakout, bomberman, centipede, pong, lunar_lander, burger_time, bubble_bobble, space_invaders, robotron_2084, smash_tv, defender, missile_command, battlezone, joust, tempest, tapper | Tickets in `vault/30-tasks/`. Dispatch pending — corruption blocked the cascade. |
+
+The 22-game cascade is the next big dispatch once the hub is verified
+clean. Recommended split:
+
+- **Antigravity bundle (13):** snake, tron, gauntlet, dig_dug,
+  marble_madness, qbert, breakout, bomberman, centipede, pong,
+  lunar_lander, burger_time, bubble_bobble.
+- **Codex bundle (9):** space_invaders, robotron_2084, smash_tv, defender,
+  missile_command, battlezone, joust, tempest, tapper.
+
+The dispatch prompt template now MUST include the four mandatory
+governance reads (per `05_ORCHESTRATOR_RUNBOOK.md` §3). Update
+`DISPATCH.md` accordingly before issuing the cascade.
+
+---
+
+## Your immediate moves (in order)
+
+1. **Read the governance pack.** It's the new contract. `_Briefs/governance/00_README.md` first.
+2. **Ask Kons to run the cleanup script.** `_Briefs/governance/scripts/cleanup_2026-06-30.cmd`. After it runs, the repo is clean and `daily/2026-06-30` is tagged.
+3. **Wait for the hub thumbnails/favorites receipt** from the Antigravity
+   thread Kons dispatched. If it doesn't write one, that's a tracked
+   hygiene failure — reconstruct from git + ping the agent on `AGENT_SYNC.md`.
+4. **Verify INT-08 / INT-09** with Kons (Design save → derived produces
+   files, preset dropdown works). Flip status accordingly.
+5. **Update `DISPATCH.md`** to make the four governance docs mandatory
+   reads in every cart prompt.
+6. **Dispatch the 22-game cascade** in two bundles, one per fleet.
+7. **Grep-gate every cart return** per `02_VERIFICATION_GATES.md` §2.
+8. **Generate Wave-3 retrofit tickets** for pacman, tetris, donkey_kong,
+   galaga, frogger, on_track (SharedLoader cleanup) — these were
+   incorrectly assumed clean.
+9. **Track the GitHub-integration Codex agent** — when its work lands,
+   refine `07_GIT_GOVERNANCE.md` with the actual remote URL, push cadence,
+   branch protection rules.
+
+---
+
+## Open decisions parked for Kons
+
+In `vault/40-agent-runs/OPEN_QUESTIONS.md`. The new ones:
+
+- INT-08 / INT-09 status drift (resolve via verification, above).
+- Hub post-corruption thumbnails/favorites regression (pending receipt).
+- Wave-3 polish ordering — which games are venue-hit candidates and get
+  first tweak. Old candidates: Pac-Man, Bomberman, 4p Tetris, Frogger.
+- Binaries at repo root (Godot .exe, godot.zip) — open follow-on for the
+  GitHub-integration agent to design a real install step.
+
+The pre-2026-06-30 entries in `OPEN_QUESTIONS.md` are all still active —
+read them too.
+
+---
+
+## Gotchas / norms (re-asserted)
+
+- **Pre-edit snapshot before any edit to a file > 200 lines.** Mandatory.
+  See `03_RECOVERY_PROTOCOL.md` §1.2 and `07_GIT_GOVERNANCE.md` §2.2.
+- **No `multi_replace_file_content`** without the §1.1 sanity check. This
+  is what cost us three days.
+- Schemas in `vault/50-schemas/` are FROZEN; only the orchestrator changes
+  them.
+- Cartridges run as separate processes; hub is the launcher (crash
+  isolation is non-negotiable).
+- One agent per folder/lock at a time; `app/hub` and `app/shared` work
+  share their respective locks.
+- Design system is law: black base, thin white structure, cyan-led neon;
+  homage names only.
+- Six parallel cart agents is the design target, not the exception.
+  See `01_LANES.md` §2b.
+
+---
+
+*Index: `_Briefs/governance/00_README.md` · Pack: `_Briefs/governance/` ·
+Tickets: `vault/30-tasks/TASK-INT-*.md` · Board:
+`vault/60-bases/interpretation.base` · Strategy:
+`_Briefs/PLAN_interpretation-and-editor.md`.*

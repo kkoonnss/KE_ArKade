@@ -1,4 +1,0 @@
-Godot Engine v4.3.stable.official.77dcf97d8 - https://godotengine.org
-
-Block Stack _ready called. Args: ["--level", "C:\\Users\\Kons\\Documents\\_KE_VibeApps\\KE_ArKade\\content\\scenes\\puzzle_1"]
-Block Stack Scale: 1.10091743119266 Offset: 592.844036697248, 0

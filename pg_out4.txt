@@ -1,4 +1,0 @@
-Godot Engine v4.3.stable.official.77dcf97d8 - https://godotengine.org
-
-Cartridge _ready called. Args: ["--level", "C:\\Users\\Kons\\Documents\\_KE_VibeApps\\KE_ArKade\\content\\scenes\\scene_demo_wall\\levels\\gallery_260627_010703"]
-Parsed level_dir: C:\Users\Kons\Documents\_KE_VibeApps\KE_ArKade\content\scenes\scene_demo_wall\levels\gallery_260627_010703 ipc_port: 0 screenshot_path: 
