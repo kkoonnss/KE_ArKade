@@ -323,8 +323,18 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	var tex_rect = TextureRect.new()
 	tex_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	img_control.add_child(tex_rect)
+	
+	var cover_btn = Button.new()
+	cover_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var empty_style = StyleBoxEmpty.new()
+	cover_btn.add_theme_stylebox_override("normal", empty_style)
+	cover_btn.add_theme_stylebox_override("hover", empty_style)
+	cover_btn.add_theme_stylebox_override("pressed", empty_style)
+	cover_btn.add_theme_stylebox_override("focus", empty_style)
+	cover_btn.pressed.connect(func(): _launch_game(cart_id))
+	img_control.add_child(cover_btn)
 
 	var current_skin = _get_selected_skin_name(cart_id, game_name, cart.manifest)
 	var default_skin = _get_default_skin_name(cart.manifest, game_name)
@@ -403,7 +413,20 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	title_btn.custom_minimum_size = Vector2(0, 36)
 	title_btn.add_theme_font_size_override("font_size", 16)
 	title_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	style_grid_button(title_btn)
+	
+	var style_normal = StyleBoxFlat.new()
+	style_normal.bg_color = Color(0.15, 0.16, 0.18)
+	style_normal.set_corner_radius_all(4)
+	var style_hover = StyleBoxFlat.new()
+	style_hover.bg_color = Color(0.2, 0.22, 0.25)
+	style_hover.border_width_bottom = 2
+	style_hover.border_color = color_cyan
+	style_hover.set_corner_radius_all(4)
+	
+	title_btn.add_theme_stylebox_override("normal", style_normal)
+	title_btn.add_theme_stylebox_override("hover", style_hover)
+	title_btn.add_theme_stylebox_override("pressed", style_hover)
+	title_btn.add_theme_stylebox_override("focus", style_hover)
 	title_btn.pressed.connect(func():
 		_launch_game(cart_id)
 	)
@@ -582,7 +605,7 @@ func _create_level_card(level_name: String, levels_dir: String, container: Contr
 	text_container.add_child(top_text_spacer)
 	
 	var title_lbl = Label.new()
-	if is_scene:
+	if is_scene or not level_name.begins_with("classic_"):
 		title_lbl.text = level_name
 	else:
 		title_lbl.text = classic_name.replace("Classic ", "")
