@@ -1,5 +1,5 @@
 extends Node2D
-const SharedLoader = preload("res://../../../app/shared/shared_loader.gd")
+var SharedLoader = (func(): var p = ProjectSettings.globalize_path("res://").path_join("../../../app/shared/shared_loader.gd").simplify_path(); var s = GDScript.new(); s.source_code = FileAccess.get_file_as_string(p); s.reload(); return s).call()
 
 const NEON_CYAN = Color(0.0, 0.9, 1.0)
 const NEON_ORANGE = Color(1.0, 0.48, 0.0)

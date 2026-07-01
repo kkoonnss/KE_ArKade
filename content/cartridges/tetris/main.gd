@@ -1,5 +1,5 @@
 extends Node2D
-
+var SharedLoader = (func(): var p = ProjectSettings.globalize_path("res://").path_join("../../../app/shared/shared_loader.gd").simplify_path(); var s = GDScript.new(); s.source_code = FileAccess.get_file_as_string(p); s.reload(); return s).call()
 var splash_rect: TextureRect
 var splash_timer: float = 2.0
 

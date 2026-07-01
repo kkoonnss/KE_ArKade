@@ -1,5 +1,5 @@
 extends Node2D
-const SharedLoader = preload("res://../../../app/shared/shared_loader.gd")
+var SharedLoader = (func(): var p = ProjectSettings.globalize_path("res://").path_join("../../../app/shared/shared_loader.gd").simplify_path(); var s = GDScript.new(); s.source_code = FileAccess.get_file_as_string(p); s.reload(); return s).call()
 
 const C_DIM = Color(0.6, 0.63, 0.65)
 const BUILDING_COLLAPSE_TIME := 1.15
