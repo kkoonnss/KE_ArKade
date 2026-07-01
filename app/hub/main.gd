@@ -81,6 +81,12 @@ func _ready():
 	display_scenes()
 
 func clear_main_panel():
+	var scroll_container = $UI/Content/MainPanel/ScrollContainer
+	if scroll_container:
+		scroll_container.visible = true
+	for child in $UI/Content/MainPanel.get_children():
+		if child != scroll_container:
+			child.queue_free()
 	for child in scenes_grid.get_children():
 		child.queue_free()
 	_prepare_scroll_view(true)
@@ -112,7 +118,7 @@ func display_scenes():
 	)
 	
 	for i in range(scenes.size()):
-		_create_level_card(scenes[i], base_dir, scenes_grid, i)
+		_create_level_card(scenes[i], base_dir, scenes_grid, i, true)
 func style_grid_button(btn: Button):
 	btn.custom_minimum_size = Vector2(240, 160)
 	var style = StyleBoxFlat.new()
@@ -229,6 +235,14 @@ func display_games():
 			_create_game_card(game, grid, game.absolute_index)
 
 func _launch_game(cart_id: String):
+	if cart_id in ["tetris", "pacman", "bomberman", "frogger", "asteroids", "tron", "on_track", "rampage", "gta"]:
+		current_scene = "scene_classic_pack"
+		selected_level_name = "classic_" + cart_id
+		
+	if current_scene == "" or selected_level_name == "":
+		current_scene = "scene_demo_wall"
+		selected_level_name = "demo_level"
+		
 	last_known_level = selected_level_name
 	last_known_cartridge = cart_id
 	var base_dir = ProjectSettings.globalize_path("res://").path_join("../..")
@@ -256,7 +270,17 @@ func _on_restore_pressed():
 		_launch_game(last_known_cartridge)
 
 func _on_design_nav_pressed():
-	pass
+	current_tab = "Design"
+	var scroll_container = $UI/Content/MainPanel/ScrollContainer
+	if scroll_container:
+		scroll_container.visible = false
+		
+	for child in $UI/Content/MainPanel.get_children():
+		if child != scroll_container:
+			child.queue_free()
+			
+	var design = load("res://design_screen.tscn").instantiate()
+	$UI/Content/MainPanel.add_child(design)
 
 func _on_launch_calibration_tool():
 	pass
@@ -385,7 +409,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	)
 	bottom_margin.add_child(title_btn)
 
-func _create_level_card(level_name: String, levels_dir: String, container: Control, display_index: int = -1):
+func _create_level_card(level_name: String, levels_dir: String, container: Control, display_index: int = -1, is_scene: bool = false):
 	var btn = Button.new()
 	btn.custom_minimum_size = Vector2(256, 284)
 	btn.pressed.connect(func(): _on_level_selected(level_name))
@@ -558,7 +582,10 @@ func _create_level_card(level_name: String, levels_dir: String, container: Contr
 	text_container.add_child(top_text_spacer)
 	
 	var title_lbl = Label.new()
-	title_lbl.text = classic_name.replace("Classic ", "")
+	if is_scene:
+		title_lbl.text = level_name
+	else:
+		title_lbl.text = classic_name.replace("Classic ", "")
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
