@@ -120,7 +120,6 @@ func display_scenes():
 	for i in range(scenes.size()):
 		_create_level_card(scenes[i], base_dir, scenes_grid, i, true)
 func style_grid_button(btn: Button):
-	btn.custom_minimum_size = Vector2(240, 160)
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.15, 0.15, 0.18, 1.0)
 	style.corner_radius_top_left = 12
@@ -563,20 +562,15 @@ func _create_level_card(level_name: String, levels_dir: String, container: Contr
 	if FileAccess.file_exists(thumb_path):
 		var img = Image.load_from_file(thumb_path)
 		if img: tex_rect.texture = ImageTexture.create_from_image(img)
-	if display_index > 0:
-		var number_row = HBoxContainer.new()
-		number_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		
+	if display_index >= 0:
 		var number_lbl = Label.new()
-		number_lbl.text = str(display_index)
-		number_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		number_lbl.text = str(display_index + 1) + "."
 		number_lbl.add_theme_font_size_override("font_size", 22)
-		number_lbl.add_theme_color_override("font_color", Color(1, 1, 1))
-		number_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		number_row.add_child(number_lbl)
-		var number_spacer = Control.new()
-		number_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		number_row.add_child(number_spacer)
-		vbox.add_child(number_row)
+		number_lbl.add_theme_color_override("font_color", Color(0, 0.9, 1.0))
+		number_lbl.position = Vector2(8, 8)
+		tex_rect.add_child(number_lbl)
+		
 	vbox.add_child(tex_rect)
 	
 	# Text layout
