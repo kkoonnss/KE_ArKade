@@ -245,7 +245,7 @@ func _launch_game(cart_id: String):
 	var level_dir = scene_dir.path_join("levels").path_join(selected_level_name)
 	var cart_dir = base_dir.path_join("content/cartridges").path_join(cart_id)
 	
-	var launch_cmd = "Godot_v4.3-stable_win64.exe"
+	var launch_cmd = base_dir.path_join("Godot_v4.3-stable_win64.exe")
 	var args_template = "--path \"" + cart_dir + "\" -- --scene \"" + scene_dir + "\" --level \"" + level_dir + "\" --ipc <socket>"
 	
 	if launcher:
