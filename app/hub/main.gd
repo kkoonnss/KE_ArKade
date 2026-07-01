@@ -49,6 +49,17 @@ var dialog_scroll_vbox: VBoxContainer
 
 func _ready():
 	if scenes_grid is GridContainer: scenes_grid.columns = 3
+	
+	# Initialize scroll_vbox to wrap ScenesGrid
+	var scroll_container = $UI/Content/MainPanel/ScrollContainer
+	if scroll_container and scenes_grid:
+		scroll_container.remove_child(scenes_grid)
+		scroll_vbox = VBoxContainer.new()
+		scroll_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll_vbox.add_theme_constant_override("separation", 24)
+		scroll_container.add_child(scroll_vbox)
+		scroll_vbox.add_child(scenes_grid)
+		
 	init_styling()
 	load_favorites()
 	if launcher: launcher.cartridge_exited.connect(_on_cartridge_exited)
@@ -72,6 +83,7 @@ func _ready():
 func clear_main_panel():
 	for child in scenes_grid.get_children():
 		child.queue_free()
+	_prepare_scroll_view(true)
 
 func set_active_nav(active_btn: Button):
 	active_nav_btn = active_btn
