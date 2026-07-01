@@ -24,6 +24,9 @@ app/tools/tests/out_*
 /add_preview_menu.py
 /rebuild_*.py
 /refactor_*.py
+/rewrite_*.py
+/safe_rewrite*.py
+/tweak_*.py
 /implement_*.py
 /integrate_*.py
 /tile_*.py
@@ -81,6 +84,14 @@ Thumbs.db
 
 # Scratch directory (intentional throwaway space — see 03_RECOVERY_PROTOCOL.md §4.5)
 scratch/
+
+# Hub-lane scratch that snuck in during recovery (2026-06-30 addendum)
+app/hub/main_backup.gd
+app/hub/main_dump*.txt
+app/hub/test_hub.gd
+
+# Orchestrator sandbox test artifacts
+vault/35-locks/_test_write.tmp
 
 # Large binaries that should be installed separately, not committed
 # (see 07_GIT_GOVERNANCE.md §5 — temporarily allowed until install step lands)
