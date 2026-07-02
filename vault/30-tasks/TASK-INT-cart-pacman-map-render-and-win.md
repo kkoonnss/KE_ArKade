@@ -4,8 +4,9 @@ stage: 6
 wave: 2
 priority: P0
 lane: cartridge
-status: in_progress
+status: pending_kons_verify
 owner_agent: antigravity
+closing_receipt: vault/40-agent-runs/antigravity_TASK-INT-cart-pacman-map-render-and-win_2026-07-01.md
 touches: [content/cartridges/pacman/main.gd]
 locks_required: [cart-pacman]
 depends_on: []

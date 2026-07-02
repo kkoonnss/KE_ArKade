@@ -1,0 +1,28 @@
+{
+  "cartridge_id": "asteroids",
+  "scene_level": "scene_demo_wall/Car-CRV_260630_235222",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "background_view": "collision",
+    "block_region": false,
+    "bounds_clamp": true,
+    "collision_mode": "grid",
+    "grid_expand_px": 4,
+    "grid_resolution": 2.25,
+    "invert_grid": false,
+    "invert_lanes": false,
+    "lane_expand_px": 8,
+    "organic_boundary": false,
+    "organic_rounding_px": 22,
+    "reference": true,
+    "reference_opacity": 0.6,
+    "secondary_fill_alpha": 0.32,
+    "secondary_lane_alpha": 0.24,
+    "secondary_outline_px": 2,
+    "secondary_photo_mix": 0.4,
+    "secondary_strength": 0.75,
+    "ship_scale": 0.65,
+    "show_debug_grid": true
+  },
+  "version": "1.0.0"
+}

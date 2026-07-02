@@ -1,6 +1,6 @@
 {
   "cartridge_id": "tetris",
-  "scene_level": "levels/classic_tetris",
+  "scene_level": "levels/demo_level",
   "schema": "cartridge_level_edit_adjustments",
   "settings": {
     "background_view": "photo",

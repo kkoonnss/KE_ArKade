@@ -1,12 +1,12 @@
 {
 	"slots": {
 		"0": {
-			"device_id": -2,
-			"type": "keyboard"
+			"device_id": 0,
+			"type": "gamepad"
 		},
 		"1": {
-			"device_id": -1,
-			"type": "none"
+			"device_id": -2,
+			"type": "keyboard"
 		},
 		"2": {
 			"device_id": -1,

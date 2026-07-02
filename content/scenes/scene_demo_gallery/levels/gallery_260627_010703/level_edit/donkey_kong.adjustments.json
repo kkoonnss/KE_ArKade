@@ -1,0 +1,29 @@
+{
+  "cartridge_id": "donkey_kong",
+  "scene_level": "scene_demo_wall/gallery_260627_010703",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "add_platforms": true,
+    "background_view": "semantic",
+    "barrel_ladder_chance": 1,
+    "bounds_clamp": true,
+    "climb_tolerance": 1,
+    "extra_fill": 1,
+    "fire_enemy_count": 2,
+    "gravity": 1,
+    "hazard_leniency": 1,
+    "jump_height": 1,
+    "ladder_density": 1.4,
+    "level_scale": 0.6,
+    "level_seed": 6069,
+    "max_ladder_length": 275,
+    "platform_snap": 1,
+    "platform_spacing": 0.08,
+    "platform_trim": 0.2,
+    "reference": true,
+    "reference_opacity": 0.55,
+    "show_debug_grid": true,
+    "slope_angle": 0.4
+  },
+  "version": "1.0.0"
+}

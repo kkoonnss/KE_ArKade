@@ -1,0 +1,19 @@
+{
+  "cartridge_id": "rampage",
+  "scene_level": "levels/demo_level",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "bounds_clamp": true,
+    "density": 1,
+    "game_scale": 1,
+    "grid_resolution": 1,
+    "invert": false,
+    "players": 1,
+    "reference": false,
+    "reference_opacity": 0.16,
+    "show_grid": false,
+    "smooth": false,
+    "vertical_gaps": 0.35
+  },
+  "version": "1.0.0"
+}
