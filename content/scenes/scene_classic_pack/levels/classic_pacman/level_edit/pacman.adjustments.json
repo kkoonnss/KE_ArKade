@@ -4,14 +4,15 @@
   "schema": "cartridge_level_edit_adjustments",
   "settings": {
     "background_view": "final",
-    "grid_scale": 1.35,
+    "grid_scale": 1,
     "invert_main_solid": false,
     "players": 1,
     "reference": false,
-    "reference_opacity": 0.3,
-    "show_debug_grid": true,
+    "reference_opacity": 0.15,
+    "show_debug_grid": false,
     "skin": "classic",
-    "wall_width": 0.75
+    "tunnel_fill": 0,
+    "wall_width": 1
   },
   "version": "1.0.0"
 }

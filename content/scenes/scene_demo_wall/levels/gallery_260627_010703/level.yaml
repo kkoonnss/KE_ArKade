@@ -1,9 +1,0 @@
-schema: level
-version: 1.0.0
-level_id: gallery_260627_010703
-scene_id: scene_demo_wall
-name: Authored Level
-semantic_map: semantic_map.png
-palette_schema: ../../../../vault/50-schemas/semantic-palette-v1.yaml
-status: playable
-reference_image: background.jpeg

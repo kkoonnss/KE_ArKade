@@ -4,8 +4,10 @@ stage: 6
 wave: 2
 priority: P2
 lane: hub
-status: ready
-owner_agent: null
+status: pending_kons_verify
+closed_at: 2026-07-01
+closing_receipt: vault/40-agent-runs/antigravity_hub_fix_INT-08-09-scene-ordering_2026-07-01.md
+owner_agent: "Antigravity"
 touches: [app/hub/main.gd]
 locks_required: [hub-design]
 depends_on: []

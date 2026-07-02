@@ -6,16 +6,19 @@
     "background_view": "photo",
     "bounds_clamp": true,
     "density": 1,
-    "fill": false,
-    "grid_scale": 1,
-    "invert": false,
+    "fill": true,
+    "grid_scale": 1.1,
+    "group_islands": 0,
+    "invert": true,
     "organic_behavior": "stick",
+    "players": 3,
     "reference": true,
     "reference_opacity": 0.3,
     "secondary_photo_mix": 0.18,
     "show_debug_grid": true,
     "show_outline": true,
-    "wall_width": 1
+    "spawn_clearance": 0.35,
+    "wall_width": 1.3
   },
   "version": "1.0.0"
 }

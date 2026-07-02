@@ -5,7 +5,9 @@ wave: 0
 priority: P0
 lane: hub
 archetype: n/a
-status: in_progress
+status: pending_kons_verify
+closed_at: 2026-07-01
+closing_receipt: vault/40-agent-runs/antigravity_hub_fix_INT-08-09-scene-ordering_2026-07-01.md
 owner_agent: "Antigravity"
 touches: [app/hub]
 locks_required: [hub-design]

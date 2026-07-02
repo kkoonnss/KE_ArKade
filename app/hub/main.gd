@@ -47,6 +47,7 @@ var _updating_dialog_checkbox = false
 var scroll_vbox: VBoxContainer
 var active_nav_btn: Button = null
 var dialog_scroll_vbox: VBoxContainer
+var games_overlay: ColorRect = null
 
 func _ready():
 	if scenes_grid is GridContainer: scenes_grid.columns = 3
@@ -57,9 +58,12 @@ func _ready():
 		scroll_container.remove_child(scenes_grid)
 		scroll_vbox = VBoxContainer.new()
 		scroll_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		scroll_vbox.add_theme_constant_override("separation", 24)
 		scroll_container.add_child(scroll_vbox)
 		scroll_vbox.add_child(scenes_grid)
+		scenes_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scenes_grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		
 	init_styling()
 	load_favorites()
@@ -87,6 +91,7 @@ func _ready():
 	display_scenes()
 
 func clear_main_panel():
+	_clear_games_overlay()
 	var scroll_container = $UI/Content/MainPanel/ScrollContainer
 	if scroll_container:
 		scroll_container.visible = true
@@ -101,6 +106,9 @@ func set_active_nav(active_btn: Button):
 	active_nav_btn = active_btn
 
 func display_scenes():
+	current_tab = "scenes"
+	viewing_levels = false
+	selected_level_name = ""
 	clear_main_panel()
 	var base_dir = ProjectSettings.globalize_path("res://").path_join("../../content/scenes")
 	var dir = DirAccess.open(base_dir)
@@ -155,6 +163,8 @@ func _on_scene_selected(scene_name: String):
 		display_levels()
 
 func display_levels():
+	current_tab = "levels"
+	viewing_levels = true
 	clear_main_panel()
 	var base_dir = ProjectSettings.globalize_path("res://").path_join("../../content/scenes").path_join(current_scene).path_join("levels")
 	var dir = DirAccess.open(base_dir)
@@ -172,8 +182,7 @@ func _on_level_selected(level_name: String):
 	display_games_lightbox()
 
 func display_games_lightbox():
-	if games_overlay != null:
-		games_overlay.queue_free()
+	_clear_games_overlay()
 		
 	games_overlay = ColorRect.new()
 	games_overlay.color = Color(0, 0, 0, 0.85)
@@ -216,7 +225,13 @@ func display_games_lightbox():
 	var close_btn = Button.new()
 	close_btn.text = "Close"
 	close_btn.add_theme_font_size_override("font_size", 18)
-	close_btn.pressed.connect(func(): games_overlay.queue_free())
+	var overlay_ref = games_overlay
+	close_btn.pressed.connect(func():
+		if is_instance_valid(overlay_ref):
+			overlay_ref.queue_free()
+		if games_overlay == overlay_ref:
+			games_overlay = null
+	)
 	hbox.add_child(close_btn)
 	
 	var scroll = ScrollContainer.new()
@@ -253,7 +268,8 @@ func display_games_lightbox():
 
 func display_games():
 	clear_main_panel()
-	current_tab = "Games"
+	current_tab = "games"
+	viewing_levels = false
 	
 	scenes_grid.visible = false
 	
@@ -309,9 +325,7 @@ func display_games():
 			_create_game_card(game, grid, game.absolute_index)
 
 func _launch_game(cart_id: String):
-	if games_overlay != null:
-		games_overlay.queue_free()
-		games_overlay = null
+	_clear_games_overlay()
 	if current_scene == "" or current_scene == "scene_classic_pack":
 		if cart_id in ["tetris", "pacman", "bomberman", "frogger", "asteroids", "tron", "on_track", "rampage", "gta"]:
 			current_scene = "scene_classic_pack"
@@ -348,7 +362,9 @@ func _on_restore_pressed():
 		_launch_game(last_known_cartridge)
 
 func _on_design_nav_pressed():
-	current_tab = "Design"
+	current_tab = "design"
+	viewing_levels = false
+	_clear_games_overlay()
 	var scroll_container = $UI/Content/MainPanel/ScrollContainer
 	if scroll_container:
 		scroll_container.visible = false
@@ -424,7 +440,62 @@ func _on_help_pressed():
 	_show_placeholder_overlay("Help", help_text)
 
 func parse_simple_yaml(path: String) -> Dictionary:
-	return {}
+	var data = {}
+	var file = FileAccess.open(path, FileAccess.READ)
+	if not file:
+		return data
+	
+	var current_parent = ""
+	while not file.eof_reached():
+		var line = file.get_line()
+		var trimmed = line.strip_edges()
+		if trimmed == "" or trimmed.begins_with("#"):
+			continue
+		
+		var indent_level = 0
+		for i in range(line.length()):
+			var ch = line.unicode_at(i)
+			if ch == 32 or ch == 9:
+				indent_level += 1
+			else:
+				break
+		
+		if trimmed.ends_with(":"):
+			current_parent = trimmed.substr(0, trimmed.length() - 1).strip_edges()
+			if not data.has(current_parent):
+				data[current_parent] = {}
+			continue
+		
+		if not trimmed.contains(":"):
+			continue
+		
+		var parts = trimmed.split(":", true, 1)
+		var key = parts[0].strip_edges()
+		var val = parts[1].strip_edges()
+		
+		if (val.begins_with("\"") and val.ends_with("\"")) or (val.begins_with("'") and val.ends_with("'")):
+			val = val.substr(1, val.length() - 2)
+		
+		var parsed_val: Variant = val
+		if val.begins_with("[") and val.ends_with("]"):
+			var inner = val.substr(1, val.length() - 2)
+			var list_items: Array = []
+			if inner != "":
+				for item in inner.split(","):
+					list_items.append(item.strip_edges())
+			parsed_val = list_items
+		
+		if indent_level > 0 and current_parent != "" and typeof(data.get(current_parent)) == TYPE_DICTIONARY:
+			data[current_parent][key] = parsed_val
+		else:
+			data[key] = parsed_val
+	
+	return data
+
+func _clear_games_overlay():
+	if games_overlay != null and is_instance_valid(games_overlay):
+		games_overlay.queue_free()
+	games_overlay = null
 
 func _get_repo_root() -> String:
 	return ProjectSettings.globalize_path("res://").path_join("../..")

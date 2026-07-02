@@ -3,13 +3,17 @@
   "scene_level": "levels/classic_rampage",
   "schema": "cartridge_level_edit_adjustments",
   "settings": {
-    "block_size": 1,
     "bounds_clamp": true,
     "density": 1,
+    "game_scale": 1,
+    "grid_resolution": 1,
     "invert": false,
+    "players": 1,
     "reference": false,
     "reference_opacity": 0.16,
-    "smooth": false
+    "show_grid": false,
+    "smooth": false,
+    "vertical_gaps": 0.35
   },
   "version": "1.0.0"
 }

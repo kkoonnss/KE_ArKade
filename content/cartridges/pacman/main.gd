@@ -24,6 +24,8 @@ var score = 0
 var active_particles = []
 
 var game_state = "playing" # playing, game_over, win, respawning
+var game_time: float = 0.0
+var _debug_drawn_once: bool = false
 var lives = 3
 var enemies = []
 var original_player_spawns = []
@@ -240,6 +242,8 @@ func parse_simple_yaml(path: String) -> Dictionary:
 
 
 func _process(delta):
+    if game_state == "playing":
+        game_time += delta
     menu_axis_cooldown = max(0.0, menu_axis_cooldown - delta)
     if frightened_timer > 0.0:
         frightened_timer = max(0.0, frightened_timer - delta)
@@ -414,6 +418,7 @@ func _load_grid_metadata():
     grid_rows = grid_cells.size()
     if grid_rows > 0:
         grid_cols = grid_cells[0].size()
+    print("PHASE 1 DEBUG - _load_grid_metadata: grid_rows=", grid_rows, " grid_cols=", grid_cols, " grid_cell_size_base=", grid_cell_size_base, " cell_px=", data.get("cell_px", 32.0))
 
 func _build_scaled_layout_from_grid() -> Dictionary:
     if grid_rows <= 0 or grid_cols <= 0 or grid_cells.is_empty():
@@ -475,6 +480,7 @@ func _build_scaled_layout_from_grid() -> Dictionary:
         spawn_gx = clampi(int(round((float(source_spawn.x) + 0.5) * float(target_cols) / float(grid_cols) - 0.5)), 0, target_cols - 1)
         spawn_gy = clampi(int(round((float(source_spawn.y) + 0.5) * float(target_rows) / float(grid_rows) - 0.5)), 0, target_rows - 1)
     _apply_tunnel_fill_mask(layout, node_map, target_cols, target_rows, spawn_gx if source_spawn.x >= 0 else -1, spawn_gy if source_spawn.x >= 0 else -1)
+    print("PHASE 1 DEBUG - after _apply_tunnel_fill_mask: pickups.size()=", layout["pickups"].size())
     node_map.clear()
     for n in layout["nodes"]:
         node_map["%d:%d" % [int(n["gx"]), int(n["gy"])]] = n
@@ -512,6 +518,7 @@ func _build_scaled_layout_from_grid() -> Dictionary:
             var n = far_nodes[(i * max(1, far_nodes.size() / 4)) % far_nodes.size()]
             layout["enemies"].append({"x": n["x"], "y": n["y"], "id": n["id"]})
     _assign_power_pellets(layout)
+    print("PHASE 1 DEBUG - end of _build_scaled_layout_from_grid: nodes=", layout["nodes"].size(), " pickups=", layout["pickups"].size(), " players=", layout["players"].size(), " grid_cell_size=", grid_cell_size)
     return layout
 
 func _apply_tunnel_fill_mask(layout: Dictionary, node_map: Dictionary, target_cols: int, target_rows: int, spawn_gx: int, spawn_gy: int):
@@ -869,7 +876,10 @@ func _draw_maze_skin():
     var wall_color = Color(0.04, 0.2, 1.0)
     var edge_color = Color(0.22, 0.5, 1.0)
     var resolution_ratio = _resolution_ratio()
-    var outer_width = 7.0 * classic_wall_width_scale * resolution_ratio
+    var outer_width = 7.0 * classic_wall_width_scale
+    if not _debug_drawn_once:
+        print("PHASE 1 DEBUG - _draw_maze_skin: outer_width=", outer_width, " scale_factor=", scale_factor, " resolution_ratio=", resolution_ratio, " classic_wall_width_scale=", classic_wall_width_scale)
+        _debug_drawn_once = true
     var inner_width = 2.2 * classic_wall_width_scale * resolution_ratio
     var segments = _collect_merged_wall_segments()
     var corners = {}
@@ -880,7 +890,7 @@ func _draw_maze_skin():
         corners[a_key] = seg["a"]
         corners[b_key] = seg["b"]
     for corner in corners.values():
-        _draw_wall_corner(corner, outer_width * 0.5, wall_color, edge_color)
+        _draw_wall_corner(corner, min(outer_width * 0.5, grid_cell_size * 0.15), wall_color, edge_color)
 
 func _has_walkable_cell(gx: int, gy: int) -> bool:
     return walkable_cells.has("%d:%d" % [gx, gy])
@@ -1083,18 +1093,19 @@ func _process_player(delta):
         p["y"] = pos.y
         
         # Check Pickups
-        for j in range(pickups.size() - 1, -1, -1):
-            var pickup = pickups[j]
-            if pos.distance_to(Vector2(pickup["x"], pickup["y"])) < 15.0:
-                var pickup_pos = Vector2(pickup["x"], pickup["y"])
-                pickups.remove_at(j)
-                spawn_particle_burst(pickup_pos, Color.YELLOW, 15)
-                score += 10
-                send_ipc_message({"type": "score", "data": {"player": i + 1, "score": score}})
-                
-                if pickups.size() == 0:
-                    game_state = "win"
-                    send_ipc_message({"type": "state", "data": {"state": "win"}})
+        if game_time > 0.5:
+            for j in range(pickups.size() - 1, -1, -1):
+                var pickup = pickups[j]
+                if pos.distance_to(Vector2(pickup["x"], pickup["y"])) < 15.0:
+                    var pickup_pos = Vector2(pickup["x"], pickup["y"])
+                    pickups.remove_at(j)
+                    spawn_particle_burst(pickup_pos, Color.YELLOW, 15)
+                    score += 10
+                    send_ipc_message({"type": "score", "data": {"player": i + 1, "score": score}})
+                    
+                    if pickups.size() == 0:
+                        game_state = "win"
+                        send_ipc_message({"type": "state", "data": {"state": "win"}})
 
 func _get_degree(node_id: String) -> int:
     var deg = 0
@@ -1195,6 +1206,7 @@ func _respawn_all():
 func _restart_game():
     score = 0
     lives = 3
+    game_time = 0.0
     game_state = "playing"
     send_ipc_message({"type": "score", "data": {"player": 1, "score": score}})
     pickups = original_pickups.duplicate(true)

@@ -5,8 +5,8 @@
 			"type": "keyboard"
 		},
 		"1": {
-			"device_id": 0,
-			"type": "gamepad"
+			"device_id": -1,
+			"type": "none"
 		},
 		"2": {
 			"device_id": -1,
