@@ -47,14 +47,23 @@ func _is_device_assigned(device_id: int) -> bool:
 	return false
 
 func _assign_joypad(device_id: int):
-	for i in range(1, 4):
-		if slots[i]["device_id"] == -1:
+	for i in range(4):
+		if slots[i]["device_id"] == -1 or slots[i]["device_id"] == -2:
+			var old_dev = slots[i]["device_id"]
 			slots[i] = {"device_id": device_id, "type": "gamepad"}
 			print("Auto-assigned gamepad ", device_id, " to slot ", i)
-			break
+			
+			if old_dev == -2:
+				# Move keyboard down to next empty slot
+				for j in range(i + 1, 4):
+					if slots[j]["device_id"] == -1:
+						slots[j] = {"device_id": -2, "type": "keyboard"}
+						print("Moved keyboard to slot ", j)
+						break
+			return
 
 func _unassign_joypad(device_id: int):
-	for i in range(1, 4):
+	for i in range(4):
 		if slots[i]["device_id"] == device_id:
 			slots[i] = {"device_id": -1, "type": "none"}
 			print("Unassigned gamepad ", device_id, " from slot ", i)
