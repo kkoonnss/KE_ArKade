@@ -169,7 +169,87 @@ func display_levels():
 			file_name = dir.get_next()
 func _on_level_selected(level_name: String):
 	selected_level_name = level_name
-	display_games()
+	display_games_lightbox()
+
+func display_games_lightbox():
+	if games_overlay != null:
+		games_overlay.queue_free()
+		
+	games_overlay = ColorRect.new()
+	games_overlay.color = Color(0, 0, 0, 0.85)
+	games_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(games_overlay)
+	
+	var margin = MarginContainer.new()
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left", 60)
+	margin.add_theme_constant_override("margin_top", 60)
+	margin.add_theme_constant_override("margin_right", 60)
+	margin.add_theme_constant_override("margin_bottom", 60)
+	games_overlay.add_child(margin)
+	
+	var panel = PanelContainer.new()
+	panel.add_theme_stylebox_override("panel", style_panel)
+	margin.add_child(panel)
+	
+	var vbox = VBoxContainer.new()
+	panel.add_child(vbox)
+	
+	var header = MarginContainer.new()
+	header.add_theme_constant_override("margin_left", 20)
+	header.add_theme_constant_override("margin_top", 20)
+	header.add_theme_constant_override("margin_right", 20)
+	header.add_theme_constant_override("margin_bottom", 10)
+	vbox.add_child(header)
+	
+	var hbox = HBoxContainer.new()
+	header.add_child(hbox)
+	
+	var title = Label.new()
+	var pretty_level = selected_level_name.replace("_", " ").to_upper()
+	title.text = "SELECT A GAME TO PLAY IN " + pretty_level
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", color_cyan)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(title)
+	
+	var close_btn = Button.new()
+	close_btn.text = "Close"
+	close_btn.add_theme_font_size_override("font_size", 18)
+	close_btn.pressed.connect(func(): games_overlay.queue_free())
+	hbox.add_child(close_btn)
+	
+	var scroll = ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	var scroll_margin = MarginContainer.new()
+	scroll_margin.add_theme_constant_override("margin_left", 20)
+	scroll_margin.add_theme_constant_override("margin_bottom", 20)
+	scroll_margin.add_theme_constant_override("margin_right", 20)
+	scroll.add_child(scroll_margin)
+	vbox.add_child(scroll)
+	
+	var grid = GridContainer.new()
+	grid.columns = 6
+	grid.add_theme_constant_override("h_separation", 16)
+	grid.add_theme_constant_override("v_separation", 16)
+	scroll_margin.add_child(grid)
+	
+	var games = get_sorted_cartridges()
+	
+	if sort_favorites_first:
+		var favs = []
+		var others = []
+		for g in games:
+			if g.favorite: favs.append(g)
+			else: others.append(g)
+		favs.sort_custom(func(a,b): return _get_cartridge_sort_name(a.game_name) < _get_cartridge_sort_name(b.game_name))
+		others.sort_custom(func(a,b): return _get_cartridge_sort_name(a.game_name) < _get_cartridge_sort_name(b.game_name))
+		games = favs + others
+		
+	var idx = 0
+	for g in games:
+		_create_game_card(g, grid, idx)
+		idx += 1
 
 func display_games():
 	clear_main_panel()
@@ -229,6 +309,9 @@ func display_games():
 			_create_game_card(game, grid, game.absolute_index)
 
 func _launch_game(cart_id: String):
+	if games_overlay != null:
+		games_overlay.queue_free()
+		games_overlay = null
 	if current_scene == "" or current_scene == "scene_classic_pack":
 		if cart_id in ["tetris", "pacman", "bomberman", "frogger", "asteroids", "tron", "on_track", "rampage", "gta"]:
 			current_scene = "scene_classic_pack"
@@ -351,7 +434,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	var is_fav = cart.favorite
 
 	var card_panel = PanelContainer.new()
-	card_panel.custom_minimum_size = Vector2(260, 260)
+	card_panel.custom_minimum_size = Vector2(260, 300)
 	card_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	card_panel.add_theme_stylebox_override("panel", style_panel)
@@ -414,7 +497,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	var fav_btn = Button.new()
 	fav_btn.text = "★" if is_fav else "☆"
 	fav_btn.custom_minimum_size = Vector2(36, 36)
-	fav_btn.add_theme_font_size_override("font_size", 20)
+	fav_btn.add_theme_font_size_override("font_size", 24)
 	if is_fav: fav_btn.add_theme_color_override("font_color", color_cyan)
 	else: fav_btn.add_theme_color_override("font_color", color_ink_dim)
 	var fav_style = StyleBoxEmpty.new()
@@ -433,39 +516,15 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	)
 	img_control.add_child(fav_btn)
 
-	var prev_skin_btn = Button.new()
-	prev_skin_btn.text = "<"
-	prev_skin_btn.custom_minimum_size = Vector2(36, 48)
-	prev_skin_btn.add_theme_font_size_override("font_size", 24)
-	var arrow_style = StyleBoxFlat.new()
-	arrow_style.bg_color = Color(0,0,0, 0.4)
-	prev_skin_btn.add_theme_stylebox_override("normal", arrow_style)
-	prev_skin_btn.set_anchors_preset(Control.PRESET_CENTER_LEFT)
-	prev_skin_btn.offset_left = 0
-	prev_skin_btn.offset_right = 36
-	prev_skin_btn.pressed.connect(func():
-		_cycle_skin(cart_id, skins, -1)
-	)
-	img_control.add_child(prev_skin_btn)
-
-	var next_skin_btn = Button.new()
-	next_skin_btn.text = ">"
-	next_skin_btn.custom_minimum_size = Vector2(36, 48)
-	next_skin_btn.add_theme_font_size_override("font_size", 24)
-	next_skin_btn.add_theme_stylebox_override("normal", arrow_style)
-	next_skin_btn.set_anchors_preset(Control.PRESET_CENTER_RIGHT)
-	next_skin_btn.offset_left = -36
-	next_skin_btn.offset_right = 0
-	next_skin_btn.pressed.connect(func():
-		_cycle_skin(cart_id, skins, 1)
-	)
-	img_control.add_child(next_skin_btn)
-
 	var bottom_margin = MarginContainer.new()
 	bottom_margin.add_theme_constant_override("margin_left", 8)
 	bottom_margin.add_theme_constant_override("margin_right", 8)
 	bottom_margin.add_theme_constant_override("margin_bottom", 8)
 	vbox.add_child(bottom_margin)
+	
+	var bottom_vbox = VBoxContainer.new()
+	bottom_vbox.add_theme_constant_override("separation", 4)
+	bottom_margin.add_child(bottom_vbox)
 
 	var title_btn = Button.new()
 	var display_title = game_name
@@ -490,7 +549,40 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	title_btn.pressed.connect(func():
 		_launch_game(cart_id)
 	)
-	bottom_margin.add_child(title_btn)
+	bottom_vbox.add_child(title_btn)
+
+	if skins.size() > 1:
+		var skin_hbox = HBoxContainer.new()
+		skin_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		skin_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		skin_hbox.add_theme_constant_override("separation", 8)
+		
+		var prev_skin_btn = Button.new()
+		prev_skin_btn.text = "<"
+		prev_skin_btn.custom_minimum_size = Vector2(28, 28)
+		var arrow_style = StyleBoxFlat.new()
+		arrow_style.bg_color = Color(0.1, 0.1, 0.12)
+		arrow_style.set_corner_radius_all(4)
+		prev_skin_btn.add_theme_stylebox_override("normal", arrow_style)
+		prev_skin_btn.pressed.connect(func(): _cycle_skin(cart_id, skins, -1))
+		skin_hbox.add_child(prev_skin_btn)
+		
+		var skin_lbl = Label.new()
+		skin_lbl.text = current_skin if current_skin != "" else default_skin
+		skin_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		skin_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		skin_lbl.add_theme_font_size_override("font_size", 14)
+		skin_lbl.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+		skin_hbox.add_child(skin_lbl)
+		
+		var next_skin_btn = Button.new()
+		next_skin_btn.text = ">"
+		next_skin_btn.custom_minimum_size = Vector2(28, 28)
+		next_skin_btn.add_theme_stylebox_override("normal", arrow_style)
+		next_skin_btn.pressed.connect(func(): _cycle_skin(cart_id, skins, 1))
+		skin_hbox.add_child(next_skin_btn)
+		
+		bottom_vbox.add_child(skin_hbox)
 
 func _create_level_card(level_name: String, levels_dir: String, container: Control, display_index: int = -1, is_scene: bool = false):
 	var btn = Button.new()
