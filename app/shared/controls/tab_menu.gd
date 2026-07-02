@@ -442,7 +442,7 @@ func _build_group_section(text: String) -> Control:
 	header.text = _group_header_text(text)
 	header.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	header.flat = true
-	header.focus_mode = Control.FOCUS_NONE
+	header.focus_mode = Control.FOCUS_ALL
 	header.add_theme_color_override("font_color", Color(1.0, 0.86, 0.24))
 	header.add_theme_font_size_override("font_size", 18)
 	box.add_child(header)
