@@ -83,7 +83,7 @@ var island_count = 5
 var island_width = 1.0
 var island_depth = 1.0
 var throw_distance = 1.0
-var global_scale = 1.0
+var pb_global_scale = 1.0
 
 var players = []
 var enemies = []
@@ -191,7 +191,7 @@ func _setup_shared_tab_menu():
     tab_menu.register_knob_float("target_spread", "Target Spread", target_spread, 0.3, 1.8, 0.05, "Secondary")
     tab_menu.register_knob_float("density", "Traffic Density", traffic_density, 0.2, 2.0, 0.1, "Gameplay")
     tab_menu.register_knob_float("throw_distance", "Throw Distance", throw_distance, 0.65, 1.6, 0.05, "Gameplay")
-    tab_menu.register_knob_float("global_scale", "Global Scale", global_scale, 0.6, 1.35, 0.05, "Gameplay")
+    tab_menu.register_knob_float("pb_global_scale", "Global Scale", pb_global_scale, 0.6, 1.35, 0.05, "Gameplay")
     tab_menu.connect("knob_changed", Callable(self, "_on_shared_knob_changed"))
     tab_menu.connect("action_triggered", Callable(self, "_on_shared_menu_action"))
     tab_menu.setup(game_id, level_dir, game_title.to_upper())
@@ -221,7 +221,7 @@ func _apply_shared_menu_settings():
     subscriber_ratio = float(tab_menu.get_knob_value("subscriber_ratio"))
     target_spread = float(tab_menu.get_knob_value("target_spread"))
     throw_distance = float(tab_menu.get_knob_value("throw_distance"))
-    global_scale = float(tab_menu.get_knob_value("global_scale"))
+    pb_global_scale = float(tab_menu.get_knob_value("pb_global_scale"))
 
 func _on_shared_knob_changed(knob_id: String, value):
     _apply_shared_menu_settings()
@@ -229,7 +229,7 @@ func _on_shared_knob_changed(knob_id: String, value):
         "grid_scale", "lane_width", "lane_spacing", "shoulder_width", "safe_zone_padding",
         "density", "invert", "bounds_clamp", "house_setback", "house_spacing",
         "yard_depth", "island_count", "island_width", "island_depth",
-        "delivery_side_bias", "subscriber_ratio", "target_spread", "global_scale"
+        "delivery_side_bias", "subscriber_ratio", "target_spread", "pb_global_scale"
     ]:
         load_level()
         _reset_game()
@@ -1323,13 +1323,13 @@ func _tick_paperboy(delta):
         paper_throw_dir = sign(move.x)
     var road_half = _paperboy_road_half_width()
     var pad_px = cell_px * (0.4 + safe_zone_padding * 0.55)
-    p["pos"].x = clamp(p["pos"].x + move.x * 240.0 * max(0.72, global_scale) * delta, map_w * 0.5 - road_half + pad_px, map_w * 0.5 + road_half - pad_px)
+    p["pos"].x = clamp(p["pos"].x + move.x * 240.0 * max(0.72, pb_global_scale) * delta, map_w * 0.5 - road_half + pad_px, map_w * 0.5 + road_half - pad_px)
     p["cooldown"] = max(0.0, p["cooldown"] - delta)
     if _shoot_pressed(0) and p["cooldown"] <= 0.0:
         var dir = paper_throw_dir
         papers.append({
-            "pos": p["pos"] + Vector2(20 * dir, -8) * global_scale,
-            "vel": Vector2(420 * dir * throw_distance * max(0.8, global_scale), (-170.0 - 70.0 * throw_distance) * max(0.82, global_scale)),
+            "pos": p["pos"] + Vector2(20 * dir, -8) * pb_global_scale,
+            "vel": Vector2(420 * dir * throw_distance * max(0.8, pb_global_scale), (-170.0 - 70.0 * throw_distance) * max(0.82, pb_global_scale)),
             "life": 0.0
         })
         p["cooldown"] = 0.25
@@ -1590,9 +1590,9 @@ func _draw_paperboy():
                 if not _paperboy_flash_on(h):
                     continue
                 col = Color(col.r, col.g, col.b, 0.8)
-            _draw_house(hp, col, global_scale)
-            _glow_line(mailbox + Vector2(0, -10) * global_scale, mailbox + Vector2(0, 10) * global_scale, col, 1.2)
-            _glow_line(mailbox + Vector2(-8, -6) * global_scale, mailbox + Vector2(8, -2) * global_scale, col, 1.0)
+            _draw_house(hp, col, pb_global_scale)
+            _glow_line(mailbox + Vector2(0, -10) * pb_global_scale, mailbox + Vector2(0, 10) * pb_global_scale, col, 1.2)
+            _glow_line(mailbox + Vector2(-8, -6) * pb_global_scale, mailbox + Vector2(8, -2) * pb_global_scale, col, 1.0)
     for m in road_markers:
         var rp = m["pos"] + Vector2(0, scroll_y)
         if rp.y > -20 and rp.y < map_h + 20:
@@ -1601,7 +1601,7 @@ func _draw_paperboy():
             _glow_circle(rp, float(m.get("radius", 7.0)), NEON_ORANGE)
     for p in papers:
         _glow_line(p["pos"] - Vector2(8, 3), p["pos"] + Vector2(8, 3), NEON_YELLOW, 2.0)
-    _draw_bicycle_rider(players[0]["pos"], NEON_CYAN, global_scale)
+    _draw_bicycle_rider(players[0]["pos"], NEON_CYAN, pb_global_scale)
 
 func _draw_qbert():
     for c in cubes:
@@ -1726,7 +1726,7 @@ func _clamp_world(pos: Vector2) -> Vector2:
     return Vector2(clamp(pos.x, 0.0, map_w), clamp(pos.y, 0.0, map_h))
 
 func _paperboy_road_half_width() -> float:
-    return clamp(map_w * (0.08 + lane_width * 0.075) * global_scale, map_w * 0.1, map_w * 0.26)
+    return clamp(map_w * (0.08 + lane_width * 0.075) * pb_global_scale, map_w * 0.1, map_w * 0.26)
 
 func _build_paperboy_islands(road_center: float, road_half: float, shoulder_px: float) -> Array:
     var result = []
@@ -1770,7 +1770,7 @@ func _assign_house_batch(batch_idx: int, start_scroll: float, island_id: int):
     var road_center = map_w * 0.5
     var road_half = _paperboy_road_half_width()
     var shoulder_px = cell_px * (0.55 + shoulder_width * 0.9)
-    var yard_px = cell_px * (0.9 + yard_depth * 1.1) * global_scale
+    var yard_px = cell_px * (0.9 + yard_depth * 1.1) * pb_global_scale
     var members: Array = batch["members"]
     for local_idx in range(members.size()):
         var house_idx = int(members[local_idx])
