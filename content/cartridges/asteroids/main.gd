@@ -1289,12 +1289,13 @@ func _bullet_hits_enemies():
             _setup_tank()
 
 func _tick_bullets(delta):
-    for i in range(bullets.size() - 1, -1, -1):
-        bullets[i]["pos"] += bullets[i]["vel"] * delta
-        bullets[i]["ttl"] -= delta
-        var blocked_by_level = not _cell_walkable(_pos_to_cell(bullets[i]["pos"]))
-        if bullets[i]["ttl"] <= 0 or bullets[i]["pos"].x < -60 or bullets[i]["pos"].x > map_w + 60 or bullets[i]["pos"].y < -60 or bullets[i]["pos"].y > map_h + 60 or blocked_by_level:
-            bullets.remove_at(i)
+	for i in range(bullets.size() - 1, -1, -1):
+		bullets[i]["pos"] += bullets[i]["vel"] * delta
+		bullets[i]["pos"] = _wrap(bullets[i]["pos"])
+		bullets[i]["ttl"] -= delta
+		var blocked_by_level = not _cell_walkable(_pos_to_cell(bullets[i]["pos"]))
+		if bullets[i]["ttl"] <= 0 or blocked_by_level:
+			bullets.remove_at(i)
 
 func _tick_particles(delta):
     for i in range(particles.size() - 1, -1, -1):
