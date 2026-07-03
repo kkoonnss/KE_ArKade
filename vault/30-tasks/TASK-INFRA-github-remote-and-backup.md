@@ -4,8 +4,9 @@ stage: 6
 wave: infra
 priority: P0
 lane: tools
-status: in_progress
+status: pending_kons_verify
 owner_agent: codex
+closing_receipt: vault/40-agent-runs/codex_github_remote_and_backup_2026-07-02.md
 touches: [".gitignore", "_Briefs/governance/07_GIT_GOVERNANCE.md", "_Briefs/governance/scripts/**"]
 locks_required: [tools-github-integration]
 depends_on: []
