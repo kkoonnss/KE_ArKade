@@ -461,6 +461,31 @@ func _build_group_section(text: String) -> Control:
 		body.visible = not next_state
 		header.text = _group_header_text(text)
 	)
+	# Left = collapse, Right = expand via controller / keyboard
+	header.gui_input.connect(func(event):
+		var want_collapse = false
+		var want_expand = false
+		if event is InputEventKey and event.pressed and not event.echo:
+			if event.keycode in [KEY_LEFT]:
+				want_collapse = true
+			elif event.keycode in [KEY_RIGHT]:
+				want_expand = true
+		elif event is InputEventJoypadButton and event.pressed:
+			if event.button_index == JOY_BUTTON_DPAD_LEFT:
+				want_collapse = true
+			elif event.button_index == JOY_BUTTON_DPAD_RIGHT:
+				want_expand = true
+		if want_collapse and not bool(collapsed_groups.get(text, false)):
+			collapsed_groups[text] = true
+			body.visible = false
+			header.text = _group_header_text(text)
+			header.accept_event()
+		elif want_expand and bool(collapsed_groups.get(text, false)):
+			collapsed_groups[text] = false
+			body.visible = true
+			header.text = _group_header_text(text)
+			header.accept_event()
+	)
 	return box
 
 func _group_header_text(text: String) -> String:
