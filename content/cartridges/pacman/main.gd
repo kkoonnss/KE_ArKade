@@ -1181,7 +1181,7 @@ func _process_enemies(delta):
                     for nid in possible:
                         var nnode = _get_node(nid)
                         if nnode:
-                            var nd = Vector2(nnode["x"], nnode["y"]).distance_to(player_pos)
+                            var nd = Vector2(nnode.get("x", 0.0), nnode.get("y", 0.0)).distance_to(player_pos)
                             if nd > best_flee_dist:
                                 best_flee_dist = nd
                                 best_flee_id = nid
