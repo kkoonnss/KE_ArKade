@@ -494,15 +494,15 @@ func _menu_line(index: int) -> String:
     return prefix + str(menu_items[index].get("label", ""))
 
 func _handle_menu_input(event) -> bool:
-	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
-		if "game_state" in self and game_state != "playing":
-			if has_method("_reset_game"): _reset_game()
-			elif has_method("reset_game"): reset_game()
-		elif "state" in self and state != "playing":
-			if has_method("_reset_game"): _reset_game()
-			elif has_method("reset_game"): reset_game()
+    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
+        if get("game_state") != null and get("game_state") != "playing":
+            if has_method("_reset_game"): call("_reset_game")
+            elif has_method("reset_game"): call("reset_game")
+        elif get("state") != null and get("state") != "playing":
+            if has_method("_reset_game"): call("_reset_game")
+            elif has_method("reset_game"): call("reset_game")
 
-	if event is InputEventKey and event.pressed and not event.echo:
+    if event is InputEventKey and event.pressed and not event.echo:
         if event.keycode in [KEY_UP, KEY_W]:
             _menu_move(-1)
             return true
@@ -1004,6 +1004,22 @@ func _setup_tank():
 func _input(event):
     if _shared_menu_open():
         return
+    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
+        if get("game_state") != null and get("game_state") != "playing":
+            if has_method("_reset_game"): call("_reset_game")
+            elif has_method("reset_game"): call("reset_game")
+        elif get("state") != null and get("state") != "playing":
+            if has_method("_reset_game"): call("_reset_game")
+            elif has_method("reset_game"): call("reset_game")
+
+    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
+        if get("game_state") != null and get("game_state") != "playing":
+            if has_method("_reset_game"): call("_reset_game")
+            elif has_method("reset_game"): call("reset_game")
+        elif get("state") != null and get("state") != "playing":
+            if has_method("_reset_game"): call("_reset_game")
+            elif has_method("reset_game"): call("reset_game")
+
     if event is InputEventKey and event.pressed and not event.echo:
         if event.keycode == KEY_F1:
             show_reference = not show_reference
@@ -1297,13 +1313,13 @@ func _bullet_hits_enemies():
             _setup_tank()
 
 func _tick_bullets(delta):
-	for i in range(bullets.size() - 1, -1, -1):
-		bullets[i]["pos"] += bullets[i]["vel"] * delta
-		bullets[i]["pos"] = _wrap(bullets[i]["pos"])
-		bullets[i]["ttl"] -= delta
-		var blocked_by_level = not _cell_walkable(_pos_to_cell(bullets[i]["pos"]))
-		if bullets[i]["ttl"] <= 0 or blocked_by_level:
-			bullets.remove_at(i)
+    for i in range(bullets.size() - 1, -1, -1):
+        bullets[i]["pos"] += bullets[i]["vel"] * delta
+        bullets[i]["pos"] = _wrap(bullets[i]["pos"])
+        bullets[i]["ttl"] -= delta
+        var blocked_by_level = not _cell_walkable(_pos_to_cell(bullets[i]["pos"]))
+        if bullets[i]["ttl"] <= 0 or blocked_by_level:
+            bullets.remove_at(i)
 
 func _tick_particles(delta):
     for i in range(particles.size() - 1, -1, -1):
