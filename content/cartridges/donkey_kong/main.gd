@@ -596,7 +596,8 @@ func _setup_classic_donkey_kong():
         var fy = logical_h * 0.94 - ftier * tier_spacing
         fire_guys.append({"tier": ftier, "pos": Vector2(logical_w * 0.5, fy), "vel": Vector2(100, 0)})
         
-    player_spawn = Vector2(logical_w * 0.85, logical_h * 0.92)
+    var spawn_x = logical_w * 0.85
+    player_spawn = Vector2(spawn_x, _platform_y(Vector2(spawn_x, logical_h * 0.92)) - 20.0)
 
 func _setup_platforms():
     if level_dir.get_file().begins_with("classic") or level_dir.ends_with("classic"):
@@ -810,9 +811,11 @@ func _setup_barrel():
     _setup_platforms()
     if player_spawn != Vector2.ZERO:
         player["pos"] = player_spawn
+        player["vel"] = Vector2.ZERO
+        player["on_ground"] = true
         dk_players.clear()
         for i in range(selected_players):
-            dk_players.append({"pos": player_spawn, "vel": Vector2.ZERO, "cool": 0.0, "on_ground": false, "dead": false})
+            dk_players.append({"pos": player_spawn, "vel": Vector2.ZERO, "cool": 0.0, "on_ground": true, "dead": false})
 
 func _setup_breakout():
     paddle_x = map_w * 0.5
@@ -2085,7 +2088,7 @@ func _lose_life():
             for i in range(dk_players.size()):
                 dk_players[i]["pos"] = player_spawn
                 dk_players[i]["vel"] = Vector2.ZERO
-                dk_players[i]["on_ground"] = false
+                dk_players[i]["on_ground"] = true
                 dk_players[i]["dead"] = false
         else:
             player["pos"] = _safe_pos(Vector2(logical_w * 0.18, logical_h * 0.78))

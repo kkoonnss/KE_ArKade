@@ -171,18 +171,91 @@ The recovery is a one-liner. The reason the Jun 28-30 recovery took three
 days and 13 scripts is that the pre-edit snapshots did not exist. They
 do now (in this doc; once §2.2 is followed in dispatch prompts).
 
-## 7. The GitHub remote (in progress)
+## 7. GitHub remote + offsite backup
 
-A Codex agent is currently building the GitHub backup integration. Once
-landed, this doc updates with:
+This repo now treats GitHub as the off-machine backup target. The local repo
+remains the working source of truth, but `origin` is the disaster-recovery
+copy that must stay close behind it.
 
-- Remote URL + credentials handling.
-- Push cadence (likely: after every ticket-close commit + daily snapshot tag).
-- Branch protection rules (likely: `main` requires linear history; tags
-  are immutable).
-- The recovery story from GitHub (clone fresh, check out `daily/<date>`).
+- Remote URL: `PENDING_KONS_PRIVATE_REPO_URL`
+- Default branch: `master`
+- Manual push script: `_Briefs/governance/scripts/push_backup.cmd`
+- Automatic push hook: `.git/hooks/post-commit`
 
-The integration's output **refines this doc** rather than replacing it.
+### 7.1 Remote wiring
+
+Once Kons creates the private GitHub repo, wire it with:
+
+```bash
+git remote add origin <github-private-url>
+git remote -v
+```
+
+If `origin` already exists, update it instead of adding a second remote:
+
+```bash
+git remote set-url origin <github-private-url>
+git remote -v
+```
+
+### 7.2 Push cadence
+
+The cadence is now explicit and enforced by tooling:
+
+- After every ticket-close commit: push `master` to `origin`.
+- After every daily snapshot tag: push tags to `origin`.
+- After every weekly snapshot tag: push tags to `origin`.
+- Any time the automatic hook fails because the network is down: the local
+  commit still stands; rerun `_Briefs/governance/scripts/push_backup.cmd`
+  manually and it will catch up.
+
+`push_backup.cmd` always does:
+
+```bash
+git push origin master
+git push origin --tags
+```
+
+The post-commit hook starts that script in the background so commits do not
+wait on the network. If `origin` is not configured yet, the script logs a
+warning and exits cleanly.
+
+### 7.3 Branch protection rules
+
+On the GitHub repo, configure branch protection for `master` with:
+
+- Require linear history: enabled.
+- Allow force pushes: disabled.
+- Allow deletions: disabled.
+
+Tags are treated as immutable backups:
+
+- Do not move or delete `pre-edit/*`, `daily/*`, or `week/*` tags after they
+  are pushed.
+- If GitHub rulesets are available, add a tag protection/ruleset that blocks
+  tag deletion and tag updates for those patterns.
+
+### 7.4 Recovery from remote
+
+If the local checkout is lost or suspect:
+
+```bash
+git clone <github-private-url> C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade
+cd C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade
+git tag -l "daily/*"
+git checkout daily/<last-good-date>
+```
+
+Then:
+
+1. Reinstall the local-only Godot executables per `README.md`.
+2. Reinstall hooks with `_Briefs/governance/scripts/install_hooks_2026-07-01.cmd`.
+3. If a working branch tip is needed rather than a snapshot, return to
+   `master` after inspection with `git checkout master`.
+
+This is the offsite version of `03_RECOVERY_PROTOCOL.md` §5 Step 3: clone
+fresh, inspect the snapshot tags, and restore from the last known good state
+before attempting any stitching or manual repair.
 
 ## 8. Pre-commit checks (light, conceptual)
 

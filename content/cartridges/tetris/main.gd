@@ -13,6 +13,7 @@ var heartbeat_timer: float = 0.0
 var read_buffer: String = ""
 var prev_keys = {}
 var prev_joy_buttons = {}
+var prev_joy_axes = {}
 var active_particles = []
 
 # Container data
@@ -191,6 +192,18 @@ func _apply_settings_from_menu():
         show_reference = bool(tab_menu.get_knob_value("reference"))
         reference_opacity = float(tab_menu.get_knob_value("reference_opacity"))
         secondary_photo_mix = float(tab_menu.get_knob_value("secondary_photo_mix"))
+    _apply_classic_level_defaults()
+
+func _is_classic_tetris_level() -> bool:
+    return level_dir.get_file() == "classic_tetris"
+
+func _apply_classic_level_defaults():
+    if not _is_classic_tetris_level():
+        return
+    show_reference = false
+    show_debug_grid = false
+    background_view = "final"
+    reference_opacity = 0.0
 
 func _on_knob_changed(knob_id: String, value):
     _apply_settings_from_menu()
@@ -338,6 +351,9 @@ func load_level():
         if semantic_img:
             map_w = semantic_img.get_width()
             map_h = semantic_img.get_height()
+
+    var classic_empty_well = _is_classic_tetris_level()
+    _apply_classic_level_defaults()
             
     # Calculate scale factor and offset to center and fill screen (1920x1080)
     var viewport_size = get_viewport_rect().size
@@ -418,7 +434,9 @@ func load_level():
                 continue
                 
             var hits_cell = false
-            if semantic_img != null and map_center.x >= 0 and map_center.y >= 0 and map_center.x < semantic_img.get_width() and map_center.y < semantic_img.get_height():
+            if classic_empty_well:
+                hits_cell = false
+            elif semantic_img != null and map_center.x >= 0 and map_center.y >= 0 and map_center.x < semantic_img.get_width() and map_center.y < semantic_img.get_height():
                 var px_color = semantic_img.get_pixel(int(map_center.x), int(map_center.y))
                 # Cyan (0.0, 0.9, 1.0) is lane/empty space. Other colors are solid.
                 var cyan_dist = abs(px_color.r - 0.0) + abs(px_color.g - 0.9) + abs(px_color.b - 1.0)
@@ -472,6 +490,10 @@ func load_level():
                 continue
                 
             var hits_cell = temp_grid[x][y]
+
+            if classic_empty_well:
+                temp_grid[x][y] = false
+                continue
             
             if center.y < clear_y_max:
                 hits_cell = false
@@ -581,37 +603,66 @@ func is_key_just_pressed(key: int) -> bool:
     return pressed and not was_pressed
 
 func is_joy_button_just_pressed(device: int, button: int) -> bool:
-    var pressed = Input.is_joy_button_pressed(SharedLoader.get_joy_id(device), button)
+    var joy_id = SharedLoader.get_joy_id(device)
+    if joy_id < 0:
+        return false
+    var pressed = Input.is_joy_button_pressed(joy_id, button)
     var key = "%d_%d" % [device, button]
     var was_pressed = prev_joy_buttons.get(key, false)
     prev_joy_buttons[key] = pressed
     return pressed and not was_pressed
 
+func is_joy_button_pressed(device: int, button: int) -> bool:
+    var joy_id = SharedLoader.get_joy_id(device)
+    if joy_id < 0:
+        return false
+    return Input.is_joy_button_pressed(joy_id, button)
+
+func is_joy_axis_just_pressed(device: int, axis: int, direction: float, threshold: float = 0.55) -> bool:
+    var joy_id = SharedLoader.get_joy_id(device)
+    if joy_id < 0:
+        return false
+    var pressed = Input.get_joy_axis(joy_id, axis) * direction > threshold
+    var key = "%d_%d_%d" % [device, axis, int(sign(direction))]
+    var was_pressed = prev_joy_axes.get(key, false)
+    prev_joy_axes[key] = pressed
+    return pressed and not was_pressed
+
+func is_joy_axis_pressed(device: int, axis: int, direction: float, threshold: float = 0.55) -> bool:
+    var joy_id = SharedLoader.get_joy_id(device)
+    if joy_id < 0:
+        return false
+    return Input.get_joy_axis(joy_id, axis) * direction > threshold
+
 func get_player_inputs(p_idx: int) -> Dictionary:
-    var inputs = {"left": false, "right": false, "up": false, "down": false, "hard_drop": false}
+    var inputs = {"left": false, "right": false, "rotate_left": false, "rotate_right": false, "down": false, "hard_drop": false}
     if p_idx == 0:
-        inputs.left = is_key_just_pressed(KEY_A) or is_joy_button_just_pressed(0, JOY_BUTTON_DPAD_LEFT)
-        inputs.right = is_key_just_pressed(KEY_D) or is_joy_button_just_pressed(0, JOY_BUTTON_DPAD_RIGHT)
-        inputs.up = is_key_just_pressed(KEY_W) or is_joy_button_just_pressed(0, JOY_BUTTON_DPAD_UP) or is_joy_button_just_pressed(0, JOY_BUTTON_A)
-        inputs.down = Input.is_key_pressed(KEY_S) or Input.is_joy_button_pressed(SharedLoader.get_joy_id(0), JOY_BUTTON_DPAD_DOWN)
+        inputs.left = is_key_just_pressed(KEY_A) or is_joy_button_just_pressed(0, JOY_BUTTON_DPAD_LEFT) or is_joy_axis_just_pressed(0, JOY_AXIS_LEFT_X, -1.0)
+        inputs.right = is_key_just_pressed(KEY_D) or is_joy_button_just_pressed(0, JOY_BUTTON_DPAD_RIGHT) or is_joy_axis_just_pressed(0, JOY_AXIS_LEFT_X, 1.0)
+        inputs.rotate_left = is_key_just_pressed(KEY_Q) or is_key_just_pressed(KEY_Z) or is_joy_button_just_pressed(0, JOY_BUTTON_LEFT_SHOULDER) or is_joy_button_just_pressed(0, JOY_BUTTON_X)
+        inputs.rotate_right = is_key_just_pressed(KEY_W) or is_key_just_pressed(KEY_E) or is_joy_button_just_pressed(0, JOY_BUTTON_DPAD_UP) or is_joy_button_just_pressed(0, JOY_BUTTON_RIGHT_SHOULDER) or is_joy_button_just_pressed(0, JOY_BUTTON_A)
+        inputs.down = Input.is_key_pressed(KEY_S) or is_joy_button_pressed(0, JOY_BUTTON_DPAD_DOWN) or is_joy_axis_pressed(0, JOY_AXIS_LEFT_Y, 1.0)
         inputs.hard_drop = is_key_just_pressed(KEY_SPACE) or is_joy_button_just_pressed(0, JOY_BUTTON_B)
     elif p_idx == 1:
-        inputs.left = is_key_just_pressed(KEY_LEFT) or is_joy_button_just_pressed(1, JOY_BUTTON_DPAD_LEFT)
-        inputs.right = is_key_just_pressed(KEY_RIGHT) or is_joy_button_just_pressed(1, JOY_BUTTON_DPAD_RIGHT)
-        inputs.up = is_key_just_pressed(KEY_UP) or is_joy_button_just_pressed(1, JOY_BUTTON_DPAD_UP) or is_joy_button_just_pressed(1, JOY_BUTTON_A)
-        inputs.down = Input.is_key_pressed(KEY_DOWN) or Input.is_joy_button_pressed(SharedLoader.get_joy_id(1), JOY_BUTTON_DPAD_DOWN)
+        inputs.left = is_key_just_pressed(KEY_LEFT) or is_joy_button_just_pressed(1, JOY_BUTTON_DPAD_LEFT) or is_joy_axis_just_pressed(1, JOY_AXIS_LEFT_X, -1.0)
+        inputs.right = is_key_just_pressed(KEY_RIGHT) or is_joy_button_just_pressed(1, JOY_BUTTON_DPAD_RIGHT) or is_joy_axis_just_pressed(1, JOY_AXIS_LEFT_X, 1.0)
+        inputs.rotate_left = is_key_just_pressed(KEY_COMMA) or is_joy_button_just_pressed(1, JOY_BUTTON_LEFT_SHOULDER) or is_joy_button_just_pressed(1, JOY_BUTTON_X)
+        inputs.rotate_right = is_key_just_pressed(KEY_UP) or is_key_just_pressed(KEY_PERIOD) or is_joy_button_just_pressed(1, JOY_BUTTON_DPAD_UP) or is_joy_button_just_pressed(1, JOY_BUTTON_RIGHT_SHOULDER) or is_joy_button_just_pressed(1, JOY_BUTTON_A)
+        inputs.down = Input.is_key_pressed(KEY_DOWN) or is_joy_button_pressed(1, JOY_BUTTON_DPAD_DOWN) or is_joy_axis_pressed(1, JOY_AXIS_LEFT_Y, 1.0)
         inputs.hard_drop = is_key_just_pressed(KEY_ENTER) or is_joy_button_just_pressed(1, JOY_BUTTON_B)
     elif p_idx == 2:
-        inputs.left = is_joy_button_just_pressed(2, JOY_BUTTON_DPAD_LEFT)
-        inputs.right = is_joy_button_just_pressed(2, JOY_BUTTON_DPAD_RIGHT)
-        inputs.up = is_joy_button_just_pressed(2, JOY_BUTTON_DPAD_UP) or is_joy_button_just_pressed(2, JOY_BUTTON_A)
-        inputs.down = Input.is_joy_button_pressed(SharedLoader.get_joy_id(2), JOY_BUTTON_DPAD_DOWN)
+        inputs.left = is_joy_button_just_pressed(2, JOY_BUTTON_DPAD_LEFT) or is_joy_axis_just_pressed(2, JOY_AXIS_LEFT_X, -1.0)
+        inputs.right = is_joy_button_just_pressed(2, JOY_BUTTON_DPAD_RIGHT) or is_joy_axis_just_pressed(2, JOY_AXIS_LEFT_X, 1.0)
+        inputs.rotate_left = is_joy_button_just_pressed(2, JOY_BUTTON_LEFT_SHOULDER) or is_joy_button_just_pressed(2, JOY_BUTTON_X)
+        inputs.rotate_right = is_joy_button_just_pressed(2, JOY_BUTTON_DPAD_UP) or is_joy_button_just_pressed(2, JOY_BUTTON_RIGHT_SHOULDER) or is_joy_button_just_pressed(2, JOY_BUTTON_A)
+        inputs.down = is_joy_button_pressed(2, JOY_BUTTON_DPAD_DOWN) or is_joy_axis_pressed(2, JOY_AXIS_LEFT_Y, 1.0)
         inputs.hard_drop = is_joy_button_just_pressed(2, JOY_BUTTON_B)
     elif p_idx == 3:
-        inputs.left = is_joy_button_just_pressed(3, JOY_BUTTON_DPAD_LEFT)
-        inputs.right = is_joy_button_just_pressed(3, JOY_BUTTON_DPAD_RIGHT)
-        inputs.up = is_joy_button_just_pressed(3, JOY_BUTTON_DPAD_UP) or is_joy_button_just_pressed(3, JOY_BUTTON_A)
-        inputs.down = Input.is_joy_button_pressed(SharedLoader.get_joy_id(3), JOY_BUTTON_DPAD_DOWN)
+        inputs.left = is_joy_button_just_pressed(3, JOY_BUTTON_DPAD_LEFT) or is_joy_axis_just_pressed(3, JOY_AXIS_LEFT_X, -1.0)
+        inputs.right = is_joy_button_just_pressed(3, JOY_BUTTON_DPAD_RIGHT) or is_joy_axis_just_pressed(3, JOY_AXIS_LEFT_X, 1.0)
+        inputs.rotate_left = is_joy_button_just_pressed(3, JOY_BUTTON_LEFT_SHOULDER) or is_joy_button_just_pressed(3, JOY_BUTTON_X)
+        inputs.rotate_right = is_joy_button_just_pressed(3, JOY_BUTTON_DPAD_UP) or is_joy_button_just_pressed(3, JOY_BUTTON_RIGHT_SHOULDER) or is_joy_button_just_pressed(3, JOY_BUTTON_A)
+        inputs.down = is_joy_button_pressed(3, JOY_BUTTON_DPAD_DOWN) or is_joy_axis_pressed(3, JOY_AXIS_LEFT_Y, 1.0)
         inputs.hard_drop = is_joy_button_just_pressed(3, JOY_BUTTON_B)
     return inputs
 
@@ -639,8 +690,10 @@ func _process_game(delta):
             try_move(p, Vector2(-1, 0))
         elif inputs.right:
             try_move(p, Vector2(1, 0))
-        elif inputs.up:
-            try_rotate(p)
+        elif inputs.rotate_left:
+            try_rotate(p, -1)
+        elif inputs.rotate_right:
+            try_rotate(p, 1)
             
         if settings["organic_behavior"] == "tumble" and is_touching_awkward_wall(p):
             start_simulation(p)
@@ -670,11 +723,14 @@ func try_move(p_idx: int, offset: Vector2) -> bool:
         return true
     return false
     
-func try_rotate(p_idx: int):
+func try_rotate(p_idx: int, direction: int = 1):
     var piece = active_pieces[p_idx]
     var new_blocks = []
     for b in piece.blocks:
-        new_blocks.append(Vector2(-b.y, b.x))
+        if direction < 0:
+            new_blocks.append(Vector2(b.y, -b.x))
+        else:
+            new_blocks.append(Vector2(-b.y, b.x))
     if is_valid_pos(piece.pos, new_blocks, p_idx):
         piece.blocks = new_blocks
 

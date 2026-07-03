@@ -93,8 +93,8 @@ app/hub/test_hub.gd
 # Orchestrator sandbox test artifacts
 vault/35-locks/_test_write.tmp
 
-# Large binaries that should be installed separately, not committed
-# (see 07_GIT_GOVERNANCE.md §5 — temporarily allowed until install step lands)
-# godot.zip
-# Godot_v4.3-stable_win64.exe
-# Godot_v4.3-stable_win64_console.exe
+# Large binaries that are installed locally, not committed
+# (see 07_GIT_GOVERNANCE.md §5 and README.md install steps)
+/godot.zip
+/Godot_v4.3-stable_win64.exe
+/Godot_v4.3-stable_win64_console.exe

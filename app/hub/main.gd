@@ -158,6 +158,7 @@ func style_grid_button(btn: Button):
 func _on_scene_selected(scene_name: String):
 	current_scene = scene_name
 	if scene_name == "scene_classic_pack":
+		selected_level_name = ""
 		display_games()
 	else:
 		display_levels()
@@ -324,12 +325,22 @@ func display_games():
 		for game in games:
 			_create_game_card(game, grid, game.absolute_index)
 
+func _classic_level_for_cart(cart_id: String) -> String:
+	var base_dir = ProjectSettings.globalize_path("res://").path_join("../..").simplify_path()
+	var candidate = "classic_" + cart_id
+	var level_path = base_dir.path_join("content/scenes/scene_classic_pack/levels").path_join(candidate)
+	if DirAccess.dir_exists_absolute(level_path):
+		return candidate
+	return ""
+
 func _launch_game(cart_id: String):
+	var launched_from_level_overlay = games_overlay != null and is_instance_valid(games_overlay)
 	_clear_games_overlay()
-	if current_scene == "" or current_scene == "scene_classic_pack":
-		if cart_id in ["tetris", "pacman", "bomberman", "frogger", "asteroids", "tron", "on_track", "rampage", "gta"]:
-			current_scene = "scene_classic_pack"
-			selected_level_name = "classic_" + cart_id
+	var classic_level = _classic_level_for_cart(cart_id)
+	if classic_level != "" and (current_scene == "" or current_scene == "scene_classic_pack"):
+		current_scene = "scene_classic_pack"
+		if not launched_from_level_overlay or selected_level_name == "":
+			selected_level_name = classic_level
 		
 	if current_scene == "" or selected_level_name == "":
 		current_scene = "scene_demo_wall"

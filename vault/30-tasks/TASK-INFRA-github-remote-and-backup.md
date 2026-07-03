@@ -4,8 +4,8 @@ stage: 6
 wave: infra
 priority: P0
 lane: tools
-status: ready
-owner_agent: null
+status: in_progress
+owner_agent: codex
 touches: [".gitignore", "_Briefs/governance/07_GIT_GOVERNANCE.md", "_Briefs/governance/scripts/**"]
 locks_required: [tools-github-integration]
 depends_on: []

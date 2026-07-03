@@ -418,6 +418,14 @@ func _load_grid_metadata():
     grid_rows = grid_cells.size()
     if grid_rows > 0:
         grid_cols = grid_cells[0].size()
+        
+    if grid_cols > 0 and grid_rows > 0:
+        var expected_w = float(grid_cols) * grid_cell_size_base
+        var expected_h = float(grid_rows) * grid_cell_size_base
+        if map_w < 100.0 or map_h < 100.0:
+            map_w = expected_w
+            map_h = expected_h
+            
     print("PHASE 1 DEBUG - _load_grid_metadata: grid_rows=", grid_rows, " grid_cols=", grid_cols, " grid_cell_size_base=", grid_cell_size_base, " cell_px=", data.get("cell_px", 32.0))
 
 func _build_scaled_layout_from_grid() -> Dictionary:
@@ -1096,7 +1104,7 @@ func _process_player(delta):
         if game_time > 0.5:
             for j in range(pickups.size() - 1, -1, -1):
                 var pickup = pickups[j]
-                if pos.distance_to(Vector2(pickup["x"], pickup["y"])) < 15.0:
+                if pos.distance_to(Vector2(pickup["x"], pickup["y"])) < max(15.0, grid_cell_size * 0.45):
                     var pickup_pos = Vector2(pickup["x"], pickup["y"])
                     pickups.remove_at(j)
                     spawn_particle_burst(pickup_pos, Color.YELLOW, 15)
