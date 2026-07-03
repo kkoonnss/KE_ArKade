@@ -5,8 +5,8 @@ wave: 1
 priority: P1
 lane: cartridge
 archetype: well_fill
-status: done
-owner_agent: "Antigravity"
+status: in_progress
+owner_agent: "claude_sonnet (took over from Antigravity 2026-07-03)"
 touches: [content/cartridges/tetris]
 locks_required: [cart-tetris]
 depends_on: [TASK-INT-01-adapter-library, TASK-INT-02-controls-toolkit, TASK-INT-05-shared-loader-standard]
@@ -45,4 +45,17 @@ GATE: copy gta exactly (SharedLoader pattern), then LAUNCH it — no crash, read
 - Injected _repo_root() and used SharedLoader to load dependencies dynamically.
 - Passed headless boot validation (zero parse errors or runtime crashes on boot).
 - QA Note: Verified that SharedLoader is strictly used and Adapter.new() / TabMenu.new() are entirely absent. The games boot cleanly.
+
+## REOPENED 2026-07-03 — corruption + handoff to claude_sonnet
+Antigravity found `main.gd` corrupted (overlapping duplicate blocks from a prior
+automated batch edit) while working Task A (grey screen/flashing) and Task B
+(classic map invisible-row/wall-boundary). Antigravity produced an
+implementation plan to reconstruct `main.gd` from the clean, compile-verified
+historical version (`main_ecfdcfa9.gd`, git commit `ecfdcfa9`) plus rotation/
+analog-input additions and the Task B boundary fix, but paused before applying
+it. Kons handed the plan to claude_sonnet to take over; per Kons's explicit
+instruction, ingested only — **no edits applied yet, awaiting go-ahead.**
+Lock `cart-tetris` claimed. Status flipped `done` -> `in_progress` (was stale
+since 2026-06-27, did not reflect this corruption). Full detail:
+`vault/40-agent-runs/claude_sonnet_cart-tetris-handoff_2026-07-03.md`.
 

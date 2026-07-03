@@ -75,11 +75,16 @@ static func ensure_input_actions():
 	_ensure_action_key("ui_up", KEY_W)
 	_ensure_action_key("ui_down", KEY_DOWN)
 	_ensure_action_key("ui_down", KEY_S)
+	_ensure_action_key("ui_accept", KEY_ENTER)
+	_ensure_action_key("ui_accept", KEY_SPACE)
+	_ensure_action_key("ui_cancel", KEY_ESCAPE)
 	
 	_ensure_action_joy_button("ui_left", JOY_BUTTON_DPAD_LEFT)
 	_ensure_action_joy_button("ui_right", JOY_BUTTON_DPAD_RIGHT)
 	_ensure_action_joy_button("ui_up", JOY_BUTTON_DPAD_UP)
 	_ensure_action_joy_button("ui_down", JOY_BUTTON_DPAD_DOWN)
+	_ensure_action_joy_button("ui_accept", JOY_BUTTON_A)
+	_ensure_action_joy_button("ui_cancel", JOY_BUTTON_B)
 	
 	_ensure_action_joy_axis("ui_left", JOY_AXIS_LEFT_X, -1.0)
 	_ensure_action_joy_axis("ui_right", JOY_AXIS_LEFT_X, 1.0)

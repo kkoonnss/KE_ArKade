@@ -46,11 +46,38 @@ var dialog_scroll_vbox: VBoxContainer
 var games_overlay: ColorRect = null
 var _pending_menu_focus: Control = null
 var _game_title_focus_buttons: Array = []
+var _last_nav_focus: Control = null
+var _last_content_focus: Control = null
+var hub_card_scale: float = 1.0
+var scale_slider: HSlider = null
 
 func _ready():
 	set_process_input(true)
 	_ensure_hub_input_actions()
-	if scenes_grid is GridContainer: scenes_grid.columns = 3
+	if scenes_grid is GridContainer: scenes_grid.columns = 4
+	
+	var top_bar = get_node_or_null("UI/TopBar")
+	if top_bar and not scale_slider:
+		var scale_container = HBoxContainer.new()
+		scale_container.alignment = BoxContainer.ALIGNMENT_CENTER
+		var scale_lbl = Label.new()
+		scale_lbl.text = "Scale"
+		scale_lbl.add_theme_font_size_override("font_size", 20)
+		scale_lbl.add_theme_color_override("font_color", color_cyan)
+		scale_container.add_child(scale_lbl)
+		scale_slider = HSlider.new()
+		scale_slider.custom_minimum_size = Vector2(150, 0)
+		scale_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		scale_slider.min_value = 0.5
+		scale_slider.max_value = 1.5
+		scale_slider.step = 0.1
+		scale_slider.value = hub_card_scale
+		scale_slider.value_changed.connect(func(v):
+			hub_card_scale = v
+			_refresh_card_views()
+		)
+		scale_container.add_child(scale_slider)
+		top_bar.add_child(scale_container)
 	
 	# Initialize scroll_vbox to wrap ScenesGrid
 	var scroll_container = $UI/Content/MainPanel/ScrollContainer
@@ -84,6 +111,21 @@ func _ready():
 	if nav.has_node("HelpBtn"): nav.get_node("HelpBtn").pressed.connect(_on_help_pressed)
 	
 	if nav.has_node("SortFavBtn"): nav.get_node("SortFavBtn").toggled.connect(_on_sort_favorites_toggled)
+	
+	var nav_buttons = []
+	for btn_name in ["ScenesBtn", "LevelsBtn", "GamesBtn", "DesignBtn", "CalibrateBtn", "ServiceBtn", "HelpBtn", "TestPatternBtn", "RestoreBtn"]:
+		if nav.has_node(btn_name):
+			nav_buttons.append(nav.get_node(btn_name))
+	for i in range(nav_buttons.size()):
+		var btn = nav_buttons[i]
+		if i > 0:
+			btn.focus_neighbor_top = btn.get_path_to(nav_buttons[i-1])
+		if i < nav_buttons.size() - 1:
+			btn.focus_neighbor_bottom = btn.get_path_to(nav_buttons[i+1])
+		btn.focus_entered.connect(func(): _last_nav_focus = btn)
+	if nav_buttons.size() > 0:
+		nav_buttons[0].focus_neighbor_top = nav_buttons[0].get_path_to(nav_buttons[-1])
+		nav_buttons[-1].focus_neighbor_bottom = nav_buttons[-1].get_path_to(nav_buttons[0])
 	
 	display_scenes()
 
@@ -214,6 +256,7 @@ func _wire_auto_scroll(buttons: Array, scroll_container: ScrollContainer):
 		if button == null or not is_instance_valid(button):
 			continue
 		button.focus_entered.connect(func():
+			_last_content_focus = button
 			if is_instance_valid(button) and is_instance_valid(scroll_container):
 				scroll_container.ensure_control_visible(button)
 		)
@@ -279,13 +322,67 @@ func _is_focus_recovery_event(event: InputEvent) -> bool:
 	return event.is_action_pressed("ui_up") or event.is_action_pressed("ui_down") or event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right") or event.is_action_pressed("ui_accept") or event.is_action_pressed("ui_cancel")
 
 func _input(event: InputEvent):
+	if event is InputEventJoypadMotion and event.axis == JOY_AXIS_RIGHT_Y:
+		var scroll = 0
+		var scroll_container = get_node_or_null("UI/Content/MainPanel/ScrollContainer")
+		if scroll_container and abs(event.axis_value) > 0.2:
+			scroll = int(event.axis_value * 40)
+			scroll_container.scroll_vertical += scroll
+		if scroll != 0:
+			get_viewport().set_input_as_handled()
+			return
+
 	if event.is_action_pressed("ui_cancel"):
 		_handle_hub_cancel()
 		get_viewport().set_input_as_handled()
 		return
+
+	var owner = get_viewport().gui_get_focus_owner()
+	var in_sidenav = owner != null and owner.get_parent() != null and owner.get_parent().name == "SideNav"
+
+	if event.is_action_pressed("ui_right") and in_sidenav:
+		if _last_content_focus and is_instance_valid(_last_content_focus) and _last_content_focus.is_inside_tree() and _last_content_focus.is_visible_in_tree():
+			_last_content_focus.grab_focus()
+		else:
+			var main_panel = get_node_or_null("UI/Content/MainPanel")
+			if main_panel: _grab_first_focusable(main_panel)
+		get_viewport().set_input_as_handled()
+		return
+		
+	if event.is_action_pressed("ui_accept") and in_sidenav:
+		if owner is Button:
+			owner.pressed.emit()
+		if _last_content_focus and is_instance_valid(_last_content_focus) and _last_content_focus.is_inside_tree() and _last_content_focus.is_visible_in_tree():
+			_last_content_focus.grab_focus()
+		else:
+			var main_panel = get_node_or_null("UI/Content/MainPanel")
+			if main_panel: _grab_first_focusable(main_panel)
+		get_viewport().set_input_as_handled()
+		return
+
+	if event.is_action_pressed("ui_left") and not in_sidenav and owner != null and games_overlay == null:
+		var nav = get_node_or_null("UI/Content/SideNav")
+		var should_go_left = false
+		
+		# If we're on the left edge of a grid, move to sidenav
+		var parent = owner.get_parent()
+		if parent is GridContainer and parent.columns > 0:
+			var idx = owner.get_index()
+			if idx % parent.columns == 0:
+				should_go_left = true
+		else:
+			should_go_left = true
+			
+		if should_go_left:
+			if _last_nav_focus and is_instance_valid(_last_nav_focus) and _last_nav_focus.is_inside_tree() and _last_nav_focus.is_visible_in_tree():
+				_last_nav_focus.grab_focus()
+			elif nav:
+				_grab_first_focusable(nav)
+			get_viewport().set_input_as_handled()
+			return
+
 	if not _is_focus_recovery_event(event):
 		return
-	var owner = get_viewport().gui_get_focus_owner()
 	if owner == null or not is_instance_valid(owner) or not owner.is_visible_in_tree():
 		_focus_current_menu()
 
@@ -303,6 +400,13 @@ func _handle_hub_cancel():
 			display_levels()
 		else:
 			display_scenes()
+		return
+	if current_tab == "scenes":
+		var nav = get_node_or_null("UI/Content/SideNav")
+		if _last_nav_focus and is_instance_valid(_last_nav_focus) and _last_nav_focus.is_inside_tree() and _last_nav_focus.is_visible_in_tree():
+			_last_nav_focus.grab_focus()
+		elif nav:
+			_grab_first_focusable(nav)
 		return
 	_focus_current_menu()
 
@@ -337,7 +441,7 @@ func display_scenes():
 	for i in range(scenes.size()):
 		focus_buttons.append(_create_level_card(scenes[i], base_dir, scenes_grid, i, true))
 	_chain_horizontal_focus(focus_buttons)
-	_wire_vertical_focus_neighbors(focus_buttons, 3)
+	_wire_vertical_focus_neighbors(focus_buttons, 4)
 	_wire_auto_scroll(focus_buttons, $UI/Content/MainPanel/ScrollContainer)
 	_focus_current_menu()
 func style_grid_button(btn: Button):
@@ -390,7 +494,7 @@ func display_levels():
 				index += 1
 			file_name = dir.get_next()
 		_chain_horizontal_focus(focus_buttons)
-		_wire_vertical_focus_neighbors(focus_buttons, 3)
+		_wire_vertical_focus_neighbors(focus_buttons, 4)
 		_wire_auto_scroll(focus_buttons, $UI/Content/MainPanel/ScrollContainer)
 	_focus_current_menu()
 func _on_level_selected(level_name: String):
@@ -463,7 +567,7 @@ func display_games_lightbox():
 	vbox.add_child(scroll)
 	
 	var grid = GridContainer.new()
-	grid.columns = 6
+	grid.columns = 4
 	grid.add_theme_constant_override("h_separation", 16)
 	grid.add_theme_constant_override("v_separation", 16)
 	scroll_margin.add_child(grid)
@@ -486,7 +590,7 @@ func display_games_lightbox():
 		focus_buttons.append(_create_game_card(g, grid, idx))
 		idx += 1
 	_chain_horizontal_focus(focus_buttons)
-	_wire_vertical_focus_neighbors(focus_buttons, 6)
+	_wire_vertical_focus_neighbors(focus_buttons, 4)
 	_wire_auto_scroll(focus_buttons, scroll)
 	if _pending_menu_focus == null:
 		_remember_menu_focus(close_btn)
@@ -520,7 +624,7 @@ func display_games():
 			fav_lbl.add_theme_font_size_override("font_size", 24)
 			scroll_vbox.add_child(fav_lbl)
 			var fav_grid = GridContainer.new()
-			fav_grid.columns = 3
+			fav_grid.columns = 4
 			fav_grid.add_theme_constant_override("h_separation", 16)
 			fav_grid.add_theme_constant_override("v_separation", 16)
 			scroll_vbox.add_child(fav_grid)
@@ -529,7 +633,7 @@ func display_games():
 				var card_btn = _create_game_card(game, fav_grid, game.absolute_index)
 				fav_buttons.append(card_btn)
 				_game_title_focus_buttons.append(card_btn)
-			_wire_vertical_focus_neighbors(fav_buttons, 3)
+			_wire_vertical_focus_neighbors(fav_buttons, 4)
 
 		if others.size() > 0:
 			var other_lbl = Label.new()
@@ -540,7 +644,7 @@ func display_games():
 			margin.add_child(other_lbl)
 			scroll_vbox.add_child(margin)
 			var other_grid = GridContainer.new()
-			other_grid.columns = 3
+			other_grid.columns = 4
 			other_grid.add_theme_constant_override("h_separation", 16)
 			other_grid.add_theme_constant_override("v_separation", 16)
 			scroll_vbox.add_child(other_grid)
@@ -549,17 +653,17 @@ func display_games():
 				var card_btn = _create_game_card(game, other_grid, game.absolute_index)
 				other_buttons.append(card_btn)
 				_game_title_focus_buttons.append(card_btn)
-			_wire_vertical_focus_neighbors(other_buttons, 3)
+			_wire_vertical_focus_neighbors(other_buttons, 4)
 
 	else:
 		var grid = GridContainer.new()
-		grid.columns = 3
+		grid.columns = 4
 		grid.add_theme_constant_override("h_separation", 16)
 		grid.add_theme_constant_override("v_separation", 16)
 		scroll_vbox.add_child(grid)
 		for game in games:
 			_game_title_focus_buttons.append(_create_game_card(game, grid, game.absolute_index))
-		_wire_vertical_focus_neighbors(_game_title_focus_buttons, 3)
+		_wire_vertical_focus_neighbors(_game_title_focus_buttons, 4)
 	_chain_horizontal_focus(_game_title_focus_buttons)
 	_wire_auto_scroll(_game_title_focus_buttons, $UI/Content/MainPanel/ScrollContainer)
 	_focus_current_menu()
@@ -586,9 +690,10 @@ func _launch_game(cart_id: String):
 		if not launched_from_level_overlay or selected_level_name == "":
 			selected_level_name = classic_level
 		
-	if current_scene == "" or selected_level_name == "":
+	if current_scene == "":
 		current_scene = "scene_demo_wall"
-		selected_level_name = "demo_level"
+	if selected_level_name == "":
+		selected_level_name = "rock_wall_260629_173035"
 		
 	last_known_level = selected_level_name
 	last_known_scene = current_scene
@@ -764,7 +869,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	var is_fav = cart.favorite
 
 	var card_panel = PanelContainer.new()
-	card_panel.custom_minimum_size = Vector2(260, 300)
+	card_panel.custom_minimum_size = Vector2(260 * hub_card_scale, 300 * hub_card_scale)
 	card_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	card_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	card_panel.add_theme_stylebox_override("panel", style_panel)
@@ -782,7 +887,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	vbox.add_child(top_margin)
 
 	var img_control = Control.new()
-	img_control.custom_minimum_size = Vector2(244, 200)
+	img_control.custom_minimum_size = Vector2(244 * hub_card_scale, 200 * hub_card_scale)
 	top_margin.add_child(img_control)
 
 	var tex_rect = TextureRect.new()
@@ -859,10 +964,13 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	bottom_margin.add_child(bottom_vbox)
 
 	var title_btn = Button.new()
-	var display_title = game_name
+	var active_skin_name = current_skin if current_skin != "" else default_skin
+	var display_title = active_skin_name if current_skin != "" else game_name
+	if skins.size() > 1:
+		display_title = "< " + display_title + " >"
 	title_btn.text = display_title
-	title_btn.custom_minimum_size = Vector2(0, 36)
-	title_btn.add_theme_font_size_override("font_size", 16)
+	title_btn.custom_minimum_size = Vector2(0, 36 * hub_card_scale)
+	title_btn.add_theme_font_size_override("font_size", int(16 * hub_card_scale))
 	title_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	
 	var style_normal = StyleBoxFlat.new()
@@ -881,54 +989,33 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	title_btn.pressed.connect(func():
 		_launch_game(cart_id)
 	)
+	
+	if skins.size() > 1:
+		title_btn.gui_input.connect(func(event):
+			var step = 0
+			if event is InputEventJoypadButton and event.pressed:
+				if event.button_index == JOY_BUTTON_X:
+					step = -1
+				elif event.button_index == JOY_BUTTON_Y:
+					step = 1
+			elif event is InputEventKey and event.pressed and not event.echo:
+				if event.keycode == KEY_X:
+					step = -1
+				elif event.keycode == KEY_Y:
+					step = 1
+			if step != 0:
+				_cycle_skin(cart_id, skins, step)
+				title_btn.accept_event()
+		)
+
 	bottom_vbox.add_child(title_btn)
 	_remember_menu_focus(title_btn)
-
-	if skins.size() > 1:
-		var skin_hbox = HBoxContainer.new()
-		skin_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		skin_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-		skin_hbox.add_theme_constant_override("separation", 8)
-		
-		var prev_skin_btn = Button.new()
-		prev_skin_btn.text = "<"
-		prev_skin_btn.custom_minimum_size = Vector2(28, 28)
-		var arrow_style = StyleBoxFlat.new()
-		arrow_style.bg_color = Color(0.1, 0.1, 0.12)
-		arrow_style.set_corner_radius_all(4)
-		var arrow_focus = arrow_style.duplicate()
-		arrow_focus.bg_color = Color(0.2, 0.22, 0.25)
-		arrow_focus.border_width_bottom = 2
-		arrow_focus.border_color = color_cyan
-		prev_skin_btn.add_theme_stylebox_override("normal", arrow_style)
-		prev_skin_btn.add_theme_stylebox_override("hover", arrow_focus)
-		prev_skin_btn.add_theme_stylebox_override("focus", arrow_focus)
-		prev_skin_btn.pressed.connect(func(): _cycle_skin(cart_id, skins, -1))
-		skin_hbox.add_child(prev_skin_btn)
-		
-		var skin_lbl = Label.new()
-		skin_lbl.text = current_skin if current_skin != "" else default_skin
-		skin_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		skin_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		skin_lbl.add_theme_font_size_override("font_size", 14)
-		skin_lbl.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
-		skin_hbox.add_child(skin_lbl)
-		
-		var next_skin_btn = Button.new()
-		next_skin_btn.text = ">"
-		next_skin_btn.custom_minimum_size = Vector2(28, 28)
-		next_skin_btn.add_theme_stylebox_override("normal", arrow_style)
-		next_skin_btn.add_theme_stylebox_override("hover", arrow_focus)
-		next_skin_btn.add_theme_stylebox_override("focus", arrow_focus)
-		next_skin_btn.pressed.connect(func(): _cycle_skin(cart_id, skins, 1))
-		skin_hbox.add_child(next_skin_btn)
-		
-		bottom_vbox.add_child(skin_hbox)
+	
 	return title_btn
 
 func _create_level_card(level_name: String, levels_dir: String, container: Control, display_index: int = -1, is_scene: bool = false, prefer_focus: bool = false):
 	var btn = Button.new()
-	btn.custom_minimum_size = Vector2(256, 284)
+	btn.custom_minimum_size = Vector2(256 * hub_card_scale, 284 * hub_card_scale)
 	btn.focus_mode = Control.FOCUS_ALL
 	if is_scene:
 		btn.pressed.connect(func(): _on_scene_selected(level_name))
@@ -1007,7 +1094,7 @@ func _create_level_card(level_name: String, levels_dir: String, container: Contr
 
 
 	var tex_rect = TextureRect.new()
-	tex_rect.custom_minimum_size = Vector2(232, 176)
+	tex_rect.custom_minimum_size = Vector2(232 * hub_card_scale, 176 * hub_card_scale)
 	tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE

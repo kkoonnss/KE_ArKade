@@ -4,8 +4,8 @@ stage: 6
 wave: 2
 priority: P0
 lane: hub
-status: ready
-owner_agent: null
+status: pending_kons_verify
+owner_agent: claude_sonnet
 touches: [app/hub/main.gd]
 locks_required: [hub-design]
 depends_on: []
@@ -13,6 +13,7 @@ kind: fix
 issued_by: opus_orchestrator
 issued_at: 2026-07-01
 severity: blocking
+closing_receipt: vault/40-agent-runs/claude_hub_classic_routing_continuation_2026-07-03.md
 acceptance:
   - Clicking ANY cart in the hub routes to that cart's classic_<id> level if it exists in scene_classic_pack/levels/, regardless of the cart id.
   - No hardcoded classic-game list in main.gd — the routing is data-driven off the filesystem.

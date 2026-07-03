@@ -163,7 +163,7 @@ func _build_ui():
 	menu_reset_button.add_theme_font_size_override("font_size", 18)
 	menu_reset_button.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
 	menu_reset_button.flat = true
-	menu_reset_button.focus_mode = Control.FOCUS_NONE
+	menu_reset_button.focus_mode = Control.FOCUS_ALL
 	menu_reset_button.pressed.connect(func(): _reset_settings())
 	title_row.add_child(menu_reset_button)
 
@@ -252,8 +252,7 @@ func _set_overlay_mode(mode: String):
 	else:
 		if overlay_mode == "settings":
 			_rebuild_settings_controls()
-			if settings_box:
-				_focus_first(settings_box)
+			_focus_first_settings_control()
 		_update_menu_overlay()
 
 func _input(event):
@@ -328,6 +327,10 @@ func _handle_menu_input(event) -> bool:
 			_menu_move(1 if event.axis_value > 0.0 else -1)
 			menu_axis_cooldown = 0.18
 			return true
+		if event.axis == JOY_AXIS_RIGHT_Y and abs(event.axis_value) > 0.2:
+			if overlay_mode == "settings" and settings_scroll and settings_scroll.visible:
+				settings_scroll.scroll_vertical += int(event.axis_value * 40)
+			return true
 	return false
 
 func _menu_move(step: int):
@@ -349,6 +352,8 @@ func _menu_accept():
 		_save_settings()
 		_set_overlay_mode("")
 		emit_signal("action_triggered", "start")
+	elif a == "exit_hub":
+		_exit_to_hub()
 	elif a == "help":
 		_set_overlay_mode("help")
 	elif a == "settings":
@@ -372,6 +377,7 @@ func _get_current_items() -> Array:
 		items.append({"label": "Start Game", "action": "start"})
 		items.append({"label": "Help", "action": "help"})
 		items.append({"label": "Settings", "action": "settings"})
+		items.append({"label": "Back to Hub", "action": "exit_hub"})
 		for a in registered_actions:
 			if a.mode == "start" or a.mode == "all":
 				items.append({"label": a.label, "action": a.id})
@@ -433,7 +439,9 @@ func _rebuild_settings_controls():
 		if current_body != null:
 			current_body.add_child(_build_knob_row(knob))
 	settings_box.add_child(_action_button("Start Game", "start"))
+	settings_box.add_child(_action_button("Back to Hub", "exit_hub"))
 	settings_box.add_child(_action_button("Back", "back"))
+	_chain_settings_focus()
 
 func _build_group_section(text: String) -> Control:
 	var box = VBoxContainer.new()
@@ -460,6 +468,7 @@ func _build_group_section(text: String) -> Control:
 		collapsed_groups[text] = next_state
 		body.visible = not next_state
 		header.text = _group_header_text(text)
+		_chain_settings_focus()
 	)
 	# Left = collapse, Right = expand via controller / keyboard
 	header.gui_input.connect(func(event):
@@ -479,11 +488,13 @@ func _build_group_section(text: String) -> Control:
 			collapsed_groups[text] = true
 			body.visible = false
 			header.text = _group_header_text(text)
+			_chain_settings_focus()
 			header.accept_event()
 		elif want_expand and bool(collapsed_groups.get(text, false)):
 			collapsed_groups[text] = false
 			body.visible = true
 			header.text = _group_header_text(text)
+			_chain_settings_focus()
 			header.accept_event()
 	)
 	return box
@@ -550,6 +561,38 @@ func _build_knob_control(knob: Dictionary, value_label: Label) -> Control:
 	slider.max_value = float(knob.max)
 	slider.step = float(knob.step)
 	slider.value = float(knob.value)
+	var slider_focus_style = StyleBoxFlat.new()
+	slider_focus_style.bg_color = Color(0, 0, 0, 0)
+	slider_focus_style.border_color = Color(0.16, 0.55, 1.0, 1.0)
+	slider_focus_style.border_width_left = 3
+	slider_focus_style.border_width_top = 3
+	slider_focus_style.border_width_right = 3
+	slider_focus_style.border_width_bottom = 3
+	slider_focus_style.corner_radius_top_left = 6
+	slider_focus_style.corner_radius_top_right = 6
+	slider_focus_style.corner_radius_bottom_left = 6
+	slider_focus_style.corner_radius_bottom_right = 6
+	slider_focus_style.expand_margin_left = 4
+	slider_focus_style.expand_margin_top = 6
+	slider_focus_style.expand_margin_right = 4
+	slider_focus_style.expand_margin_bottom = 6
+	slider.add_theme_stylebox_override("focus", slider_focus_style)
+	var slider_grabber_area_highlight = StyleBoxFlat.new()
+	slider_grabber_area_highlight.bg_color = Color(0.16, 0.55, 1.0, 0.9)
+	slider_grabber_area_highlight.corner_radius_top_left = 3
+	slider_grabber_area_highlight.corner_radius_top_right = 3
+	slider_grabber_area_highlight.corner_radius_bottom_left = 3
+	slider_grabber_area_highlight.corner_radius_bottom_right = 3
+	var slider_grabber_area_normal = StyleBoxFlat.new()
+	slider_grabber_area_normal.bg_color = Color(0.16, 0.55, 1.0, 0.55)
+	slider_grabber_area_normal.corner_radius_top_left = 3
+	slider_grabber_area_normal.corner_radius_top_right = 3
+	slider_grabber_area_normal.corner_radius_bottom_left = 3
+	slider_grabber_area_normal.corner_radius_bottom_right = 3
+	slider.add_theme_stylebox_override("grabber_area", slider_grabber_area_normal)
+	slider.add_theme_stylebox_override("grabber_area_highlight", slider_grabber_area_highlight)
+	slider.focus_entered.connect(func(): slider.add_theme_stylebox_override("grabber_area", slider_grabber_area_highlight))
+	slider.focus_exited.connect(func(): slider.add_theme_stylebox_override("grabber_area", slider_grabber_area_normal))
 	slider.gui_input.connect(func(event):
 		if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN, MOUSE_BUTTON_WHEEL_LEFT, MOUSE_BUTTON_WHEEL_RIGHT]:
 			slider.accept_event()
@@ -572,12 +615,19 @@ func _action_button(text: String, action_id: String) -> Control:
 			_save_settings()
 			_set_overlay_mode("")
 			emit_signal("action_triggered", "start")
+		elif action_id == "exit_hub":
+			_exit_to_hub()
 		elif action_id == "back":
 			_menu_back()
 		else:
 			emit_signal("action_triggered", action_id)
 	)
 	return button
+
+func _exit_to_hub():
+	_save_settings()
+	emit_signal("action_triggered", "exit_hub")
+	get_tree().quit()
 
 func _apply_knob_from_control(knob: Dictionary, raw_value, value_label: Label):
 	if knob.type == "float":
@@ -785,3 +835,45 @@ func _focus_first(node: Node) -> bool:
 		if _focus_first(child):
 			return true
 	return false
+
+func _focus_first_settings_control():
+	if menu_reset_button and menu_reset_button.visible:
+		menu_reset_button.grab_focus()
+		return
+	if settings_box:
+		_focus_first(settings_box)
+
+func _chain_settings_focus():
+	var focusables = []
+	if menu_reset_button and menu_reset_button.visible:
+		focusables.append(menu_reset_button)
+	if settings_box:
+		_collect_settings_focusables(settings_box, focusables)
+	if focusables.size() < 2:
+		return
+	for i in range(focusables.size()):
+		var control = focusables[i] as Control
+		if control == null or not is_instance_valid(control):
+			continue
+		var previous = focusables[(i - 1 + focusables.size()) % focusables.size()] as Control
+		var next = focusables[(i + 1) % focusables.size()] as Control
+		if previous != null and is_instance_valid(previous):
+			control.focus_neighbor_top = control.get_path_to(previous)
+		if next != null and is_instance_valid(next):
+			control.focus_neighbor_bottom = control.get_path_to(next)
+		if not control.has_meta("focus_connected"):
+			control.focus_entered.connect(func():
+				if settings_scroll and is_instance_valid(settings_scroll) and is_instance_valid(control):
+					settings_scroll.ensure_control_visible(control)
+			)
+			control.set_meta("focus_connected", true)
+
+func _collect_settings_focusables(node: Node, focusables: Array):
+	if node == null or not is_instance_valid(node) or node.is_queued_for_deletion():
+		return
+	if node is Control:
+		var control = node as Control
+		if control.focus_mode == Control.FOCUS_ALL and control.visible and control.is_visible_in_tree():
+			focusables.append(control)
+	for child in node.get_children():
+		_collect_settings_focusables(child, focusables)
