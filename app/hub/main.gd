@@ -333,8 +333,12 @@ func display_scenes():
 		return a < b
 	)
 	
+	var focus_buttons = []
 	for i in range(scenes.size()):
-		_create_level_card(scenes[i], base_dir, scenes_grid, i, true)
+		focus_buttons.append(_create_level_card(scenes[i], base_dir, scenes_grid, i, true))
+	_chain_horizontal_focus(focus_buttons)
+	_wire_vertical_focus_neighbors(focus_buttons, 3)
+	_wire_auto_scroll(focus_buttons, $UI/Content/MainPanel/ScrollContainer)
 	_focus_current_menu()
 func style_grid_button(btn: Button):
 	var style = StyleBoxFlat.new()
@@ -378,12 +382,16 @@ func display_levels():
 		dir.list_dir_begin()
 		var file_name = dir.get_next()
 		var index = 0
+		var focus_buttons = []
 		while file_name != "":
 			if dir.current_is_dir() and not file_name.begins_with("."): 
 				var prefer_focus = file_name == selected_level_name or (selected_level_name == "" and file_name == last_known_level)
-				_create_level_card(file_name, base_dir, scenes_grid, index, false, prefer_focus)
+				focus_buttons.append(_create_level_card(file_name, base_dir, scenes_grid, index, false, prefer_focus))
 				index += 1
 			file_name = dir.get_next()
+		_chain_horizontal_focus(focus_buttons)
+		_wire_vertical_focus_neighbors(focus_buttons, 3)
+		_wire_auto_scroll(focus_buttons, $UI/Content/MainPanel/ScrollContainer)
 	_focus_current_menu()
 func _on_level_selected(level_name: String):
 	selected_level_name = level_name
@@ -1056,6 +1064,7 @@ func _create_level_card(level_name: String, levels_dir: String, container: Contr
 	if prefer_focus:
 		_prefer_menu_focus(btn)
 	_remember_menu_focus(btn)
+	return btn
 
 func _scene_card_thumb_path(scene_dir: String) -> String:
 	var scene_thumb = _first_existing_file(scene_dir, ["thumbnail.png", "background.png", "reference.png", "photo.png", "image.png"])
