@@ -1094,11 +1094,23 @@ func send_ipc_message(msg: Dictionary):
 
 func _tick_asteroids(delta):
     var thrust_scale = max(0.25, ship_scale)
-    if Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_A):
-        player["angle"] -= 4.2 * delta
-    if Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_D):
-        player["angle"] += 4.2 * delta
-    if Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_W):
+    var joy_id = SharedLoader.get_joy_id(0)
+    var joy_x = Input.get_joy_axis(joy_id, JOY_AXIS_LEFT_X)
+    var joy_y = Input.get_joy_axis(joy_id, JOY_AXIS_LEFT_Y)
+    # Rotation: keyboard left/right, controller left-stick X, or D-pad
+    var rotate_input = 0.0
+    if Input.is_key_pressed(KEY_LEFT) or Input.is_key_pressed(KEY_A) or Input.is_joy_button_pressed(joy_id, JOY_BUTTON_DPAD_LEFT):
+        rotate_input -= 1.0
+    if Input.is_key_pressed(KEY_RIGHT) or Input.is_key_pressed(KEY_D) or Input.is_joy_button_pressed(joy_id, JOY_BUTTON_DPAD_RIGHT):
+        rotate_input += 1.0
+    if abs(joy_x) > 0.2:
+        rotate_input = joy_x
+    player["angle"] += 4.2 * rotate_input * delta
+    # Thrust: keyboard up, controller left-stick Y negative, or D-pad up
+    var thrusting = Input.is_key_pressed(KEY_UP) or Input.is_key_pressed(KEY_W) or Input.is_joy_button_pressed(joy_id, JOY_BUTTON_DPAD_UP)
+    if not thrusting and joy_y < -0.2:
+        thrusting = true
+    if thrusting:
         player["vel"] += Vector2(cos(player["angle"]), sin(player["angle"])) * 420 * thrust_scale * delta
     player["vel"] *= 0.992
     var player_motion = _move_asteroids_actor(player["pos"], player["vel"], delta, true)
