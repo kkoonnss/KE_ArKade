@@ -44,6 +44,7 @@ var bg_canvas: CanvasLayer
 var black_rect: ColorRect
 var ui_canvas: CanvasLayer
 var tab_menu: ColorRect
+var shared_tab_menu
 var splash_rect: TextureRect
 var menu_panel: PanelContainer
 var menu_title_label: Label
@@ -60,7 +61,15 @@ var tab_cover_frame: PanelContainer
 var tab_cover_rect: TextureRect
 var splash_timer = 1.6
 var show_reference = false
+var reference_opacity: float = 0.15
 var reference_texture: Texture2D = null
+var arena_bounds := Rect2(0, 0, 1280, 720)
+var arena_spawns := []
+var arena_cover_blocks := []
+var arena_density: float = 1.0
+var arena_bounds_clamp: bool = true
+var arena_block_region: bool = false
+var arena_invert: bool = false
 
 var players = []
 var enemies = []
@@ -88,12 +97,15 @@ var invader_step_timer = 0.0
 var spawn_timer = 0.0
 var fire_timer = 0.0
 var wave = 1
+var galaga_attack_timer = 0.0
+var galaga_maneuver_timer = 0.0
 var dual_ship = false
 var lander = {}
 var scroll_x = 0.0
 var scroll_y = 0.0
 var aim_pos = Vector2.ZERO
 var cube_player = Vector2i.ZERO
+var star_scroll = 0.0
 
 func _ready():
     randomize()
@@ -101,12 +113,17 @@ func _ready():
     _parse_args()
     _build_shell()
     _connect_ipc()
+    _setup_shared_tab_menu()
     load_level()
     _reset_game()
-    _set_overlay_mode("start")
+    overlay_mode = ""
+    if tab_menu:
+        tab_menu.visible = false
     if screenshot_path != "":
-        await get_tree().create_timer(2.2).timeout
-        get_viewport().get_texture().get_image().save_png(screenshot_path)
+        for _i in range(8):
+            await get_tree().process_frame
+        var err = get_viewport().get_texture().get_image().save_png(screenshot_path)
+        print("Galaga screenshot saved: ", screenshot_path, " err=", err)
         get_tree().quit()
 
 func _derive_identity():
@@ -160,6 +177,29 @@ func _set_ipc(value: String):
         ipc_port = int(parts[1])
     else:
         ipc_port = int(value)
+
+func _shared_script_path(relative_path: String) -> String:
+    var root = ProjectSettings.globalize_path("res://").get_base_dir().get_base_dir().get_base_dir().get_base_dir()
+    return root.path_join("app").path_join("shared").path_join(relative_path)
+
+func _load_shared_adapter(relative_path: String):
+    var file = FileAccess.open(_shared_script_path(relative_path), FileAccess.READ)
+    if file == null:
+        return null
+    var lines = []
+    for line in file.get_as_text().split("\n"):
+        var stripped = line.strip_edges()
+        if stripped.begins_with("class_name "):
+            continue
+        if stripped == "extends AdapterBase":
+            lines.append("extends \"res://adapter_base.gd\"")
+        else:
+            lines.append(line)
+    var script = GDScript.new()
+    script.source_code = "\n".join(lines)
+    if script.reload() != OK:
+        return null
+    return script
 
 func _build_shell():
     RenderingServer.set_default_clear_color(Color.BLACK)
@@ -260,6 +300,46 @@ func _build_shell():
     box.add_child(menu_hint_label)
     _set_overlay_mode("start")
 
+func _setup_shared_tab_menu():
+    var menu_script = load(_shared_script_path("controls/tab_menu.gd"))
+    if not menu_script:
+        return
+    shared_tab_menu = menu_script.new()
+    add_child(shared_tab_menu)
+    shared_tab_menu.register_knob_int("players", "Players", selected_players, 1, 4, 1)
+    shared_tab_menu.register_knob_bool("bounds_clamp", "Bounds Clamp", true)
+    shared_tab_menu.register_knob_float("density", "Wave Density", 1.0, 0.4, 2.0, 0.1)
+    shared_tab_menu.register_knob_bool("block_region", "Central Block", false)
+    shared_tab_menu.register_knob_bool("invert", "Invert Cover", false)
+    shared_tab_menu.register_knob_bool("reference", "Reference Overlay", false)
+    shared_tab_menu.register_knob_float("reference_opacity", "Reference Opacity", 0.15, 0.0, 1.0, 0.05)
+    shared_tab_menu.connect("knob_changed", Callable(self, "_on_shared_knob_changed"))
+    shared_tab_menu.connect("action_triggered", Callable(self, "_on_shared_menu_action"))
+    shared_tab_menu.setup("space_invaders", level_dir, "SPACE INVADERS")
+    _apply_shared_menu_settings()
+
+func _apply_shared_menu_settings():
+    if shared_tab_menu == null:
+        return
+    selected_players = int(shared_tab_menu.get_knob_value("players"))
+    arena_bounds_clamp = bool(shared_tab_menu.get_knob_value("bounds_clamp"))
+    arena_density = float(shared_tab_menu.get_knob_value("density"))
+    arena_block_region = bool(shared_tab_menu.get_knob_value("block_region"))
+    arena_invert = bool(shared_tab_menu.get_knob_value("invert"))
+    show_reference = bool(shared_tab_menu.get_knob_value("reference"))
+    reference_opacity = float(shared_tab_menu.get_knob_value("reference_opacity"))
+
+func _on_shared_knob_changed(knob_id: String, value):
+    _apply_shared_menu_settings()
+    if knob_id in ["bounds_clamp", "density", "block_region", "invert"]:
+        load_level()
+        _reset_game()
+    queue_redraw()
+
+func _on_shared_menu_action(action_id: String):
+    if action_id == "start" and game_state != "playing":
+        _reset_game()
+
 func _connect_ipc():
     if ipc_port <= 0:
         return
@@ -309,6 +389,11 @@ func load_level():
         var row = grid_cells[y]
         for x in range(row.size()):
             var cid = int(row[x])
+            if arena_invert:
+                if cid == 1:
+                    cid = 2
+                elif cid == 2:
+                    cid = 1
             var c = Vector2i(x, y)
             if cid == 1:
                 solid_cells.append(c)
@@ -317,6 +402,40 @@ func load_level():
             if cid in [3, 5, 6, 7]:
                 special_cells.append(c)
     _update_scale()
+    _apply_arena_adapter_layout()
+
+func _apply_arena_adapter_layout():
+    arena_bounds = Rect2(0, 0, map_w, map_h)
+    arena_spawns.clear()
+    arena_cover_blocks.clear()
+    if level_dir == "":
+        arena_spawns.append(Vector2(map_w * 0.5, map_h * 0.86))
+        return
+    var adapter_script = _load_shared_adapter("adapters/arena.gd")
+    if not adapter_script:
+        arena_spawns.append(Vector2(arena_bounds.get_center().x, arena_bounds.position.y + arena_bounds.size.y * 0.86))
+        return
+    var adapter = adapter_script.new()
+    var layout = adapter.interpret(level_dir, {}, {
+        "bounds_clamp": arena_bounds_clamp,
+        "density": arena_density,
+        "block_region": arena_block_region,
+        "invert": arena_invert,
+        "reference_opacity": reference_opacity
+    })
+    if layout.has("bounds") and layout["bounds"] is Rect2:
+        arena_bounds = layout["bounds"]
+    for p in layout.get("spawns", []):
+        if p is Vector2:
+            arena_spawns.append(p)
+    for r in layout.get("cover_blocks", []):
+        if r is Rect2:
+            arena_cover_blocks.append(r)
+    if arena_spawns.is_empty():
+        arena_spawns.append(Vector2(arena_bounds.get_center().x, arena_bounds.position.y + arena_bounds.size.y * 0.86))
+    if arena_block_region:
+        var block_size = Vector2(arena_bounds.size.x * 0.18, arena_bounds.size.y * 0.08)
+        arena_cover_blocks.append(Rect2(arena_bounds.get_center() - block_size * 0.5, block_size))
 
 func _load_grid_from_occupancy():
     if level_dir == "":
@@ -383,6 +502,8 @@ func _reset_game():
     game_state = "playing"
     state_timer = 0.0
     wave = 1
+    galaga_attack_timer = 0.0
+    galaga_maneuver_timer = 0.0
     dual_ship = false
     players.clear()
     enemies.clear()
@@ -438,13 +559,46 @@ func _setup_centipede():
     _seed_barriers(36, [1, 7], 1)
 
 func _setup_invaders():
-    _setup_player(Vector2(map_w * 0.5, map_h * 0.88))
-    var rows = 5 if game_id == "galaga" else 4
-    var cols = 10
+    _setup_player(_galaga_player_spawn())
+    var rows = maxi(3, int(round(4 * arena_density)))
+    var cols = maxi(6, int(round(10 * min(1.4, arena_density))))
+    var form_bounds = arena_bounds
     for y in range(rows):
         for x in range(cols):
-            enemies.append({"pos": Vector2(map_w * 0.2 + x * 52, map_h * 0.13 + y * 42), "base": Vector2(map_w * 0.2 + x * 52, map_h * 0.13 + y * 42), "kind": "boss" if game_id == "galaga" and y == 0 and x in [4, 5] else "alien", "phase": randf() * TAU, "cooldown": randf_range(1.0, 3.0), "alive": true})
-    _seed_barriers(24, [1, 7], 2)
+            var tx = (float(x) + 0.5) / float(cols)
+            var ty = (float(y) + 0.5) / float(rows)
+            var base_pos = Vector2(
+                form_bounds.position.x + form_bounds.size.x * lerp(0.18, 0.82, tx),
+                form_bounds.position.y + form_bounds.size.y * lerp(0.12, 0.36, ty)
+            )
+            enemies.append({
+                "pos": base_pos,
+                "base": base_pos,
+                "kind": "alien",
+                "phase": randf() * TAU,
+                "cooldown": randf_range(1.0, 3.0),
+                "alive": true,
+                "state": "formation",
+                "dive": 0.0
+            })
+    _seed_arena_cover_barriers(maxi(8, int(round(24.0 * arena_density))))
+
+func _galaga_player_spawn() -> Vector2:
+    var spawn = arena_spawns[0] if not arena_spawns.is_empty() else Vector2(map_w * 0.5, map_h * 0.86)
+    spawn.y = max(spawn.y, arena_bounds.position.y + arena_bounds.size.y * 0.76)
+    spawn.x = clamp(spawn.x, arena_bounds.position.x + cell_px, arena_bounds.position.x + arena_bounds.size.x - cell_px)
+    return spawn
+
+func _seed_arena_cover_barriers(target_count: int):
+    barriers.clear()
+    for rect in arena_cover_blocks:
+        if barriers.size() >= target_count:
+            break
+        var center = rect.get_center()
+        if center.y < arena_bounds.position.y + arena_bounds.size.y * 0.70 and center.y > arena_bounds.position.y + arena_bounds.size.y * 0.18:
+            barriers.append({"cell": _pos_to_cell(center), "pos": _safe_position(center), "hp": 2})
+    if barriers.size() < target_count:
+        _seed_barriers(target_count, [1, 7], 2)
 
 func _setup_robotron_2084():
     _setup_player(Vector2(map_w * 0.5, map_h * 0.5))
@@ -513,10 +667,14 @@ func _seed_barriers(count: int, classes: Array, hit_points: int):
         barriers.append({"cell": _pos_to_cell(p), "pos": p, "hp": hit_points})
 
 func _input(event):
+    if shared_tab_menu and shared_tab_menu.overlay_mode != "":
+        return
     if overlay_mode != "" and _handle_menu_input(event):
         return
     if event is InputEventKey and event.pressed and not event.echo:
         if event.keycode == KEY_TAB:
+            if shared_tab_menu:
+                return
             _set_overlay_mode("settings" if overlay_mode != "settings" else "start")
         elif event.keycode == KEY_F1:
             show_reference = not show_reference
@@ -538,6 +696,9 @@ func _process(delta):
     if menu_axis_cooldown > 0.0:
         menu_axis_cooldown = max(0.0, menu_axis_cooldown - delta)
     if blanked:
+        return
+    if shared_tab_menu and shared_tab_menu.overlay_mode != "":
+        queue_redraw()
         return
     if overlay_mode != "" or paused:
         queue_redraw()
@@ -565,7 +726,7 @@ func _process(delta):
     queue_redraw()
 
 func _set_menu_mode(show_cover: bool):
-    if not tab_menu:
+    if tab_menu == null:
         return
     tab_menu.color = Color(0, 0, 0, 0.82) if show_cover else Color(0, 0, 0, 0.18)
     if tab_cover_frame:
@@ -826,14 +987,13 @@ func _tick_centipede(delta):
 func _tick_invaders(delta):
     var p = players[0]
     var move = _input_vector(0)
-    p["pos"].x = clamp(p["pos"].x + move.x * 330.0 * delta, cell_px, map_w - cell_px)
-    p["pos"].y = clamp(p["pos"].y, map_h * 0.76, map_h - cell_px)
+    var min_px = arena_bounds.position.x + cell_px if arena_bounds_clamp else cell_px
+    var max_px = arena_bounds.position.x + arena_bounds.size.x - cell_px if arena_bounds_clamp else map_w - cell_px
+    p["pos"].x = clamp(p["pos"].x + move.x * 330.0 * delta, min_px, max_px)
+    p["pos"].y = clamp(p["pos"].y, arena_bounds.position.y, arena_bounds.position.y + arena_bounds.size.y - cell_px)
     p["cooldown"] = max(0.0, p["cooldown"] - delta)
     if _shoot_pressed(0) and p["cooldown"] <= 0.0:
         bullets.append({"pos": p["pos"] + Vector2(0, -22), "vel": Vector2(0, -600), "ttl": 1.6})
-        if dual_ship:
-            bullets.append({"pos": p["pos"] + Vector2(-24, -18), "vel": Vector2(0, -600), "ttl": 1.6})
-            bullets.append({"pos": p["pos"] + Vector2(24, -18), "vel": Vector2(0, -600), "ttl": 1.6})
         p["cooldown"] = 0.22
     invader_step_timer += delta
     var shift = false
@@ -842,24 +1002,24 @@ func _tick_invaders(delta):
     for e in enemies:
         if not e["alive"]:
             continue
-        if game_id == "galaga":
-            e["phase"] += delta * 2.0
-            e["pos"].x += sin(e["phase"]) * 28.0 * delta
-            if e["kind"] == "boss" and randf() < delta * 0.08:
-                e["pos"].y += 18.0
         min_x = min(min_x, e["pos"].x)
         max_x = max(max_x, e["pos"].x)
+    
     if invader_step_timer > 0.42:
         invader_step_timer = 0.0
         shift = true
+        
     if shift:
-        if min_x < cell_px * 2 or max_x > map_w - cell_px * 2:
+        var bounds_min = arena_bounds.position.x + cell_px * 2 if arena_bounds_clamp else cell_px * 2
+        var bounds_max = arena_bounds.position.x + arena_bounds.size.x - cell_px * 2 if arena_bounds_clamp else map_w - cell_px * 2
+        if min_x < bounds_min or max_x > bounds_max:
             invader_dir *= -1
             for e in enemies:
                 e["pos"].y += 22
         for e in enemies:
             e["pos"].x += invader_dir * (20 + wave * 2)
-            if e["pos"].y > map_h * 0.78:
+            var lower_bound = arena_bounds.position.y + arena_bounds.size.y * 0.78 if arena_bounds_clamp else map_h * 0.78
+            if e["pos"].y > lower_bound:
                 _lose_life()
     fire_timer -= delta
     if fire_timer <= 0.0:
@@ -901,6 +1061,15 @@ func _tick_invaders(delta):
     if enemies.is_empty():
         wave += 1
         _setup_invaders()
+
+func _galaga_active_divers() -> int:
+    var count = 0
+    for e in enemies:
+        if not e["alive"]:
+            continue
+        if str(e.get("state", "")) == "dive":
+            count += 1
+    return count
 
 func _tick_robotron_2084(delta):
     var p = players[0]
@@ -1210,7 +1379,7 @@ func _draw():
         return
     draw_set_transform(offset, 0.0, Vector2(scale_factor, scale_factor))
     if show_reference and reference_texture:
-        draw_texture_rect(reference_texture, Rect2(0, 0, map_w, map_h), false, Color(1, 1, 1, 0.15))
+        draw_texture_rect(reference_texture, Rect2(0, 0, map_w, map_h), false, Color(1, 1, 1, reference_opacity))
     _draw_arena_frame()
     if game_id == "centipede":
         _draw_centipede()
@@ -1237,6 +1406,13 @@ func _draw():
     _draw_hud()
 
 func _draw_arena_frame():
+    if game_id == "galaga":
+        for y in range(-96, int(map_h) + 96, 48):
+            for x in range(24, int(map_w), 96):
+                var yy = fmod(float(y) + star_scroll + float((x / 96) % 3) * 17.0, map_h + 96.0) - 48.0
+                draw_circle(Vector2(x, yy), 1.5, Color(1, 1, 1, 0.42))
+                draw_line(Vector2(x, yy - 8), Vector2(x, yy + 10), Color(0.0, 0.9, 1.0, 0.18), 1.0)
+        draw_rect(arena_bounds, Color(0.0, 0.9, 1.0, 0.45), false, 2.0)
     var grid_step = cell_px * 2.0
     for x in range(0, int(map_w), int(grid_step)):
         draw_line(Vector2(x, 0), Vector2(x, map_h), Color(1, 1, 1, 0.035), 1.0)
@@ -1462,6 +1638,11 @@ func _cell_center(cell: Vector2i) -> Vector2:
     return Vector2((cell.x + 0.5) * cell_px, (cell.y + 0.5) * cell_px)
 
 func _clamp_world(pos: Vector2) -> Vector2:
+    if game_id == "galaga" and arena_bounds_clamp:
+        return Vector2(
+            clamp(pos.x, arena_bounds.position.x, arena_bounds.position.x + arena_bounds.size.x),
+            clamp(pos.y, arena_bounds.position.y, arena_bounds.position.y + arena_bounds.size.y)
+        )
     return Vector2(clamp(pos.x, 0.0, map_w), clamp(pos.y, 0.0, map_h))
 
 func _wrap_world(pos: Vector2) -> Vector2:
