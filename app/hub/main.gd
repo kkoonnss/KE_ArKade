@@ -48,8 +48,10 @@ var scroll_vbox: VBoxContainer
 var active_nav_btn: Button = null
 var dialog_scroll_vbox: VBoxContainer
 var games_overlay: ColorRect = null
+var _pending_menu_focus: Control = null
 
 func _ready():
+	set_process_input(true)
 	if scenes_grid is GridContainer: scenes_grid.columns = 3
 	
 	# Initialize scroll_vbox to wrap ScenesGrid
@@ -105,10 +107,89 @@ func clear_main_panel():
 func set_active_nav(active_btn: Button):
 	active_nav_btn = active_btn
 
+func _reset_menu_focus():
+	_pending_menu_focus = null
+
+func _remember_menu_focus(control: Control):
+	if control == null:
+		return
+	if control.focus_mode == Control.FOCUS_NONE:
+		control.focus_mode = Control.FOCUS_ALL
+	if _pending_menu_focus == null:
+		_pending_menu_focus = control
+
+func _focus_current_menu():
+	call_deferred("_grab_current_menu_focus")
+
+func _grab_current_menu_focus():
+	if _grab_focus_if_valid(_pending_menu_focus):
+		return
+	if games_overlay != null and is_instance_valid(games_overlay):
+		if _grab_first_focusable(games_overlay):
+			return
+	var main_panel = get_node_or_null("UI/Content/MainPanel")
+	if main_panel and _grab_first_focusable(main_panel):
+		return
+	var nav = get_node_or_null("UI/Content/SideNav")
+	if nav:
+		_grab_first_focusable(nav)
+
+func _grab_focus_if_valid(control: Control) -> bool:
+	if control == null or not is_instance_valid(control):
+		return false
+	if not control.is_inside_tree() or not control.is_visible_in_tree():
+		return false
+	if control.focus_mode == Control.FOCUS_NONE:
+		return false
+	control.grab_focus()
+	return true
+
+func _grab_first_focusable(node: Node) -> bool:
+	if _grab_first_focusable_button(node):
+		return true
+	return _grab_first_focusable_control(node)
+
+func _grab_first_focusable_button(node: Node) -> bool:
+	if node == null or not is_instance_valid(node):
+		return false
+	if node is Control:
+		var control := node as Control
+		if control is BaseButton and control.is_inside_tree() and control.is_visible_in_tree() and control.focus_mode != Control.FOCUS_NONE:
+			control.grab_focus()
+			return true
+	for child in node.get_children():
+		if _grab_first_focusable_button(child):
+			return true
+	return false
+
+func _grab_first_focusable_control(node: Node) -> bool:
+	if node == null or not is_instance_valid(node):
+		return false
+	if node is Control:
+		var control := node as Control
+		if control.is_inside_tree() and control.is_visible_in_tree() and control.focus_mode != Control.FOCUS_NONE:
+			control.grab_focus()
+			return true
+	for child in node.get_children():
+		if _grab_first_focusable_control(child):
+			return true
+	return false
+
+func _is_focus_recovery_event(event: InputEvent) -> bool:
+	return event.is_action_pressed("ui_up") or event.is_action_pressed("ui_down") or event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right") or event.is_action_pressed("ui_accept")
+
+func _input(event: InputEvent):
+	if not _is_focus_recovery_event(event):
+		return
+	var owner = get_viewport().gui_get_focus_owner()
+	if owner == null or not is_instance_valid(owner) or not owner.is_visible_in_tree():
+		_focus_current_menu()
+
 func display_scenes():
 	current_tab = "scenes"
 	viewing_levels = false
 	selected_level_name = ""
+	_reset_menu_focus()
 	clear_main_panel()
 	var base_dir = ProjectSettings.globalize_path("res://").path_join("../../content/scenes")
 	var dir = DirAccess.open(base_dir)
@@ -133,6 +214,7 @@ func display_scenes():
 	
 	for i in range(scenes.size()):
 		_create_level_card(scenes[i], base_dir, scenes_grid, i, true)
+	_focus_current_menu()
 func style_grid_button(btn: Button):
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(0.15, 0.15, 0.18, 1.0)
@@ -147,6 +229,7 @@ func style_grid_button(btn: Button):
 	var hover = style.duplicate()
 	hover.bg_color = Color(0.2, 0.2, 0.25, 1.0)
 	btn.add_theme_stylebox_override("hover", hover)
+	btn.add_theme_stylebox_override("focus", hover)
 	
 	var pressed = style.duplicate()
 	pressed.bg_color = Color(0.1, 0.1, 0.12, 1.0)
@@ -166,6 +249,7 @@ func _on_scene_selected(scene_name: String):
 func display_levels():
 	current_tab = "levels"
 	viewing_levels = true
+	_reset_menu_focus()
 	clear_main_panel()
 	var base_dir = ProjectSettings.globalize_path("res://").path_join("../../content/scenes").path_join(current_scene).path_join("levels")
 	var dir = DirAccess.open(base_dir)
@@ -178,11 +262,13 @@ func display_levels():
 				_create_level_card(file_name, base_dir, scenes_grid, index)
 				index += 1
 			file_name = dir.get_next()
+	_focus_current_menu()
 func _on_level_selected(level_name: String):
 	selected_level_name = level_name
 	display_games_lightbox()
 
 func display_games_lightbox():
+	_reset_menu_focus()
 	_clear_games_overlay()
 		
 	games_overlay = ColorRect.new()
@@ -232,6 +318,8 @@ func display_games_lightbox():
 			overlay_ref.queue_free()
 		if games_overlay == overlay_ref:
 			games_overlay = null
+		_reset_menu_focus()
+		_focus_current_menu()
 	)
 	hbox.add_child(close_btn)
 	
@@ -266,8 +354,12 @@ func display_games_lightbox():
 	for g in games:
 		_create_game_card(g, grid, idx)
 		idx += 1
+	if _pending_menu_focus == null:
+		_remember_menu_focus(close_btn)
+	_focus_current_menu()
 
 func display_games():
+	_reset_menu_focus()
 	clear_main_panel()
 	current_tab = "games"
 	viewing_levels = false
@@ -324,6 +416,7 @@ func display_games():
 		scroll_vbox.add_child(grid)
 		for game in games:
 			_create_game_card(game, grid, game.absolute_index)
+	_focus_current_menu()
 
 func _classic_level_for_cart(cart_id: String) -> String:
 	var base_dir = ProjectSettings.globalize_path("res://").path_join("../..").simplify_path()
@@ -375,6 +468,7 @@ func _on_restore_pressed():
 func _on_design_nav_pressed():
 	current_tab = "design"
 	viewing_levels = false
+	_reset_menu_focus()
 	_clear_games_overlay()
 	var scroll_container = $UI/Content/MainPanel/ScrollContainer
 	if scroll_container:
@@ -386,6 +480,7 @@ func _on_design_nav_pressed():
 			
 	var design = load("res://design_screen.tscn").instantiate()
 	$UI/Content/MainPanel.add_child(design)
+	_focus_current_menu()
 
 func _on_ipc_log(msg: String):
 	ipc_log_lines.append(msg)
@@ -427,13 +522,20 @@ func _show_placeholder_overlay(title_text: String, content_text: String = "Comin
 	close_btn.text = "Close"
 	close_btn.custom_minimum_size = Vector2(120, 48)
 	close_btn.add_theme_font_size_override("font_size", 20)
-	close_btn.pressed.connect(func(): overlay.queue_free())
+	close_btn.pressed.connect(func():
+		overlay.queue_free()
+		_reset_menu_focus()
+		_focus_current_menu()
+	)
 	vbox.add_child(close_btn)
+	_reset_menu_focus()
+	_remember_menu_focus(close_btn)
 	
 	panel.add_child(vbox)
 	overlay.add_child(panel)
 	
 	$UI.add_child(overlay)
+	_focus_current_menu()
 
 func _on_launch_calibration_tool():
 	_show_placeholder_overlay("Calibration", "Calibration tool coming soon.")
@@ -545,6 +647,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	
 	var cover_btn = Button.new()
 	cover_btn.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cover_btn.focus_mode = Control.FOCUS_NONE
 	var empty_style = StyleBoxEmpty.new()
 	cover_btn.add_theme_stylebox_override("normal", empty_style)
 	cover_btn.add_theme_stylebox_override("hover", empty_style)
@@ -577,6 +680,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	img_control.add_child(index_lbl)
 
 	var fav_btn = Button.new()
+	fav_btn.focus_mode = Control.FOCUS_NONE
 	fav_btn.text = "★" if is_fav else "☆"
 	fav_btn.custom_minimum_size = Vector2(36, 36)
 	fav_btn.add_theme_font_size_override("font_size", 24)
@@ -632,6 +736,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 		_launch_game(cart_id)
 	)
 	bottom_vbox.add_child(title_btn)
+	_remember_menu_focus(title_btn)
 
 	if skins.size() > 1:
 		var skin_hbox = HBoxContainer.new()
@@ -645,7 +750,13 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 		var arrow_style = StyleBoxFlat.new()
 		arrow_style.bg_color = Color(0.1, 0.1, 0.12)
 		arrow_style.set_corner_radius_all(4)
+		var arrow_focus = arrow_style.duplicate()
+		arrow_focus.bg_color = Color(0.2, 0.22, 0.25)
+		arrow_focus.border_width_bottom = 2
+		arrow_focus.border_color = color_cyan
 		prev_skin_btn.add_theme_stylebox_override("normal", arrow_style)
+		prev_skin_btn.add_theme_stylebox_override("hover", arrow_focus)
+		prev_skin_btn.add_theme_stylebox_override("focus", arrow_focus)
 		prev_skin_btn.pressed.connect(func(): _cycle_skin(cart_id, skins, -1))
 		skin_hbox.add_child(prev_skin_btn)
 		
@@ -661,6 +772,8 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 		next_skin_btn.text = ">"
 		next_skin_btn.custom_minimum_size = Vector2(28, 28)
 		next_skin_btn.add_theme_stylebox_override("normal", arrow_style)
+		next_skin_btn.add_theme_stylebox_override("hover", arrow_focus)
+		next_skin_btn.add_theme_stylebox_override("focus", arrow_focus)
 		next_skin_btn.pressed.connect(func(): _cycle_skin(cart_id, skins, 1))
 		skin_hbox.add_child(next_skin_btn)
 		
@@ -669,6 +782,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 func _create_level_card(level_name: String, levels_dir: String, container: Control, display_index: int = -1, is_scene: bool = false):
 	var btn = Button.new()
 	btn.custom_minimum_size = Vector2(256, 284)
+	btn.focus_mode = Control.FOCUS_ALL
 	if is_scene:
 		btn.pressed.connect(func(): _on_scene_selected(level_name))
 	else:
@@ -857,6 +971,7 @@ func _create_level_card(level_name: String, levels_dir: String, container: Contr
 	
 
 	style_grid_button(btn)
+	_remember_menu_focus(btn)
 
 
 

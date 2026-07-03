@@ -1,0 +1,49 @@
+#!/bin/sh
+# KE_ArKade pre-commit safety hook
+# Installed via _Briefs/governance/scripts/install_hooks_2026-07-01.cmd
+# See _Briefs/governance/03_RECOVERY_PROTOCOL.md
+
+ALLOW_SHRINK="${KE_ARKADE_ALLOW_SHRINK:-0}"
+
+for FILE in $(git diff --cached --name-only --diff-filter=M); do
+  [ -z "$FILE" ] && continue
+  [ ! -f "$FILE" ] && continue
+
+  NEW_LINES=$(wc -l < "$FILE" 2>/dev/null)
+  OLD_LINES=$(git show "HEAD:$FILE" 2>/dev/null | wc -l)
+
+  [ -z "$NEW_LINES" ] && continue
+  [ -z "$OLD_LINES" ] && continue
+  [ "$OLD_LINES" -lt 500 ] && continue
+
+  SHRINK=$(( (OLD_LINES - NEW_LINES) * 100 / OLD_LINES ))
+  if [ "$SHRINK" -gt 30 ]; then
+    if [ "$ALLOW_SHRINK" = "1" ]; then
+      echo "WARN: $FILE shrunk ${SHRINK}% (${OLD_LINES} -> ${NEW_LINES} lines) because KE_ARKADE_ALLOW_SHRINK=1"
+    else
+      echo
+      echo "============================================================"
+      echo "BLOCK: $FILE would shrink from ${OLD_LINES} to ${NEW_LINES} lines (-${SHRINK}%)"
+      echo
+      echo "This looks like the Jun 28-30 corruption pattern. If intentional:"
+      echo "  set KE_ARKADE_ALLOW_SHRINK=1 && git commit -m '...'"
+      echo "Otherwise: git reset HEAD, inspect the diff, fix your edit."
+      echo "============================================================"
+      exit 1
+    fi
+  fi
+done
+
+for FILE in $(git diff --cached --name-only); do
+  case "$FILE" in
+    *.gd)
+      [ ! -f "$FILE" ] && continue
+      if grep -q "Parse Error:" "$FILE"; then
+        echo "BLOCK: $FILE contains 'Parse Error:' text and looks like a mis-committed error dump"
+        exit 1
+      fi
+      ;;
+  esac
+done
+
+exit 0

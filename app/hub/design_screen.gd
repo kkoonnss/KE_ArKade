@@ -440,6 +440,10 @@ func _rebuild_focus():
             else:
                 node.focus_neighbor_bottom = node.get_path() # Clamp bottom
 
+    var owner = get_viewport().gui_get_focus_owner()
+    if focusable.size() > 0 and (owner == null or not focusable.has(owner)):
+        focusable[0].call_deferred("grab_focus")
+
 func _gather_focusable(node: Node, arr: Array):
     if not node.visible:
         return

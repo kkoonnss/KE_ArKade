@@ -56,6 +56,8 @@ lock_held: <lock-name or "none">
 status: <done|pending_kons_verify|blocked|abandoned>
 pre_edit_commit: <git short hash>   # mandatory for any edit > §1.2 threshold
 close_commit: <git short hash>      # mandatory if any edit was made
+backup_status: <pushed|backup_pending|not_applicable>
+backup_remote: <origin URL or "none">
 escalations: []                      # list of OPEN_QUESTIONS entries added
 ---
 ```
@@ -94,6 +96,22 @@ Cartridge gate (pacman):
 - Screenshot: vault/70-qa/pacman_classic_2026-06-30.png
 - Kons launch confirmation: PENDING (status: pending_kons_verify)
 ```
+
+### Backup status
+
+Per `07_GIT_GOVERNANCE.md`. Every session that creates or closes commits
+records the GitHub backup state.
+
+```
+- Remote: origin -> https://github.com/kkoonnss/KE_ArKade.git
+- Push command: _Briefs/governance/scripts/push_backup.cmd
+- Result: pushed | backup_pending | not_applicable
+- Evidence: paste the success line or the failure reason. If backup is pending,
+  name the exact blocker and next command to run.
+```
+
+`backup_pending` is honest and allowed when GitHub/auth/network/LFS blocks the
+push. It is not the same as "done"; the next orchestrator sweep must resolve it.
 
 ### Open questions
 

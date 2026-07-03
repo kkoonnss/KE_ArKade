@@ -2,8 +2,8 @@
 doc_id: governance-07-git-governance
 audience: [orchestrators, codex, antigravity, sonnet, claude_threads]
 authority: contract
-last_revised: 2026-06-30
-notes: A Codex agent is currently solving for GitHub backup + versioning integration. This doc captures the conventions that integration must satisfy; the integration's output should refine this doc, not replace it.
+last_revised: 2026-07-02
+notes: GitHub backup is mandatory close-out hygiene once origin is live. Oversized Godot binaries are handled through Git LFS before first remote push.
 ---
 
 # 07 — Git Governance
@@ -26,6 +26,14 @@ always are.
 - Working tree has heavy uncommitted modifications across hub, shared, and
   many cartridges (recovery aftermath).
 - Remote backup (GitHub) is **in progress** — a Codex agent is solving for it.
+
+### 1.1 Current GitHub target (2026-07-02)
+
+- GitHub private repo target: `https://github.com/kkoonnss/KE_ArKade.git`.
+- Default local branch: `master`.
+- Git LFS is required before the first successful GitHub push because
+  `Godot_v4.3-stable_win64.exe` is over GitHub's normal 100 MB file limit.
+- Until `origin` push succeeds, GitHub backup state is `backup_pending`.
 
 ## 2. Commit conventions
 
@@ -83,7 +91,13 @@ Per `03_RECOVERY_PROTOCOL.md` §2:
    ```
    git add -A && git commit -m "<scope>: <change>  (close TASK-INT-<slug>)"
    ```
-5. **Daily snapshot tag (orchestrator):**
+5. **Backup push:** after the close commit, push `master` and tags.
+   ```
+   _Briefs/governance/scripts/push_backup.cmd
+   ```
+   The receipt must record `backup_status: pushed` or `backup_status:
+   backup_pending` with the reason.
+6. **Daily snapshot tag (orchestrator):**
    ```
    git tag daily/$(date +%Y-%m-%d) HEAD
    ```
@@ -142,9 +156,18 @@ historically because the repo was treated as the Godot install. **They
 should be replaced with a documented install step** so future clones
 don't carry the binaries.
 
-This is an open item for the GitHub integration agent. Until resolved, the
-binaries stay where they are (changing them now would invalidate every
-agent's `app/hub/launcher/*.gd` references).
+GitHub cannot accept normal Git blobs over 100 MB, so the first GitHub backup
+must migrate these binaries to Git LFS or remove them from history. The chosen
+policy is:
+
+- Track `Godot_v4.3-stable_*.exe` and `godot.zip` with Git LFS if the repo keeps
+  local Godot binaries.
+- Keep the README install path documented so a fresh clone can restore a working
+  checkout.
+- Do not add new large binaries without updating LFS tracking and this doc.
+
+Only the GitHub-integration/orchestrator lane should run history migration.
+Other agents treat LFS state as read-only infrastructure.
 
 ## 6. Recovery via git (the §3 of `03_RECOVERY_PROTOCOL.md`, expanded)
 
@@ -177,26 +200,37 @@ This repo now treats GitHub as the off-machine backup target. The local repo
 remains the working source of truth, but `origin` is the disaster-recovery
 copy that must stay close behind it.
 
-- Remote URL: `PENDING_KONS_PRIVATE_REPO_URL`
+- Remote URL: `https://github.com/kkoonnss/KE_ArKade.git`
 - Default branch: `master`
 - Manual push script: `_Briefs/governance/scripts/push_backup.cmd`
 - Automatic push hook: `.git/hooks/post-commit`
+- Obsidian runbook: `vault/80-builds/github-backup-runbook.md`
 
 ### 7.1 Remote wiring
 
 Once Kons creates the private GitHub repo, wire it with:
 
 ```bash
-git remote add origin <github-private-url>
+git remote add origin https://github.com/kkoonnss/KE_ArKade.git
 git remote -v
 ```
 
 If `origin` already exists, update it instead of adding a second remote:
 
 ```bash
-git remote set-url origin <github-private-url>
+git remote set-url origin https://github.com/kkoonnss/KE_ArKade.git
 git remote -v
 ```
+
+Before the first push, resolve the large-file blocker:
+
+```bash
+git lfs install
+git lfs migrate import --include="Godot_v4.3-stable_*.exe,godot.zip"
+```
+
+This rewrites local history. Run it only before the first GitHub backup or with
+explicit orchestrator approval.
 
 ### 7.2 Push cadence
 
@@ -208,6 +242,7 @@ The cadence is now explicit and enforced by tooling:
 - Any time the automatic hook fails because the network is down: the local
   commit still stands; rerun `_Briefs/governance/scripts/push_backup.cmd`
   manually and it will catch up.
+- Every receipt must include `backup_status` and `backup_remote`.
 
 `push_backup.cmd` always does:
 
@@ -240,8 +275,9 @@ Tags are treated as immutable backups:
 If the local checkout is lost or suspect:
 
 ```bash
-git clone <github-private-url> C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade
+git clone https://github.com/kkoonnss/KE_ArKade.git C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade
 cd C:/Users/Kons/Documents/_KE_VibeApps/KE_ArKade
+git lfs pull
 git tag -l "daily/*"
 git checkout daily/<last-good-date>
 ```

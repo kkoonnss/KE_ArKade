@@ -36,6 +36,9 @@ games running off one untouched map.**
 
 ## Key Files
 
+- `_Briefs/governance/00_README.md` - mandatory governance index for every agent. Read this before edits.
+- `_Briefs/governance/07_GIT_GOVERNANCE.md` - commit, snapshot, GitHub backup, and recovery rules. Every agent must follow it before closing work.
+
 - `_Briefs/PLAN_interpretation-and-editor.md` — **CURRENT STAGE 6 directive** (universal map interpretation + controller-driven Design screen). Tickets in `vault/30-tasks/TASK-INT-*`; board at `vault/60-bases/interpretation.base`.
 - `_Briefs/00_MASTER_PLAN.md` — the whole plan, decisions, roadmap. Start here.
 - `_Briefs/INTEGRATION_CONTRACT.md` — fleet ownership + seams. Read before touching code.
@@ -47,6 +50,8 @@ games running off one untouched map.**
 ---
 
 ## How To Work Here
+
+- **GitHub backup is part of "done":** before a ticket closes, follow `_Briefs/governance/07_GIT_GOVERNANCE.md` and record backup status in the receipt.
 
 - **Fleets own disjoint folders:** Codex=`app/tools`, Antigravity=`app/hub`, Sonnet=`vault`+`app/shared`.
 - **Only Opus edits frozen schemas.** Need a change? Write a task note, escalate.

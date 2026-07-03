@@ -33,7 +33,7 @@ If you are an orchestrator picking up the chair, also read
 | 04 | [[04_AGENT_HANDOFF_TEMPLATE]] | "How do I write the receipt the next holder needs?" | every agent at session end |
 | 05 | [[05_ORCHESTRATOR_RUNBOOK]] | "How do I hold the orchestrator chair? Cold start, sweep, dispatch, handoff." | orchestrators |
 | 06 | [[06_VAULT_HYGIENE]] | "What keeps the vault honest? What are the tracked hygiene failures?" | orchestrators (and all agents indirectly) |
-| 07 | [[07_GIT_GOVERNANCE]] | "How is git used as backup + time machine? What's the .gitignore? Commit cadence?" | every agent (snapshots), orchestrator (tags), GitHub-integration agent (remote) |
+| 07 | [[07_GIT_GOVERNANCE]] | "How is git used as backup + time machine? How do commits, GitHub pushes, LFS, and recovery work?" | every agent before close, orchestrators for tags/backups |
 | 08 | [[08_NEW_SESSION_SEED]] | "How does Kons start a fresh Opus thread in one paste?" | Kons + incoming orchestrators |
 
 ---
@@ -61,8 +61,9 @@ Then run cold-start protocol (`05_ORCHESTRATOR_RUNBOOK.md` §1).
 3. `02_VERIFICATION_GATES.md`
 4. `03_RECOVERY_PROTOCOL.md`
 5. `04_AGENT_HANDOFF_TEMPLATE.md`
-6. The ticket assigned to you in `vault/30-tasks/`
-7. Any prior handoff for the same lock in `vault/40-agent-runs/`
+6. `07_GIT_GOVERNANCE.md`
+7. The ticket assigned to you in `vault/30-tasks/`
+8. Any prior handoff for the same lock in `vault/40-agent-runs/`
 
 ### Kons (the human)
 
@@ -80,6 +81,8 @@ You don't need to memorize the pack. Use it as a reference when:
 
 If you read nothing else in this pack, internalize these.
 
+0. **GitHub backup is part of close.** Every closing receipt records whether
+   `origin` push succeeded, failed, or is pending (`07_GIT_GOVERNANCE.md`).
 1. **Lanes are disjoint.** One folder = one writer. Cross-lane work routes
    through the orchestrator.
 2. **`vault/50-schemas/` is frozen.** Only the orchestrator edits.

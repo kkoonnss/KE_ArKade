@@ -1,0 +1,14 @@
+#!/bin/sh
+# KE_ArKade post-commit backup hook
+# Installed via _Briefs/governance/scripts/install_hooks_2026-07-01.cmd
+# Starts push_backup.cmd in the background so commits do not block on network.
+
+REPO="$(git rev-parse --show-toplevel)"
+if command -v cygpath >/dev/null 2>&1; then
+  WIN_REPO="$(cygpath -w "$REPO")"
+else
+  WIN_REPO="$REPO"
+fi
+
+cmd.exe //c start "" /min "$WIN_REPO\\_Briefs\\governance\\scripts\\push_backup.cmd" post-commit >/dev/null 2>&1
+exit 0
