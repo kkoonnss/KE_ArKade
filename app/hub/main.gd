@@ -2,11 +2,8 @@ extends Control
 
 @onready var launcher = $Launcher
 @onready var scenes_grid = $UI/Content/MainPanel/ScrollContainer/ScenesGrid
-@onready var panic_btn = $UI/TopBar/PanicBlackBtn
-@onready var restore_btn = $UI/TopBar/RestoreBtn
-@onready var panic_overlay = $PanicOverlay
+@onready var restore_btn = $UI/Content/SideNav/RestoreBtn
 
-var is_panic = false
 var last_known_scene = ""
 var last_known_level = ""
 var last_known_cartridge = ""
@@ -21,7 +18,6 @@ var color_surface2 = Color(0.07, 0.08, 0.09, 1) # #111418
 var color_ink_white = Color(1, 1, 1, 1)
 var color_ink_dim = Color(0.6, 0.63, 0.65, 1) # #9AA0A6
 var color_cyan = Color(0.0, 0.9, 1.0, 1) # #00E5FF
-var color_panic_red = Color(1.0, 0.18, 0.3, 1)
 var color_border_default = Color(1, 1, 1, 0.14)
 var style_panel: StyleBoxFlat
 var style_btn_normal: StyleBoxFlat
@@ -49,9 +45,11 @@ var active_nav_btn: Button = null
 var dialog_scroll_vbox: VBoxContainer
 var games_overlay: ColorRect = null
 var _pending_menu_focus: Control = null
+var _game_title_focus_buttons: Array = []
 
 func _ready():
 	set_process_input(true)
+	_ensure_hub_input_actions()
 	if scenes_grid is GridContainer: scenes_grid.columns = 3
 	
 	# Initialize scroll_vbox to wrap ScenesGrid
@@ -73,8 +71,6 @@ func _ready():
 		launcher.cartridge_exited.connect(_on_cartridge_exited)
 		launcher.ipc_log.connect(_on_ipc_log)
 	
-	panic_overlay.visible = false
-	if panic_btn: panic_btn.pressed.connect(_on_panic_pressed)
 	if restore_btn: restore_btn.pressed.connect(_on_restore_pressed)
 	
 	var nav = $UI/Content/SideNav
@@ -85,12 +81,69 @@ func _ready():
 	if nav.has_node("CalibrateBtn"): nav.get_node("CalibrateBtn").pressed.connect(_on_launch_calibration_tool)
 	if nav.has_node("TestPatternBtn"): nav.get_node("TestPatternBtn").pressed.connect(_on_test_pattern_pressed)
 	if nav.has_node("ServiceBtn"): nav.get_node("ServiceBtn").pressed.connect(_on_log_pressed)
-	var topbar = $UI/TopBar
-	if topbar and topbar.has_node("HelpBtn"): topbar.get_node("HelpBtn").pressed.connect(_on_help_pressed)
+	if nav.has_node("HelpBtn"): nav.get_node("HelpBtn").pressed.connect(_on_help_pressed)
 	
 	if nav.has_node("SortFavBtn"): nav.get_node("SortFavBtn").toggled.connect(_on_sort_favorites_toggled)
 	
 	display_scenes()
+
+func _ensure_hub_input_actions():
+	_ensure_action_key("ui_left", KEY_LEFT)
+	_ensure_action_key("ui_left", KEY_A)
+	_ensure_action_key("ui_right", KEY_RIGHT)
+	_ensure_action_key("ui_right", KEY_D)
+	_ensure_action_key("ui_up", KEY_UP)
+	_ensure_action_key("ui_up", KEY_W)
+	_ensure_action_key("ui_down", KEY_DOWN)
+	_ensure_action_key("ui_down", KEY_S)
+	_ensure_action_key("ui_accept", KEY_ENTER)
+	_ensure_action_key("ui_accept", KEY_SPACE)
+	_ensure_action_key("ui_cancel", KEY_ESCAPE)
+	_ensure_action_joy_button("ui_left", JOY_BUTTON_DPAD_LEFT)
+	_ensure_action_joy_button("ui_right", JOY_BUTTON_DPAD_RIGHT)
+	_ensure_action_joy_button("ui_up", JOY_BUTTON_DPAD_UP)
+	_ensure_action_joy_button("ui_down", JOY_BUTTON_DPAD_DOWN)
+	_ensure_action_joy_button("ui_accept", JOY_BUTTON_A)
+	_ensure_action_joy_button("ui_cancel", JOY_BUTTON_B)
+	_ensure_action_joy_axis("ui_left", JOY_AXIS_LEFT_X, -1.0)
+	_ensure_action_joy_axis("ui_right", JOY_AXIS_LEFT_X, 1.0)
+	_ensure_action_joy_axis("ui_up", JOY_AXIS_LEFT_Y, -1.0)
+	_ensure_action_joy_axis("ui_down", JOY_AXIS_LEFT_Y, 1.0)
+
+func _ensure_action(action_name: String):
+	if not InputMap.has_action(action_name):
+		InputMap.add_action(action_name, 0.5)
+
+func _ensure_action_key(action_name: String, keycode: int):
+	_ensure_action(action_name)
+	for existing in InputMap.action_get_events(action_name):
+		if existing is InputEventKey and existing.keycode == keycode:
+			return
+	var event = InputEventKey.new()
+	event.device = -1
+	event.keycode = keycode
+	InputMap.action_add_event(action_name, event)
+
+func _ensure_action_joy_button(action_name: String, button_index: int):
+	_ensure_action(action_name)
+	for existing in InputMap.action_get_events(action_name):
+		if existing is InputEventJoypadButton and existing.button_index == button_index:
+			return
+	var event = InputEventJoypadButton.new()
+	event.device = -1
+	event.button_index = button_index
+	InputMap.action_add_event(action_name, event)
+
+func _ensure_action_joy_axis(action_name: String, axis: int, axis_value: float):
+	_ensure_action(action_name)
+	for existing in InputMap.action_get_events(action_name):
+		if existing is InputEventJoypadMotion and existing.axis == axis and sign(existing.axis_value) == sign(axis_value):
+			return
+	var event = InputEventJoypadMotion.new()
+	event.device = -1
+	event.axis = axis
+	event.axis_value = axis_value
+	InputMap.action_add_event(action_name, event)
 
 func clear_main_panel():
 	_clear_games_overlay()
@@ -117,6 +170,53 @@ func _remember_menu_focus(control: Control):
 		control.focus_mode = Control.FOCUS_ALL
 	if _pending_menu_focus == null:
 		_pending_menu_focus = control
+
+func _prefer_menu_focus(control: Control):
+	if control == null:
+		return
+	if control.focus_mode == Control.FOCUS_NONE:
+		control.focus_mode = Control.FOCUS_ALL
+	_pending_menu_focus = control
+
+func _chain_horizontal_focus(buttons: Array):
+	for i in range(buttons.size()):
+		var button = buttons[i] as Control
+		if button == null or not is_instance_valid(button):
+			continue
+		if i > 0:
+			var previous = buttons[i - 1] as Control
+			if previous != null and is_instance_valid(previous):
+				button.focus_neighbor_left = button.get_path_to(previous)
+		if i < buttons.size() - 1:
+			var next = buttons[i + 1] as Control
+			if next != null and is_instance_valid(next):
+				button.focus_neighbor_right = button.get_path_to(next)
+
+func _wire_vertical_focus_neighbors(buttons: Array, columns: int):
+	for i in range(buttons.size()):
+		var button = buttons[i] as Control
+		if button == null or not is_instance_valid(button):
+			continue
+		if i - columns >= 0:
+			var up = buttons[i - columns] as Control
+			if up != null and is_instance_valid(up):
+				button.focus_neighbor_top = button.get_path_to(up)
+		if i + columns < buttons.size():
+			var down = buttons[i + columns] as Control
+			if down != null and is_instance_valid(down):
+				button.focus_neighbor_bottom = button.get_path_to(down)
+
+func _wire_auto_scroll(buttons: Array, scroll_container: ScrollContainer):
+	if scroll_container == null:
+		return
+	for b in buttons:
+		var button = b as Control
+		if button == null or not is_instance_valid(button):
+			continue
+		button.focus_entered.connect(func():
+			if is_instance_valid(button) and is_instance_valid(scroll_container):
+				scroll_container.ensure_control_visible(button)
+		)
 
 func _focus_current_menu():
 	call_deferred("_grab_current_menu_focus")
@@ -176,14 +276,35 @@ func _grab_first_focusable_control(node: Node) -> bool:
 	return false
 
 func _is_focus_recovery_event(event: InputEvent) -> bool:
-	return event.is_action_pressed("ui_up") or event.is_action_pressed("ui_down") or event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right") or event.is_action_pressed("ui_accept")
+	return event.is_action_pressed("ui_up") or event.is_action_pressed("ui_down") or event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right") or event.is_action_pressed("ui_accept") or event.is_action_pressed("ui_cancel")
 
 func _input(event: InputEvent):
+	if event.is_action_pressed("ui_cancel"):
+		_handle_hub_cancel()
+		get_viewport().set_input_as_handled()
+		return
 	if not _is_focus_recovery_event(event):
 		return
 	var owner = get_viewport().gui_get_focus_owner()
 	if owner == null or not is_instance_valid(owner) or not owner.is_visible_in_tree():
 		_focus_current_menu()
+
+func _handle_hub_cancel():
+	if games_overlay != null and is_instance_valid(games_overlay):
+		_clear_games_overlay()
+		_reset_menu_focus()
+		_focus_current_menu()
+		return
+	if current_tab == "levels":
+		display_scenes()
+		return
+	if current_tab == "games":
+		if current_scene != "":
+			display_levels()
+		else:
+			display_scenes()
+		return
+	_focus_current_menu()
 
 func display_scenes():
 	current_tab = "scenes"
@@ -259,7 +380,8 @@ func display_levels():
 		var index = 0
 		while file_name != "":
 			if dir.current_is_dir() and not file_name.begins_with("."): 
-				_create_level_card(file_name, base_dir, scenes_grid, index)
+				var prefer_focus = file_name == selected_level_name or (selected_level_name == "" and file_name == last_known_level)
+				_create_level_card(file_name, base_dir, scenes_grid, index, false, prefer_focus)
 				index += 1
 			file_name = dir.get_next()
 	_focus_current_menu()
@@ -351,15 +473,20 @@ func display_games_lightbox():
 		games = favs + others
 		
 	var idx = 0
+	var focus_buttons = []
 	for g in games:
-		_create_game_card(g, grid, idx)
+		focus_buttons.append(_create_game_card(g, grid, idx))
 		idx += 1
+	_chain_horizontal_focus(focus_buttons)
+	_wire_vertical_focus_neighbors(focus_buttons, 6)
+	_wire_auto_scroll(focus_buttons, scroll)
 	if _pending_menu_focus == null:
 		_remember_menu_focus(close_btn)
 	_focus_current_menu()
 
 func display_games():
 	_reset_menu_focus()
+	_game_title_focus_buttons.clear()
 	clear_main_panel()
 	current_tab = "games"
 	viewing_levels = false
@@ -389,9 +516,13 @@ func display_games():
 			fav_grid.add_theme_constant_override("h_separation", 16)
 			fav_grid.add_theme_constant_override("v_separation", 16)
 			scroll_vbox.add_child(fav_grid)
+			var fav_buttons = []
 			for game in favs:
-				_create_game_card(game, fav_grid, game.absolute_index)
-		
+				var card_btn = _create_game_card(game, fav_grid, game.absolute_index)
+				fav_buttons.append(card_btn)
+				_game_title_focus_buttons.append(card_btn)
+			_wire_vertical_focus_neighbors(fav_buttons, 3)
+
 		if others.size() > 0:
 			var other_lbl = Label.new()
 			other_lbl.text = "All Games"
@@ -405,9 +536,13 @@ func display_games():
 			other_grid.add_theme_constant_override("h_separation", 16)
 			other_grid.add_theme_constant_override("v_separation", 16)
 			scroll_vbox.add_child(other_grid)
+			var other_buttons = []
 			for game in others:
-				_create_game_card(game, other_grid, game.absolute_index)
-				
+				var card_btn = _create_game_card(game, other_grid, game.absolute_index)
+				other_buttons.append(card_btn)
+				_game_title_focus_buttons.append(card_btn)
+			_wire_vertical_focus_neighbors(other_buttons, 3)
+
 	else:
 		var grid = GridContainer.new()
 		grid.columns = 3
@@ -415,7 +550,10 @@ func display_games():
 		grid.add_theme_constant_override("v_separation", 16)
 		scroll_vbox.add_child(grid)
 		for game in games:
-			_create_game_card(game, grid, game.absolute_index)
+			_game_title_focus_buttons.append(_create_game_card(game, grid, game.absolute_index))
+		_wire_vertical_focus_neighbors(_game_title_focus_buttons, 3)
+	_chain_horizontal_focus(_game_title_focus_buttons)
+	_wire_auto_scroll(_game_title_focus_buttons, $UI/Content/MainPanel/ScrollContainer)
 	_focus_current_menu()
 
 func _classic_level_for_cart(cart_id: String) -> String:
@@ -425,6 +563,11 @@ func _classic_level_for_cart(cart_id: String) -> String:
 	if DirAccess.dir_exists_absolute(level_path):
 		return candidate
 	return ""
+
+func _cart_id_for_classic_level(level_name: String) -> String:
+	if not level_name.begins_with("classic_"):
+		return ""
+	return level_name.substr("classic_".length())
 
 func _launch_game(cart_id: String):
 	var launched_from_level_overlay = games_overlay != null and is_instance_valid(games_overlay)
@@ -440,6 +583,7 @@ func _launch_game(cart_id: String):
 		selected_level_name = "demo_level"
 		
 	last_known_level = selected_level_name
+	last_known_scene = current_scene
 	last_known_cartridge = cart_id
 	var base_dir = ProjectSettings.globalize_path("res://").path_join("../..").simplify_path()
 	var scene_dir = base_dir.path_join("content/scenes").path_join(current_scene)
@@ -454,12 +598,6 @@ func _launch_game(cart_id: String):
 
 func log_debug(msg: String):
 	print(msg)
-
-func _on_panic_pressed():
-	is_panic = not is_panic
-	panic_overlay.visible = is_panic
-	if is_panic and launcher:
-		launcher.kill_cartridge()
 
 func _on_restore_pressed():
 	if last_known_cartridge != "":
@@ -778,8 +916,9 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 		skin_hbox.add_child(next_skin_btn)
 		
 		bottom_vbox.add_child(skin_hbox)
+	return title_btn
 
-func _create_level_card(level_name: String, levels_dir: String, container: Control, display_index: int = -1, is_scene: bool = false):
+func _create_level_card(level_name: String, levels_dir: String, container: Control, display_index: int = -1, is_scene: bool = false, prefer_focus: bool = false):
 	var btn = Button.new()
 	btn.custom_minimum_size = Vector2(256, 284)
 	btn.focus_mode = Control.FOCUS_ALL
@@ -807,34 +946,7 @@ func _create_level_card(level_name: String, levels_dir: String, container: Contr
 	
 
 	var base_dir = ProjectSettings.globalize_path("res://").path_join("../../")
-
-	var classic_level_to_cartridge = {
-
-		"classic_tetris": "tetris",
-
-		"classic_pacman": "pacman",
-
-		"classic_bomberman": "bomberman",
-
-		"classic_frogger": "frogger",
-
-		"classic_asteroids": "asteroids",
-
-		"classic_tron": "tron",
-
-		"classic_on_track": "on_track",
-
-		"classic_rampage": "rampage",
-
-		"classic_gta": "gta"
-
-	}
-
-	var cart_id = classic_level_to_cartridge.get(level_name, "")
-
-	if cart_id == "":
-
-		cart_id = level_name.replace("classic_", "")
+	var cart_id = _cart_id_for_classic_level(level_name)
 
 
 
@@ -882,37 +994,7 @@ func _create_level_card(level_name: String, levels_dir: String, container: Contr
 
 
 
-	# Load dynamic/skin-specific cover art if available
-
-	var thumb_path = ""
-
-	if not is_classic_skin and active_skin_name != "":
-
-		var skin_suffix = active_skin_name.to_lower().replace(" ", "_")
-
-		var skin_thumb_path = base_dir.path_join("content/cartridges").path_join(cart_id).path_join("thumbnail_" + skin_suffix + ".png")
-
-		if FileAccess.file_exists(skin_thumb_path):
-
-			thumb_path = skin_thumb_path
-
-			
-
-	if thumb_path == "":
-
-		var lvl_thumb = levels_dir.path_join(level_name).path_join("thumbnail.png")
-
-		if FileAccess.file_exists(lvl_thumb):
-
-			thumb_path = lvl_thumb
-
-		elif cart_id != "":
-
-			var cart_thumb = base_dir.path_join("content/cartridges").path_join(cart_id).path_join("thumbnail.png")
-
-			if FileAccess.file_exists(cart_thumb):
-
-				thumb_path = cart_thumb
+	var thumb_path = _scene_card_thumb_path(levels_dir.path_join(level_name)) if is_scene else _level_card_thumb_path(levels_dir.path_join(level_name), cart_id)
 
 
 
@@ -971,7 +1053,56 @@ func _create_level_card(level_name: String, levels_dir: String, container: Contr
 	
 
 	style_grid_button(btn)
+	if prefer_focus:
+		_prefer_menu_focus(btn)
 	_remember_menu_focus(btn)
+
+func _scene_card_thumb_path(scene_dir: String) -> String:
+	var scene_thumb = _first_existing_file(scene_dir, ["thumbnail.png", "background.png", "reference.png", "photo.png", "image.png"])
+	if scene_thumb != "":
+		return scene_thumb
+	var levels_root = scene_dir.path_join("levels")
+	var dir = DirAccess.open(levels_root)
+	if dir == null:
+		return ""
+	var level_names = []
+	dir.list_dir_begin()
+	var file_name = dir.get_next()
+	while file_name != "":
+		if dir.current_is_dir() and not file_name.begins_with(".") and file_name != "derived":
+			level_names.append(file_name)
+		file_name = dir.get_next()
+	level_names.sort()
+	for level_name in level_names:
+		var level_dir = levels_root.path_join(str(level_name))
+		var photo_thumb = _first_existing_file(level_dir, ["background.png", "reference.png", "photo.png", "image.png", "thumbnail.png"])
+		if photo_thumb != "":
+			return photo_thumb
+		photo_thumb = _first_existing_file(level_dir.path_join("level_edit"), ["background.png", "reference.png", "photo.png", "image.png", "thumbnail.png"])
+		if photo_thumb != "":
+			return photo_thumb
+	return ""
+
+func _level_card_thumb_path(level_dir: String, cart_id: String) -> String:
+	var level_thumb = _first_existing_file(level_dir, ["semantic_map.png", "thumbnail.png", "background.png", "reference.png"])
+	if level_thumb != "":
+		return level_thumb
+	level_thumb = _first_existing_file(level_dir.path_join("level_edit"), ["semantic_map.png", "thumbnail.png", "background.png", "reference.png"])
+	if level_thumb != "":
+		return level_thumb
+	if cart_id != "":
+		var base_dir = ProjectSettings.globalize_path("res://").path_join("../../")
+		var cart_thumb = base_dir.path_join("content/cartridges").path_join(cart_id).path_join("thumbnail.png")
+		if FileAccess.file_exists(cart_thumb):
+			return cart_thumb
+	return ""
+
+func _first_existing_file(base_dir: String, file_names: Array) -> String:
+	for file_name in file_names:
+		var path = base_dir.path_join(str(file_name))
+		if FileAccess.file_exists(path):
+			return path
+	return ""
 
 
 
@@ -1195,34 +1326,7 @@ func _prepare_scroll_view(show_default_grid: bool):
 
 
 func is_level_favorited(level_name: String) -> bool:
-
-	var classic_level_to_cartridge = {
-
-		"classic_tetris": "tetris",
-
-		"classic_pacman": "pacman",
-
-		"classic_bomberman": "bomberman",
-
-		"classic_frogger": "frogger",
-
-		"classic_asteroids": "asteroids",
-
-		"classic_tron": "tron",
-
-		"classic_on_track": "on_track",
-
-		"classic_rampage": "rampage",
-
-		"classic_gta": "gta"
-
-	}
-
-	var cart_id = classic_level_to_cartridge.get(level_name, "")
-
-	if cart_id == "":
-
-		cart_id = level_name.replace("classic_", "")
+	var cart_id = _cart_id_for_classic_level(level_name)
 
 	if cart_id != "" and cart_id in favorite_cartridges:
 
@@ -1236,34 +1340,7 @@ func is_level_favorited(level_name: String) -> bool:
 func get_level_classic_name(level_name: String) -> String:
 
 	var base_dir = ProjectSettings.globalize_path("res://").path_join("../../")
-
-	var classic_level_to_cartridge = {
-
-		"classic_tetris": "tetris",
-
-		"classic_pacman": "pacman",
-
-		"classic_bomberman": "bomberman",
-
-		"classic_frogger": "frogger",
-
-		"classic_asteroids": "asteroids",
-
-		"classic_tron": "tron",
-
-		"classic_on_track": "on_track",
-
-		"classic_rampage": "rampage",
-
-		"classic_gta": "gta"
-
-	}
-
-	var cart_id = classic_level_to_cartridge.get(level_name, "")
-
-	if cart_id == "":
-
-		cart_id = level_name.replace("classic_", "")
+	var cart_id = _cart_id_for_classic_level(level_name)
 
 	
 
@@ -1415,7 +1492,11 @@ func _on_cartridge_exited(clean: bool):
 
 	print("Cartridge exited clean: ", clean)
 
-	if not clean and not is_panic:
+	if clean:
+		_return_to_last_level_focus()
+		return
+
+	if not clean:
 
 		var running_duration = (Time.get_ticks_msec() / 1000.0) - last_launch_time
 
@@ -1428,6 +1509,15 @@ func _on_cartridge_exited(clean: bool):
 			log_debug("Crash/timeout detected after %.2fs, restoring last known good..." % running_duration)
 
 			_on_restore_pressed()
+
+func _return_to_last_level_focus():
+	_clear_games_overlay()
+	if last_known_scene == "" or last_known_level == "":
+		_focus_current_menu()
+		return
+	current_scene = last_known_scene
+	selected_level_name = last_known_level
+	display_levels()
 
 
 
