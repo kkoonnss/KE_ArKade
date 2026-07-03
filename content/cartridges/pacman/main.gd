@@ -1009,7 +1009,16 @@ func _draw_pacman(pos: Vector2, dir: Vector2):
     draw_colored_polygon(points, Color(1.0, 0.92, 0.08))
 
 func _draw_ghost(pos: Vector2, color: Color, frightened: bool):
-    var body = Color(0.22, 0.46, 1.0) if frightened else color
+    # Flash white when frightened time is running out
+    var flashing = frightened and frightened_timer < frightened_flash_window
+    var flash_on = flashing and fmod(frightened_timer, 0.4) < 0.2
+    var body: Color
+    if not frightened:
+        body = color
+    elif flash_on:
+        body = Color(1.0, 1.0, 1.0)
+    else:
+        body = Color(0.22, 0.46, 1.0)
     var ratio = _resolution_ratio()
     var rect = Rect2(pos - Vector2(_scaled_radius(11 * ratio), _scaled_radius(10 * ratio)), Vector2(_scaled_radius(22 * ratio), _scaled_radius(22 * ratio)))
     draw_rect(Rect2(rect.position + Vector2(0, _scaled_radius(6 * ratio)), Vector2(rect.size.x, rect.size.y - _scaled_radius(6 * ratio))), body, true)
@@ -1017,12 +1026,13 @@ func _draw_ghost(pos: Vector2, color: Color, frightened: bool):
     var foot_y = pos.y + _scaled_radius(12.0 * ratio)
     for i in range(4):
         draw_circle(Vector2(pos.x - _scaled_radius(8 * ratio) + i * _scaled_radius(5.3 * ratio), foot_y), _scaled_radius(2.7 * ratio), body)
-    var eye_white = Color.WHITE
-    var pupil = Color(0.04, 0.08, 0.2) if frightened else Color(0.0, 0.16, 0.62)
-    draw_circle(pos + Vector2(-_scaled_radius(4 * ratio), -_scaled_radius(2 * ratio)), _scaled_radius(3.0 * ratio), eye_white)
-    draw_circle(pos + Vector2(_scaled_radius(4 * ratio), -_scaled_radius(2 * ratio)), _scaled_radius(3.0 * ratio), eye_white)
-    draw_circle(pos + Vector2(-_scaled_radius(3 * ratio), -_scaled_radius(1 * ratio)), _scaled_radius(1.2 * ratio), pupil)
-    draw_circle(pos + Vector2(_scaled_radius(5 * ratio), -_scaled_radius(1 * ratio)), _scaled_radius(1.2 * ratio), pupil)
+    if not frightened:
+        var eye_white = Color.WHITE
+        var pupil = Color(0.0, 0.16, 0.62)
+        draw_circle(pos + Vector2(-_scaled_radius(4 * ratio), -_scaled_radius(2 * ratio)), _scaled_radius(3.0 * ratio), eye_white)
+        draw_circle(pos + Vector2(_scaled_radius(4 * ratio), -_scaled_radius(2 * ratio)), _scaled_radius(3.0 * ratio), eye_white)
+        draw_circle(pos + Vector2(-_scaled_radius(3 * ratio), -_scaled_radius(1 * ratio)), _scaled_radius(1.2 * ratio), pupil)
+        draw_circle(pos + Vector2(_scaled_radius(5 * ratio), -_scaled_radius(1 * ratio)), _scaled_radius(1.2 * ratio), pupil)
 
 func _draw_particles():
     for p in active_particles:
@@ -1107,8 +1117,15 @@ func _process_player(delta):
                 if pos.distance_to(Vector2(pickup["x"], pickup["y"])) < max(15.0, grid_cell_size * 0.45):
                     var pickup_pos = Vector2(pickup["x"], pickup["y"])
                     pickups.remove_at(j)
-                    spawn_particle_burst(pickup_pos, Color.YELLOW, 15)
-                    score += 10
+                    var is_power = pickup.get("power", false)
+                    if is_power:
+                        frightened_timer = frightened_duration
+                        frightened_chain_count = 0
+                        spawn_particle_burst(pickup_pos, Color(0.4, 0.6, 1.0), 30)
+                        score += 50
+                    else:
+                        spawn_particle_burst(pickup_pos, Color.YELLOW, 15)
+                        score += 10
                     send_ipc_message({"type": "score", "data": {"player": i + 1, "score": score}})
                     
                     if pickups.size() == 0:
@@ -1123,11 +1140,25 @@ func _get_degree(node_id: String) -> int:
     return deg
 
 func _process_enemies(delta):
+    var player_pos = Vector2.ZERO
+    var has_living_player = false
+    for p in players:
+        if p.get("alive", true):
+            player_pos = Vector2(p["x"], p["y"])
+            has_living_player = true
+            break
+            
     for i in range(enemies.size()):
         var e = enemies[i]
+        if e.get("eaten", false):
+            continue
         var pos = Vector2(e["x"], e["y"])
         var e_target_node_id = e.get("target_node_id", "")
         var e_current_node_id = e.get("current_node_id", "")
+        var is_frightened = frightened_timer > 0.0
+        var e_speed = e["speed"]
+        if is_frightened:
+            e_speed *= 0.55
         
         if e_target_node_id == "":
             var possible = []
@@ -1143,7 +1174,20 @@ func _process_enemies(delta):
                         if other_id != e.get("prev_node_id", "") or _get_degree(e_current_node_id) == 1:
                             possible.append(other_id)
             if possible.size() > 0:
-                e["target_node_id"] = possible[randi() % possible.size()]
+                if is_frightened and has_living_player and possible.size() > 1:
+                    # Flee: pick the neighbor FURTHEST from player
+                    var best_flee_id = possible[0]
+                    var best_flee_dist = -1.0
+                    for nid in possible:
+                        var nnode = _get_node(nid)
+                        if nnode:
+                            var nd = Vector2(nnode["x"], nnode["y"]).distance_to(player_pos)
+                            if nd > best_flee_dist:
+                                best_flee_dist = nd
+                                best_flee_id = nid
+                    e["target_node_id"] = best_flee_id
+                else:
+                    e["target_node_id"] = possible[randi() % possible.size()]
                 e_target_node_id = e["target_node_id"]
         
         if e_target_node_id != "":
@@ -1151,23 +1195,40 @@ func _process_enemies(delta):
             if target_node:
                 var target_pos = Vector2(target_node.get("x", 0), target_node.get("y", 0))
                 var move_vec = target_pos - pos
-                if move_vec.length() <= e["speed"] * delta:
+                if move_vec.length() <= e_speed * delta:
                     pos = target_pos
                     e["prev_node_id"] = e_current_node_id
                     e["current_node_id"] = e_target_node_id
                     e["target_node_id"] = ""
                 else:
-                    pos += move_vec.normalized() * e["speed"] * delta
+                    pos += move_vec.normalized() * e_speed * delta
         
         e["x"] = pos.x
         e["y"] = pos.y
         
         # Check collision with players
+        var catch_dist = max(20.0, grid_cell_size * 0.45)
         for j in range(players.size()):
             var p = players[j]
             if p.get("alive", true):
-                if pos.distance_to(Vector2(p["x"], p["y"])) < 20.0:
-                    _on_player_caught(j)
+                if pos.distance_to(Vector2(p["x"], p["y"])) < catch_dist:
+                    if is_frightened:
+                        # Eat the ghost!
+                        frightened_chain_count += 1
+                        var ghost_score = 200 * int(pow(2, min(frightened_chain_count - 1, 4)))
+                        score += ghost_score
+                        send_ipc_message({"type": "score", "data": {"player": j + 1, "score": score}})
+                        spawn_particle_burst(pos, Color(0.4, 0.6, 1.0), 25)
+                        # Respawn ghost at its original spawn
+                        if i < original_enemy_spawns.size():
+                            var sp = original_enemy_spawns[i]
+                            e["x"] = sp["x"]
+                            e["y"] = sp["y"]
+                            e["current_node_id"] = sp["id"]
+                            e["target_node_id"] = ""
+                            e["prev_node_id"] = ""
+                    else:
+                        _on_player_caught(j)
 
 func _on_player_caught(player_idx):
     var p = players[player_idx]
@@ -1192,6 +1253,8 @@ func _on_player_caught(player_idx):
 func _respawn_all():
     if lives <= 0: return
     game_state = "playing"
+    frightened_timer = 0.0
+    frightened_chain_count = 0
     
     for i in range(players.size()):
         if i < original_player_spawns.size():

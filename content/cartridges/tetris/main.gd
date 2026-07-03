@@ -510,13 +510,29 @@ func load_level():
     for x in range(grid_width):
         grid[x] = []
         grid[x].resize(grid_height)
+                
+            if invert_val:
+                hits_cell = not hits_cell
+                
+            if hits_cell and density_val < 1.0:
+                if randf() > density_val:
+                    hits_cell = false
+                    
+            temp_grid[x][y] = hits_cell
+            
+    for x in range(grid_width):
+        grid[x] = []
+        grid[x].resize(grid_height)
         for y in range(grid_height):
             var center = Vector2(x * BLOCK_SIZE + BLOCK_SIZE/2.0, y * BLOCK_SIZE + BLOCK_SIZE/2.0)
             var inside_well = true
             if well_polygon.size() > 2 and not Geometry2D.is_point_in_polygon(center, well_polygon):
                 inside_well = false
             if not inside_well:
-                grid[x][y] = null
+                if center.y < well_bounds.position.y:
+                    grid[x][y] = null
+                else:
+                    grid[x][y] = Color(0.0, 0.0, 0.0, 0.0)
                 continue
                 
             var is_blocked = temp_grid[x][y]
@@ -733,292 +749,6 @@ func try_rotate(p_idx: int, direction: int = 1):
             new_blocks.append(Vector2(-b.y, b.x))
     if is_valid_pos(piece.pos, new_blocks, p_idx):
         piece.blocks = new_blocks
-
-func is_valid_pos(pos: Vector2, blocks: Array, p_idx: int) -> bool:
-    for b in blocks:
-        var nx = int(pos.x + b.x)
-        var ny = int(pos.y + b.y)
-        if nx < 0 or nx >= grid_width:
-            return false
-        if ny >= grid_height:
-            return false
-            
-        if ny < 0:
-            if grid[nx][0] != null and grid[nx][0] == Color(0.1, 0.1, 0.1, 0.5):
-                return false
-        else:
-            if grid[nx][ny] != null:
-                return false
-                
-        # Check active collisions against other players' falling pieces
-        for other_p in range(num_players):
-            if other_p == p_idx: continue
-            var other = active_pieces[other_p]
-            if other == null or other.is_empty(): continue
-            if other.get("is_simulating", false): continue
-            for ob in other.blocks:
-                var onx = int(other.pos.x + ob.x)
-                var ony = int(other.pos.y + ob.y)
-                if nx == onx and ny == ony:
-                    return false
-    return true
-
-func get_closest_wall_segment(point: Vector2) -> Dictionary:
-    var min_dist = 999999.0
-    var closest_seg = {"a": Vector2.ZERO, "b": Vector2.ZERO, "dist": 999999.0}
-    if well_polygon.size() < 3:
-        return closest_seg
-    for i in range(well_polygon.size()):
-        var a = well_polygon[i]
-        var b = well_polygon[(i + 1) % well_polygon.size()]
-        var closest_pt = Geometry2D.get_closest_point_to_segment(point, a, b)
-        var d = point.distance_to(closest_pt)
-        if d < min_dist:
-            min_dist = d
-            closest_seg = {"a": a, "b": b, "dist": d}
-    return closest_seg
-
-func is_touching_awkward_wall(p_idx: int) -> bool:
-    var piece = active_pieces[p_idx]
-    if piece == null or piece.is_empty(): return false
-    for b in piece.blocks:
-        var block_pos = piece.pos + b
-        var center = (block_pos + Vector2(0.5, 0.5)) * BLOCK_SIZE
-        var seg = get_closest_wall_segment(center)
-        # Block size is 30. If center is within 45 pixels of a segment, it's touching
-        if seg.dist < 45.0:
-            var diff = seg.b - seg.a
-            # Awkward segment if it is not horizontal or vertical
-            if abs(diff.x) > 1.0 and abs(diff.y) > 1.0:
-                return true
-    return false
-
-func can_slide_on_obstacle(p_idx: int) -> bool:
-    var piece = active_pieces[p_idx]
-    if piece == null or piece.is_empty(): return false
-    for b in piece.blocks:
-        var nx = int(piece.pos.x + b.x)
-        var ny = int(piece.pos.y + b.y + 1) # Cell below the block
-        
-        if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
-            var cell = grid[nx][ny]
-            if cell != null and cell != Color(0.1, 0.1, 0.1, 0.5):
-                # This is a placed block (not wall, not empty). Cannot slide on it!
-                return false
-                
-        # Check other players' active pieces
-        for other_p in range(num_players):
-            if other_p == p_idx: continue
-            var other = active_pieces[other_p]
-            if other == null or other.is_empty(): continue
-            if other.get("is_simulating", false): continue
-            for ob in other.blocks:
-                var onx = int(other.pos.x + ob.x)
-                var ony = int(other.pos.y + ob.y)
-                if nx == onx and ny == ony:
-                    # Touched another player's falling piece. Cannot slide on it!
-                    return false
-    return true
-
-func start_simulation(p_idx: int):
-    var piece = active_pieces[p_idx]
-    piece.is_simulating = true
-    piece.sim_pos = piece.pos * BLOCK_SIZE
-    piece.sim_rot = 0.0
-    piece.sim_vel = down_direction * 150.0 # initial downward velocity in pixels/sec
-    # Spin slightly depending on which side is closer to the wall
-    piece.sim_rot_vel = randf_range(-2.0, 2.0)
-    piece.settle_time = 0.0
-
-func _process_simulating_piece(p_idx: int, delta: float):
-    var piece = active_pieces[p_idx]
-    if piece == null or piece.is_empty(): return
-    
-    var total_force = Vector2.ZERO
-    var total_torque = 0.0
-    var collision_count = 0
-    
-    # Calculate forces from each block
-    for b in piece.blocks:
-        var local_center = b * BLOCK_SIZE + Vector2(BLOCK_SIZE / 2.0, BLOCK_SIZE / 2.0)
-        var rotated_center = local_center.rotated(piece.sim_rot)
-        var pixel_pos = piece.sim_pos + rotated_center
-        
-        # 1. Collision with well_polygon
-        if well_polygon.size() > 2:
-            var inside = Geometry2D.is_point_in_polygon(pixel_pos, well_polygon)
-            if not inside:
-                var seg = get_closest_wall_segment(pixel_pos)
-                var closest_pt = Geometry2D.get_closest_point_to_segment(pixel_pos, seg.a, seg.b)
-                var pen = closest_pt - pixel_pos
-                if pen.length() > 0.1:
-                    total_force += pen * 3000.0
-                    total_torque += rotated_center.x * (pen.y * 3000.0) - rotated_center.y * (pen.x * 3000.0)
-                    collision_count += 1
-                    piece.sim_pos += pen * 0.3
-                    
-        # 2. Collision with placed grid cells
-        var gx = int(pixel_pos.x / BLOCK_SIZE)
-        var gy = int(pixel_pos.y / BLOCK_SIZE)
-        if gx >= 0 and gx < grid_width and gy >= 0 and gy < grid_height:
-            var cell = grid[gx][gy]
-            if cell != null and cell != Color(0.1, 0.1, 0.1, 0.5): # placed piece
-                var cell_center = Vector2(gx * BLOCK_SIZE + BLOCK_SIZE / 2.0, gy * BLOCK_SIZE + BLOCK_SIZE / 2.0)
-                var diff = pixel_pos - cell_center
-                if diff.length_squared() > 0:
-                    var abs_diff = Vector2(abs(diff.x), abs(diff.y))
-                    var pen_x = BLOCK_SIZE - abs_diff.x
-                    var pen_y = BLOCK_SIZE - abs_diff.y
-                    var pen = Vector2.ZERO
-                    if pen_x > 0 and pen_y > 0:
-                        if pen_x < pen_y:
-                            pen = Vector2(sign(diff.x) * pen_x, 0)
-                        else:
-                            pen = Vector2(0, sign(diff.y) * pen_y)
-                        total_force += pen * 3000.0
-                        total_torque += rotated_center.x * (pen.y * 3000.0) - rotated_center.y * (pen.x * 3000.0)
-                        collision_count += 1
-                        piece.sim_pos += pen * 0.3
-                        
-    # Apply gravity (approx. 500 pixels/sec^2)
-    var gravity = down_direction * 500.0
-    piece.sim_vel += gravity * delta
-    
-    # Apply collision forces and torques
-    piece.sim_vel += total_force * delta
-    piece.sim_rot_vel += total_torque * 0.00005 * delta
-    
-    # Damping
-    if collision_count > 0:
-        piece.sim_vel *= 0.85
-        piece.sim_rot_vel *= 0.85
-    else:
-        piece.sim_vel *= 0.98
-        piece.sim_rot_vel *= 0.98
-        
-    # Update position and rotation
-    piece.sim_pos += piece.sim_vel * delta
-    piece.sim_rot += piece.sim_rot_vel * delta
-    
-    # Keep simulation within screen bounds
-    piece.sim_pos.x = clamp(piece.sim_pos.x, 0.0, 1920.0)
-    piece.sim_pos.y = clamp(piece.sim_pos.y, -200.0, 1080.0)
-    
-    # Settle detection
-    if piece.sim_vel.length() < 15.0 and abs(piece.sim_rot_vel) < 0.5:
-        piece.settle_time += delta
-        if piece.settle_time >= 0.8:
-            lock_simulating_piece(p_idx)
-    else:
-        piece.settle_time = 0.0
-
-func find_nearest_empty_cell(gx: int, gy: int) -> Vector2:
-    if gx >= 0 and gx < grid_width and gy >= 0 and gy < grid_height:
-        if grid[gx][gy] == null:
-            return Vector2(gx, gy)
-            
-    # Search in expanding rings (radius 1 to 3)
-    for r in range(1, 4):
-        var best_cell = Vector2(-1, -1)
-        var min_d = 999999.0
-        var center_pixel = Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0)
-        
-        for dy in range(-r, r + 1):
-            for dx in range(-r, r + 1):
-                if abs(dx) != r and abs(dy) != r:
-                    continue
-                var nx = gx + dx
-                var ny = gy + dy
-                if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
-                    if grid[nx][ny] == null:
-                        var cell_pixel = Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0)
-                        var d = center_pixel.distance_to(cell_pixel)
-                        if d < min_d:
-                            min_d = d
-                            best_cell = Vector2(nx, ny)
-        if best_cell.x != -1:
-            return best_cell
-            
-    return Vector2(gx, gy) # Fallback
-
-func lock_simulating_piece(p_idx: int):
-    var piece = active_pieces[p_idx]
-    if piece == null or piece.is_empty(): return
-    
-    for b in piece.blocks:
-        var local_center = b * BLOCK_SIZE + Vector2(BLOCK_SIZE / 2.0, BLOCK_SIZE / 2.0)
-        var rotated_center = local_center.rotated(piece.sim_rot)
-        var pixel_pos = piece.sim_pos + rotated_center
-        
-        var gx = int(round(pixel_pos.x / BLOCK_SIZE))
-        var gy = int(round(pixel_pos.y / BLOCK_SIZE))
-        
-        gx = clamp(gx, 0, grid_width - 1)
-        gy = clamp(gy, 0, grid_height - 1)
-        
-        # Use robust search to find nearest empty cell if gy, gx is occupied or wall
-        if grid[gx][gy] != null:
-            var target_cell = find_nearest_empty_cell(gx, gy)
-            gx = int(target_cell.x)
-            gy = int(target_cell.y)
-            
-        grid[gx][gy] = piece.color
-        spawn_particle_burst(Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0), piece.color, 4)
-            
-    check_lines(p_idx)
-    spawn_piece(p_idx)
-
-func lock_piece(p_idx: int):
-    var piece = active_pieces[p_idx]
-    for b in piece.blocks:
-        var nx = int(piece.pos.x + b.x)
-        var ny = int(piece.pos.y + b.y)
-        if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
-            grid[nx][ny] = piece.color
-            spawn_particle_burst(Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0), piece.color, 4)
-        
-    check_lines(p_idx)
-    spawn_piece(p_idx)
-    
-func check_lines(p_idx: int):
-    var lines_cleared = 0
-    for y in range(grid_height):
-        var full = true
-        var has_playable = false
-        for x in range(grid_width):
-            if grid[x][y] == null:
-                full = false
-                break
-            if grid[x][y] != Color(0.1, 0.1, 0.1, 0.5):
-                has_playable = true
-                
-        if full and has_playable:
-            lines_cleared += 1
-            for x in range(grid_width):
-                if grid[x][y] != Color(0.1, 0.1, 0.1, 0.5) and grid[x][y] != null:
-                    spawn_particle_burst(Vector2(x * BLOCK_SIZE + BLOCK_SIZE/2.0, y * BLOCK_SIZE + BLOCK_SIZE/2.0), grid[x][y], 12)
-            for drop_y in range(y, 0, -1):
-                for x in range(grid_width):
-                    if grid[x][drop_y] != Color(0.1, 0.1, 0.1, 0.5):
-                        if grid[x][drop_y-1] != Color(0.1, 0.1, 0.1, 0.5):
-                            grid[x][drop_y] = grid[x][drop_y-1]
-                        else:
-                            grid[x][drop_y] = null
-            for x in range(grid_width):
-                if grid[x][0] != Color(0.1, 0.1, 0.1, 0.5):
-                    grid[x][0] = null
-                    
-    if lines_cleared > 0:
-        scores[p_idx] += lines_cleared * 100
-        send_ipc_message({"type": "score", "data": {"player": p_idx + 1, "score": scores[p_idx]}})
-
-func draw_glow_rect(rect: Rect2, color: Color):
-    if color == Color(0.1, 0.1, 0.1, 0.5):
-        if current_skin == "classic":
-            draw_rect(rect, Color(0.02, 0.02, 0.02, 1.0))
-        # For neon, do not draw the wall block at all, let the black background show
-        return
-        
     if current_skin == "classic":
         # Flat classic block with solid dark borders
         draw_rect(rect, color)
