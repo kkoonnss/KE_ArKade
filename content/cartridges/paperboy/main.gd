@@ -740,7 +740,15 @@ func _seed_barriers(count: int, classes: Array, hit_points: int):
 func _input(event):
     if _shared_menu_open():
         return
-    if event is InputEventKey and event.pressed and not event.echo:
+	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
+		if "game_state" in self and game_state != "playing":
+			if has_method("_reset_game"): _reset_game()
+			elif has_method("reset_game"): reset_game()
+		elif "state" in self and state != "playing":
+			if has_method("_reset_game"): _reset_game()
+			elif has_method("reset_game"): reset_game()
+
+	if event is InputEventKey and event.pressed and not event.echo:
         if event.keycode == KEY_F1:
             show_reference = not show_reference
         elif event.keycode == KEY_ENTER and game_state != "playing":

@@ -1,5 +1,5 @@
 extends Node2D
-var SharedLoader = (func(): var p = ProjectSettings.globalize_path("res://").path_join("../../../app/shared/shared_loader.gd").simplify_path(); var s = GDScript.new(); s.source_code = FileAccess.get_file_as_string(p); s.reload(); return s).call()
+
 var splash_rect: TextureRect
 var splash_timer: float = 2.0
 
@@ -13,7 +13,6 @@ var heartbeat_timer: float = 0.0
 var read_buffer: String = ""
 var prev_keys = {}
 var prev_joy_buttons = {}
-var prev_joy_axes = {}
 var active_particles = []
 
 # Container data
@@ -164,16 +163,12 @@ func _ready():
     
     tab_menu.register_knob_enum("organic_behavior", "Organic Behavior", "stick", ["stick", "slide", "tumble"], "Gameplay")
     tab_menu.register_knob_bool("show_outline", "Show Level Outline", true, "Gameplay")
-    tab_menu.register_knob_int("players", "Players", num_players, 1, 4, 1, "Gameplay")
     
     tab_menu.connect("knob_changed", Callable(self, "_on_knob_changed"))
     tab_menu.connect("action_triggered", Callable(self, "_on_menu_action"))
     
     tab_menu.setup("tetris", level_dir, "TETRIS")
-    var old_players = num_players
     _apply_settings_from_menu()
-    if num_players != old_players:
-        load_level()
 
     if screenshot_path != "":
         await get_tree().create_timer(2.35).timeout
@@ -186,28 +181,15 @@ func _apply_settings_from_menu():
     if tab_menu:
         settings["organic_behavior"] = str(tab_menu.get_knob_value("organic_behavior"))
         settings["show_outline"] = bool(tab_menu.get_knob_value("show_outline"))
-        num_players = int(tab_menu.get_knob_value("players"))
         show_debug_grid = bool(tab_menu.get_knob_value("show_debug_grid"))
         background_view = str(tab_menu.get_knob_value("background_view"))
         show_reference = bool(tab_menu.get_knob_value("reference"))
         reference_opacity = float(tab_menu.get_knob_value("reference_opacity"))
         secondary_photo_mix = float(tab_menu.get_knob_value("secondary_photo_mix"))
-    _apply_classic_level_defaults()
-
-func _is_classic_tetris_level() -> bool:
-    return level_dir.get_file() == "classic_tetris"
-
-func _apply_classic_level_defaults():
-    if not _is_classic_tetris_level():
-        return
-    show_reference = false
-    show_debug_grid = false
-    background_view = "final"
-    reference_opacity = 0.0
 
 func _on_knob_changed(knob_id: String, value):
     _apply_settings_from_menu()
-    if knob_id in ["invert", "fill", "grid_scale", "density", "bounds_clamp", "wall_width", "group_islands", "spawn_clearance", "players"]:
+    if knob_id in ["invert", "fill", "grid_scale", "density", "bounds_clamp", "wall_width", "group_islands", "spawn_clearance"]:
         load_level()
     queue_redraw()
 
@@ -275,6 +257,11 @@ func parse_simple_yaml(path: String) -> Dictionary:
             data[key] = val
     return data
 
+            if (val.begins_with("\"") and val.ends_with("\"")) or (val.begins_with("'") and val.ends_with("'")):
+                val = val.substr(1, val.length() - 2)
+            data[key] = val
+    return data
+
 
 func _process(delta):
     if splash_rect and splash_timer > 0:
@@ -290,18 +277,12 @@ func _process(delta):
             splash_rect.modulate.a = splash_timer
     _process_ipc(delta)
     if visible and well_polygon.size() > 0:
-        if tab_menu == null or tab_menu.overlay_mode == "":
-            _process_game(delta)
+        _process_game(delta)
         _process_particles(delta)
         queue_redraw()
 
 func _process_ipc(delta):
     if ipc_socket:
-        ipc_socket.poll()
-        if ipc_socket.get_status() == StreamPeerTCP.STATUS_CONNECTED:
-            var bytes_available = ipc_socket.get_available_bytes()
-            if bytes_available > 0:
-                var data = ipc_socket.get_string(bytes_available)
                 read_buffer += data
                 var lines = read_buffer.split("\n")
                 if lines.size() > 1:
@@ -344,16 +325,13 @@ func handle_ipc_message(msg_str: String):
 func load_level():
     if level_dir == "": return
     
-    var semantic_img: Image = null
+    # Calculate map dimensions from semantic_map.png
     var map_path = level_dir.path_join("semantic_map.png")
     if FileAccess.file_exists(map_path):
-        semantic_img = Image.load_from_file(map_path)
-        if semantic_img:
-            map_w = semantic_img.get_width()
-            map_h = semantic_img.get_height()
-
-    var classic_empty_well = _is_classic_tetris_level()
-    _apply_classic_level_defaults()
+        var img = Image.load_from_file(map_path)
+        if img:
+            map_w = img.get_width()
+            map_h = img.get_height()
             
     # Calculate scale factor and offset to center and fill screen (1920x1080)
     var viewport_size = get_viewport_rect().size
@@ -382,7 +360,7 @@ func load_level():
     well_polygon.clear()
     for p in layout.get("well_polygon", []):
         well_polygon.append(Vector2(p.x * scale_factor + offset_x, p.y * scale_factor + offset_y))
-            
+        
     if wall_width_val != 1.0 and well_polygon.size() > 2:
         var offset_px = (wall_width_val - 1.0) * -32.0 * scale_factor
         var offset_polys = Geometry2D.offset_polygon(well_polygon, offset_px)
@@ -434,21 +412,10 @@ func load_level():
                 continue
                 
             var hits_cell = false
-            if classic_empty_well:
-                hits_cell = false
-            elif semantic_img != null and map_center.x >= 0 and map_center.y >= 0 and map_center.x < semantic_img.get_width() and map_center.y < semantic_img.get_height():
-                var px_color = semantic_img.get_pixel(int(map_center.x), int(map_center.y))
-                # Cyan (0.0, 0.9, 1.0) is lane/empty space. Other colors are solid.
-                var cyan_dist = abs(px_color.r - 0.0) + abs(px_color.g - 0.9) + abs(px_color.b - 1.0)
-                if cyan_dist < 0.15:
-                    hits_cell = false
-                else:
+            for c in grid_cells:
+                if abs(c.x - map_center.x) < c_size/2.0 and abs(c.y - map_center.y) < c_size/2.0:
                     hits_cell = true
-            else:
-                for c in grid_cells:
-                    if abs(c.x - map_center.x) < c_size/2.0 and abs(c.y - map_center.y) < c_size/2.0:
-                        hits_cell = true
-                        break
+                    break
             col[y] = hits_cell
         temp_grid.append(col)
         
@@ -490,10 +457,6 @@ func load_level():
                 continue
                 
             var hits_cell = temp_grid[x][y]
-
-            if classic_empty_well:
-                temp_grid[x][y] = false
-                continue
             
             if center.y < clear_y_max:
                 hits_cell = false
@@ -510,6 +473,30 @@ func load_level():
     for x in range(grid_width):
         grid[x] = []
         grid[x].resize(grid_height)
+        for y in range(grid_height):
+            var center = Vector2(x * BLOCK_SIZE + BLOCK_SIZE/2.0, y * BLOCK_SIZE + BLOCK_SIZE/2.0)
+            var inside_well = true
+            if well_polygon.size() > 2 and not Geometry2D.is_point_in_polygon(center, well_polygon):
+        temp_grid = dilated
+        
+    var clear_y_max = well_bounds.position.y + well_bounds.size.y * spawn_clearance_val
+    for x in range(grid_width):
+        for y in range(grid_height):
+            var center = Vector2(x * BLOCK_SIZE + BLOCK_SIZE/2.0, y * BLOCK_SIZE + BLOCK_SIZE/2.0)
+            var inside_well = true
+            if well_polygon.size() > 2 and not Geometry2D.is_point_in_polygon(center, well_polygon):
+                inside_well = false
+            if not inside_well:
+                continue
+                
+            var hits_cell = temp_grid[x][y]
+
+            if classic_empty_well:
+                temp_grid[x][y] = false
+                continue
+            
+            if center.y < clear_y_max:
+                hits_cell = false
                 
             if invert_val:
                 hits_cell = not hits_cell
@@ -564,45 +551,6 @@ func load_level():
         fall_timers[p] = 0.0
         fall_speeds[p] = 0.5
         scores[p] = 0
-        active_pieces[p] = {}
-        spawn_piece(p)
-        
-    _build_collision_preview_texture()
-
-func _build_collision_preview_texture():
-    collision_preview_texture = null
-    if map_w <= 0 or map_h <= 0: return
-    var width = max(1, int(map_w))
-    var height = max(1, int(map_h))
-    var img = Image.create(width, height, false, Image.FORMAT_RGBA8)
-    img.fill(Color(0, 0, 0, 0))
-    
-    for x in range(grid_width):
-        for y in range(grid_height):
-            if grid[x][y] == Color(0.1, 0.1, 0.1, 0.5): # wall
-                var px = int(round((x * BLOCK_SIZE - offset_x) / scale_factor))
-                var py = int(round((y * BLOCK_SIZE - offset_y) / scale_factor))
-                var sz = int(round(BLOCK_SIZE / scale_factor))
-                var rect = Rect2i(px, py, sz, sz).intersection(Rect2i(0, 0, int(map_w), int(map_h)))
-                if rect.has_area():
-                    img.fill_rect(rect, Color(0.0, 0.95, 0.46, 0.18))
-                
-    collision_preview_texture = ImageTexture.create_from_image(img)
-
-func spawn_piece(p_idx: int):
-    var type = randi() % 7
-    # Distribute players horizontally from spawn lip
-    var offset_x = (p_idx - (num_players - 1) / 2.0) * 4
-    var spawn_x = clamp(int(spawn_lip.x / BLOCK_SIZE) + offset_x, 1, grid_width - 2)
-    
-    active_pieces[p_idx] = {
-        "blocks": SHAPES[type].duplicate(),
-        "color": COLORS[type],
-        "pos": Vector2(spawn_x, int(spawn_lip.y / BLOCK_SIZE))
-    }
-    
-    if not is_valid_pos(active_pieces[p_idx].pos, active_pieces[p_idx].blocks, p_idx):
-        # Game Over logic - just clear this player's blocks or the whole grid
         send_ipc_message({"type": "state", "data": {"status": "game_over", "player": p_idx + 1}})
         for x in range(grid_width):
             for y in range(grid_height):
@@ -619,66 +567,37 @@ func is_key_just_pressed(key: int) -> bool:
     return pressed and not was_pressed
 
 func is_joy_button_just_pressed(device: int, button: int) -> bool:
-    var joy_id = SharedLoader.get_joy_id(device)
-    if joy_id < 0:
-        return false
-    var pressed = Input.is_joy_button_pressed(joy_id, button)
+    var pressed = Input.is_joy_button_pressed(device, button)
     var key = "%d_%d" % [device, button]
     var was_pressed = prev_joy_buttons.get(key, false)
     prev_joy_buttons[key] = pressed
     return pressed and not was_pressed
 
-func is_joy_button_pressed(device: int, button: int) -> bool:
-    var joy_id = SharedLoader.get_joy_id(device)
-    if joy_id < 0:
-        return false
-    return Input.is_joy_button_pressed(joy_id, button)
-
-func is_joy_axis_just_pressed(device: int, axis: int, direction: float, threshold: float = 0.55) -> bool:
-    var joy_id = SharedLoader.get_joy_id(device)
-    if joy_id < 0:
-        return false
-    var pressed = Input.get_joy_axis(joy_id, axis) * direction > threshold
-    var key = "%d_%d_%d" % [device, axis, int(sign(direction))]
-    var was_pressed = prev_joy_axes.get(key, false)
-    prev_joy_axes[key] = pressed
-    return pressed and not was_pressed
-
-func is_joy_axis_pressed(device: int, axis: int, direction: float, threshold: float = 0.55) -> bool:
-    var joy_id = SharedLoader.get_joy_id(device)
-    if joy_id < 0:
-        return false
-    return Input.get_joy_axis(joy_id, axis) * direction > threshold
-
 func get_player_inputs(p_idx: int) -> Dictionary:
-    var inputs = {"left": false, "right": false, "rotate_left": false, "rotate_right": false, "down": false, "hard_drop": false}
+    var inputs = {"left": false, "right": false, "up": false, "down": false, "hard_drop": false}
     if p_idx == 0:
-        inputs.left = is_key_just_pressed(KEY_A) or is_joy_button_just_pressed(0, JOY_BUTTON_DPAD_LEFT) or is_joy_axis_just_pressed(0, JOY_AXIS_LEFT_X, -1.0)
-        inputs.right = is_key_just_pressed(KEY_D) or is_joy_button_just_pressed(0, JOY_BUTTON_DPAD_RIGHT) or is_joy_axis_just_pressed(0, JOY_AXIS_LEFT_X, 1.0)
-        inputs.rotate_left = is_key_just_pressed(KEY_Q) or is_key_just_pressed(KEY_Z) or is_joy_button_just_pressed(0, JOY_BUTTON_LEFT_SHOULDER) or is_joy_button_just_pressed(0, JOY_BUTTON_X)
-        inputs.rotate_right = is_key_just_pressed(KEY_W) or is_key_just_pressed(KEY_E) or is_joy_button_just_pressed(0, JOY_BUTTON_DPAD_UP) or is_joy_button_just_pressed(0, JOY_BUTTON_RIGHT_SHOULDER) or is_joy_button_just_pressed(0, JOY_BUTTON_A)
-        inputs.down = Input.is_key_pressed(KEY_S) or is_joy_button_pressed(0, JOY_BUTTON_DPAD_DOWN) or is_joy_axis_pressed(0, JOY_AXIS_LEFT_Y, 1.0)
+        inputs.left = is_key_just_pressed(KEY_A) or is_joy_button_just_pressed(0, JOY_BUTTON_DPAD_LEFT)
+        inputs.right = is_key_just_pressed(KEY_D) or is_joy_button_just_pressed(0, JOY_BUTTON_DPAD_RIGHT)
+        inputs.up = is_key_just_pressed(KEY_W) or is_joy_button_just_pressed(0, JOY_BUTTON_DPAD_UP) or is_joy_button_just_pressed(0, JOY_BUTTON_A)
+        inputs.down = Input.is_key_pressed(KEY_S) or Input.is_joy_button_pressed(0, JOY_BUTTON_DPAD_DOWN)
         inputs.hard_drop = is_key_just_pressed(KEY_SPACE) or is_joy_button_just_pressed(0, JOY_BUTTON_B)
     elif p_idx == 1:
-        inputs.left = is_key_just_pressed(KEY_LEFT) or is_joy_button_just_pressed(1, JOY_BUTTON_DPAD_LEFT) or is_joy_axis_just_pressed(1, JOY_AXIS_LEFT_X, -1.0)
-        inputs.right = is_key_just_pressed(KEY_RIGHT) or is_joy_button_just_pressed(1, JOY_BUTTON_DPAD_RIGHT) or is_joy_axis_just_pressed(1, JOY_AXIS_LEFT_X, 1.0)
-        inputs.rotate_left = is_key_just_pressed(KEY_COMMA) or is_joy_button_just_pressed(1, JOY_BUTTON_LEFT_SHOULDER) or is_joy_button_just_pressed(1, JOY_BUTTON_X)
-        inputs.rotate_right = is_key_just_pressed(KEY_UP) or is_key_just_pressed(KEY_PERIOD) or is_joy_button_just_pressed(1, JOY_BUTTON_DPAD_UP) or is_joy_button_just_pressed(1, JOY_BUTTON_RIGHT_SHOULDER) or is_joy_button_just_pressed(1, JOY_BUTTON_A)
-        inputs.down = Input.is_key_pressed(KEY_DOWN) or is_joy_button_pressed(1, JOY_BUTTON_DPAD_DOWN) or is_joy_axis_pressed(1, JOY_AXIS_LEFT_Y, 1.0)
+        inputs.left = is_key_just_pressed(KEY_LEFT) or is_joy_button_just_pressed(1, JOY_BUTTON_DPAD_LEFT)
+        inputs.right = is_key_just_pressed(KEY_RIGHT) or is_joy_button_just_pressed(1, JOY_BUTTON_DPAD_RIGHT)
+        inputs.up = is_key_just_pressed(KEY_UP) or is_joy_button_just_pressed(1, JOY_BUTTON_DPAD_UP) or is_joy_button_just_pressed(1, JOY_BUTTON_A)
+        inputs.down = Input.is_key_pressed(KEY_DOWN) or Input.is_joy_button_pressed(1, JOY_BUTTON_DPAD_DOWN)
         inputs.hard_drop = is_key_just_pressed(KEY_ENTER) or is_joy_button_just_pressed(1, JOY_BUTTON_B)
     elif p_idx == 2:
-        inputs.left = is_joy_button_just_pressed(2, JOY_BUTTON_DPAD_LEFT) or is_joy_axis_just_pressed(2, JOY_AXIS_LEFT_X, -1.0)
-        inputs.right = is_joy_button_just_pressed(2, JOY_BUTTON_DPAD_RIGHT) or is_joy_axis_just_pressed(2, JOY_AXIS_LEFT_X, 1.0)
-        inputs.rotate_left = is_joy_button_just_pressed(2, JOY_BUTTON_LEFT_SHOULDER) or is_joy_button_just_pressed(2, JOY_BUTTON_X)
-        inputs.rotate_right = is_joy_button_just_pressed(2, JOY_BUTTON_DPAD_UP) or is_joy_button_just_pressed(2, JOY_BUTTON_RIGHT_SHOULDER) or is_joy_button_just_pressed(2, JOY_BUTTON_A)
-        inputs.down = is_joy_button_pressed(2, JOY_BUTTON_DPAD_DOWN) or is_joy_axis_pressed(2, JOY_AXIS_LEFT_Y, 1.0)
+        inputs.left = is_joy_button_just_pressed(2, JOY_BUTTON_DPAD_LEFT)
+        inputs.right = is_joy_button_just_pressed(2, JOY_BUTTON_DPAD_RIGHT)
+        inputs.up = is_joy_button_just_pressed(2, JOY_BUTTON_DPAD_UP) or is_joy_button_just_pressed(2, JOY_BUTTON_A)
+        inputs.down = Input.is_joy_button_pressed(2, JOY_BUTTON_DPAD_DOWN)
         inputs.hard_drop = is_joy_button_just_pressed(2, JOY_BUTTON_B)
     elif p_idx == 3:
-        inputs.left = is_joy_button_just_pressed(3, JOY_BUTTON_DPAD_LEFT) or is_joy_axis_just_pressed(3, JOY_AXIS_LEFT_X, -1.0)
-        inputs.right = is_joy_button_just_pressed(3, JOY_BUTTON_DPAD_RIGHT) or is_joy_axis_just_pressed(3, JOY_AXIS_LEFT_X, 1.0)
-        inputs.rotate_left = is_joy_button_just_pressed(3, JOY_BUTTON_LEFT_SHOULDER) or is_joy_button_just_pressed(3, JOY_BUTTON_X)
-        inputs.rotate_right = is_joy_button_just_pressed(3, JOY_BUTTON_DPAD_UP) or is_joy_button_just_pressed(3, JOY_BUTTON_RIGHT_SHOULDER) or is_joy_button_just_pressed(3, JOY_BUTTON_A)
-        inputs.down = is_joy_button_pressed(3, JOY_BUTTON_DPAD_DOWN) or is_joy_axis_pressed(3, JOY_AXIS_LEFT_Y, 1.0)
+        inputs.left = is_joy_button_just_pressed(3, JOY_BUTTON_DPAD_LEFT)
+        inputs.right = is_joy_button_just_pressed(3, JOY_BUTTON_DPAD_RIGHT)
+        inputs.up = is_joy_button_just_pressed(3, JOY_BUTTON_DPAD_UP) or is_joy_button_just_pressed(3, JOY_BUTTON_A)
+        inputs.down = Input.is_joy_button_pressed(3, JOY_BUTTON_DPAD_DOWN)
         inputs.hard_drop = is_joy_button_just_pressed(3, JOY_BUTTON_B)
     return inputs
 
@@ -706,10 +625,8 @@ func _process_game(delta):
             try_move(p, Vector2(-1, 0))
         elif inputs.right:
             try_move(p, Vector2(1, 0))
-        elif inputs.rotate_left:
-            try_rotate(p, -1)
-        elif inputs.rotate_right:
-            try_rotate(p, 1)
+        elif inputs.up:
+            try_rotate(p)
             
         if settings["organic_behavior"] == "tumble" and is_touching_awkward_wall(p):
             start_simulation(p)
@@ -739,6 +656,76 @@ func try_move(p_idx: int, offset: Vector2) -> bool:
         return true
     return false
     
+func try_rotate(p_idx: int):
+    var piece = active_pieces[p_idx]
+    var new_blocks = []
+    for b in piece.blocks:
+        new_blocks.append(Vector2(-b.y, b.x))
+    if is_valid_pos(piece.pos, new_blocks, p_idx):
+        piece.blocks = new_blocks
+
+func is_valid_pos(pos: Vector2, blocks: Array, p_idx: int) -> bool:
+    for b in blocks:
+        var nx = int(pos.x + b.x)
+        var ny = int(pos.y + b.y)
+        if nx < 0 or nx >= grid_width:
+            return false
+        if ny >= grid_height:
+            return false
+            
+        if ny < 0:
+            if grid[nx][0] != null and grid[nx][0] == Color(0.1, 0.1, 0.1, 0.5):
+                return false
+        else:
+            if grid[nx][ny] != null:
+                return false
+                
+        # Check active collisions against other players' falling pieces
+        for other_p in range(num_players):
+            if other_p == p_idx: continue
+            var other = active_pieces[other_p]
+            if other == null or other.is_empty(): continue
+            if other.get("is_simulating", false): continue
+            for ob in other.blocks:
+                var onx = int(other.pos.x + ob.x)
+                var ony = int(other.pos.y + ob.y)
+                if nx == onx and ny == ony:
+                    return false
+    return true
+
+func get_closest_wall_segment(point: Vector2) -> Dictionary:
+    var min_dist = 999999.0
+    var closest_seg = {"a": Vector2.ZERO, "b": Vector2.ZERO, "dist": 999999.0}
+    if well_polygon.size() < 3:
+        return closest_seg
+    for i in range(well_polygon.size()):
+        var a = well_polygon[i]
+        var b = well_polygon[(i + 1) % well_polygon.size()]
+        var closest_pt = Geometry2D.get_closest_point_to_segment(point, a, b)
+        var d = point.distance_to(closest_pt)
+        if d < min_dist:
+            min_dist = d
+            closest_seg = {"a": a, "b": b, "dist": d}
+    return closest_seg
+
+func is_touching_awkward_wall(p_idx: int) -> bool:
+    var piece = active_pieces[p_idx]
+    if piece == null or piece.is_empty(): return false
+    for b in piece.blocks:
+        var block_pos = piece.pos + b
+        var center = (block_pos + Vector2(0.5, 0.5)) * BLOCK_SIZE
+        var seg = get_closest_wall_segment(center)
+        # Block size is 30. If center is within 45 pixels of a segment, it's touching
+        if seg.dist < 45.0:
+            var diff = seg.b - seg.a
+            # Awkward segment if it is not horizontal or vertical
+            if abs(diff.x) > 1.0 and abs(diff.y) > 1.0:
+    var piece = active_pieces[p_idx]
+    if is_valid_pos(piece.pos + offset, piece.blocks, p_idx):
+        piece.pos += offset
+        return true
+    return false
+    
 func try_rotate(p_idx: int, direction: int = 1):
     var piece = active_pieces[p_idx]
     var new_blocks = []
@@ -749,6 +736,1657 @@ func try_rotate(p_idx: int, direction: int = 1):
             new_blocks.append(Vector2(-b.y, b.x))
     if is_valid_pos(piece.pos, new_blocks, p_idx):
         piece.blocks = new_blocks
+
+func is_valid_pos(pos: Vector2, blocks: Array, p_idx: int) -> bool:
+    for b in blocks:
+        var nx = int(pos.x + b.x)
+        var ny = int(pos.y + b.y)
+        if nx < 0 or nx >= grid_width:
+            return false
+        if ny >= grid_height:
+            return false
+            
+        if ny < 0:
+            if grid[nx][0] != null and grid[nx][0] == Color(0.1, 0.1, 0.1, 0.5):
+                return false
+        else:
+            if grid[nx][ny] != null:
+                return false
+                
+        # Check active collisions against other players' falling pieces
+        for other_p in range(num_players):
+            if other_p == p_idx: continue
+            var other = active_pieces[other_p]
+            if other == null or other.is_empty(): continue
+            if other.get("is_simulating", false): continue
+            for ob in other.blocks:
+                var onx = int(other.pos.x + ob.x)
+                var ony = int(other.pos.y + ob.y)
+                if nx == onx and ny == ony:
+                    return false
+    return true
+
+func get_closest_wall_segment(point: Vector2) -> Dictionary:
+    var min_dist = 999999.0
+    var closest_seg = {"a": Vector2.ZERO, "b": Vector2.ZERO, "dist": 999999.0}
+    if well_polygon.size() < 3:
+        return closest_seg
+        var rotated_center = local_center.rotated(piece.sim_rot)
+        var pixel_pos = piece.sim_pos + rotated_center
+        
+        # 1. Collision with well_polygon
+        if well_polygon.size() > 2:
+            var inside = Geometry2D.is_point_in_polygon(pixel_pos, well_polygon)
+            if not inside:
+                var seg = get_closest_wall_segment(pixel_pos)
+                var closest_pt = Geometry2D.get_closest_point_to_segment(pixel_pos, seg.a, seg.b)
+                var pen = closest_pt - pixel_pos
+                if pen.length() > 0.1:
+                    total_force += pen * 3000.0
+                    total_torque += rotated_center.x * (pen.y * 3000.0) - rotated_center.y * (pen.x * 3000.0)
+                    collision_count += 1
+                    piece.sim_pos += pen * 0.3
+                    
+        # 2. Collision with placed grid cells
+        var gx = int(pixel_pos.x / BLOCK_SIZE)
+        var gy = int(pixel_pos.y / BLOCK_SIZE)
+        if gx >= 0 and gx < grid_width and gy >= 0 and gy < grid_height:
+            var cell = grid[gx][gy]
+            if cell != null and cell != Color(0.1, 0.1, 0.1, 0.5): # placed piece
+                var cell_center = Vector2(gx * BLOCK_SIZE + BLOCK_SIZE / 2.0, gy * BLOCK_SIZE + BLOCK_SIZE / 2.0)
+                var diff = pixel_pos - cell_center
+                if diff.length_squared() > 0:
+                    var abs_diff = Vector2(abs(diff.x), abs(diff.y))
+                    var pen_x = BLOCK_SIZE - abs_diff.x
+                    var pen_y = BLOCK_SIZE - abs_diff.y
+                    var pen = Vector2.ZERO
+                    if pen_x > 0 and pen_y > 0:
+        draw_rect(rect, color, false, 1.5)
+
+func draw_background_grid():
+    var grid_spacing = 80.0
+    var line_color = Color(1.0, 1.0, 1.0, 0.08) # thin white lattice
+    for x in range(0, 1920, int(grid_spacing)):
+        draw_line(Vector2(x, 0), Vector2(x, 1080), line_color, 1.0)
+    for y in range(0, 1080, int(grid_spacing)):
+        draw_line(Vector2(0, y), Vector2(1920, y), line_color, 1.0)
+
+func spawn_particle_burst(position: Vector2, color: Color, count: int = 15):
+    for j in range(count):
+        var angle = randf() * PI * 2.0
+        var speed = randf_range(50.0, 250.0)
+        active_particles.append({
+            "pos": position,
+            "vel": Vector2(cos(angle), sin(angle)) * speed,
+            "color": color,
+            "life": 0.4,
+            "max_life": 0.4
+        })
+
+func _process_particles(delta):
+    for j in range(active_particles.size() - 1, -1, -1):
+        var p = active_particles[j]
+        p.pos += p.vel * delta
+        p.life -= delta
+        if p.life <= 0.0:
+            active_particles.remove_at(j)
+
+func _draw():
+    if show_background and background_texture:
+        # Scale background photo rect to map_w * scale_factor and map_h * scale_factor centered at (offset_x, offset_y)
+        draw_texture_rect(background_texture, Rect2(offset_x, offset_y, map_w * scale_factor, map_h * scale_factor), false, Color(1, 1, 1, background_opacity))
+    
+    if settings.get("show_grid", true):
+        # Draw Background Grid
+        draw_background_grid()
+        
+    # Draw Grid Blocks
+    for x in range(grid_width):
+        for y in range(grid_height):
+            if grid[x][y] != null:
+                var rect = Rect2(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE-2, BLOCK_SIZE-2)
+                draw_glow_rect(rect, grid[x][y])
+                
+    # Draw Active Pieces for all players
+    for p in range(num_players):
+        if p >= active_pieces.size(): continue
+        if grid[gx][gy] == null:
+            return Vector2(gx, gy)
+            
+    # Search in expanding rings (radius 1 to 3)
+    for r in range(1, 4):
+        var best_cell = Vector2(-1, -1)
+        var min_d = 999999.0
+        var center_pixel = Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0)
+        
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                if abs(dx) != r and abs(dy) != r:
+                    continue
+                var nx = gx + dx
+                var ny = gy + dy
+                if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
+                    if grid[nx][ny] == null:
+                        var cell_pixel = Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0)
+                        var d = center_pixel.distance_to(cell_pixel)
+                        if d < min_d:
+                            min_d = d
+                            best_cell = Vector2(nx, ny)
+        if best_cell.x != -1:
+            return best_cell
+            
+    return Vector2(gx, gy) # Fallback
+
+func lock_simulating_piece(p_idx: int):
+    var piece = active_pieces[p_idx]
+    if piece == null or piece.is_empty(): return
+    
+    for b in piece.blocks:
+        var local_center = b * BLOCK_SIZE + Vector2(BLOCK_SIZE / 2.0, BLOCK_SIZE / 2.0)
+        var rotated_center = local_center.rotated(piece.sim_rot)
+        var pixel_pos = piece.sim_pos + rotated_center
+        
+        var gx = int(round(pixel_pos.x / BLOCK_SIZE))
+        var gy = int(round(pixel_pos.y / BLOCK_SIZE))
+        
+        gx = clamp(gx, 0, grid_width - 1)
+        gy = clamp(gy, 0, grid_height - 1)
+        
+        # Use robust search to find nearest empty cell if gy, gx is occupied or wall
+        if grid[gx][gy] != null:
+            var target_cell = find_nearest_empty_cell(gx, gy)
+            gx = int(target_cell.x)
+            gy = int(target_cell.y)
+            
+        grid[gx][gy] = piece.color
+        spawn_particle_burst(Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0), piece.color, 4)
+            
+    check_lines(p_idx)
+    spawn_piece(p_idx)
+
+func lock_piece(p_idx: int):
+    var piece = active_pieces[p_idx]
+    for b in piece.blocks:
+        var nx = int(piece.pos.x + b.x)
+        var ny = int(piece.pos.y + b.y)
+        if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
+            grid[nx][ny] = piece.color
+            spawn_particle_burst(Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0), piece.color, 4)
+        
+    check_lines(p_idx)
+    spawn_piece(p_idx)
+    
+func check_lines(p_idx: int):
+    var lines_cleared = 0
+    for y in range(grid_height):
+        var full = true
+        var has_playable = false
+        for x in range(grid_width):
+            if grid[x][y] == null:
+                full = false
+                break
+            if grid[x][y] != Color(0.1, 0.1, 0.1, 0.5):
+                has_playable = true
+                
+        if full and has_playable:
+            lines_cleared += 1
+            for x in range(grid_width):
+                if grid[x][y] != Color(0.1, 0.1, 0.1, 0.5) and grid[x][y] != null:
+                    spawn_particle_burst(Vector2(x * BLOCK_SIZE + BLOCK_SIZE/2.0, y * BLOCK_SIZE + BLOCK_SIZE/2.0), grid[x][y], 12)
+            for drop_y in range(y, 0, -1):
+                for x in range(grid_width):
+                    if grid[x][drop_y] != Color(0.1, 0.1, 0.1, 0.5):
+                        if grid[x][drop_y-1] != Color(0.1, 0.1, 0.1, 0.5):
+                            grid[x][drop_y] = grid[x][drop_y-1]
+                        else:
+                            grid[x][drop_y] = null
+            for x in range(grid_width):
+                if grid[x][0] != Color(0.1, 0.1, 0.1, 0.5):
+                    grid[x][0] = null
+                    
+    if lines_cleared > 0:
+        scores[p_idx] += lines_cleared * 100
+        send_ipc_message({"type": "score", "data": {"player": p_idx + 1, "score": scores[p_idx]}})
+
+func draw_glow_rect(rect: Rect2, color: Color):
+    if color == Color(0.0, 0.0, 0.0, 0.0):
+        return
+    if color == Color(0.1, 0.1, 0.1, 0.5):
+        if current_skin == "classic":
+            draw_rect(rect, Color(0.02, 0.02, 0.02, 1.0))
+        # For neon, do not draw the wall block at all, let the black background show
+        return
+        
+    if current_skin == "classic":
+        # Flat classic block with solid dark borders
+        draw_rect(rect, color)
+        draw_rect(rect, Color.BLACK, false, 2.0)
+    else:
+        # Neon glowing translucent block: saturated translucent fill, 1px neon edge, punchy soft glow
+        # Soft glow: drop-shadow (draw a slightly larger rect with low opacity)
+        draw_rect(Rect2(rect.position - Vector2(4, 4), rect.size + Vector2(8, 8)), Color(color.r, color.g, color.b, 0.4), false, 4.0)
+        # Translucent fill (35% to read its color on black)
+        draw_rect(rect, Color(color.r, color.g, color.b, 0.35))
+        # 1px neon edge
+        draw_rect(rect, color, false, 1.5)
+
+func draw_background_grid():
+    var grid_spacing = 80.0
+    var line_color = Color(1.0, 1.0, 1.0, 0.08) # thin white lattice
+    for x in range(0, 1920, int(grid_spacing)):
+        draw_line(Vector2(x, 0), Vector2(x, 1080), line_color, 1.0)
+    for y in range(0, 1080, int(grid_spacing)):
+        draw_line(Vector2(0, y), Vector2(1920, y), line_color, 1.0)
+
+func spawn_particle_burst(position: Vector2, color: Color, count: int = 15):
+    for j in range(count):
+        var angle = randf() * PI * 2.0
+        var speed = randf_range(50.0, 250.0)
+        active_particles.append({
+            "pos": position,
+            "vel": Vector2(cos(angle), sin(angle)) * speed,
+            "color": color,
+            "life": 0.4,
+            "max_life": 0.4
+        })
+
+func _process_particles(delta):
+    for j in range(active_particles.size() - 1, -1, -1):
+        var p = active_particles[j]
+        p.pos += p.vel * delta
+        p.life -= delta
+        if p.life <= 0.0:
+            active_particles.remove_at(j)
+
+func _draw_background_layer():
+    if not show_reference:
+        return
+    var tex: Texture2D = null
+            for drop_y in range(y, 0, -1):
+                for x in range(grid_width):
+                    if grid[x][drop_y] != Color(0.1, 0.1, 0.1, 0.5):
+                        if grid[x][drop_y-1] != Color(0.1, 0.1, 0.1, 0.5):
+                            grid[x][drop_y] = grid[x][drop_y-1]
+                        else:
+                            grid[x][drop_y] = null
+            for x in range(grid_width):
+                if grid[x][0] != Color(0.1, 0.1, 0.1, 0.5):
+                    grid[x][0] = null
+                    
+    if lines_cleared > 0:
+        scores[p_idx] += lines_cleared * 100
+        send_ipc_message({"type": "score", "data": {"player": p_idx + 1, "score": scores[p_idx]}})
+
+func draw_glow_rect(rect: Rect2, color: Color):
+    if color == Color(0.1, 0.1, 0.1, 0.5):
+        if current_skin == "classic":
+            draw_rect(rect, Color(0.02, 0.02, 0.02, 1.0))
+        # For neon, do not draw the wall block at all, let the black background show
+        return
+        
+        else:
+            if grid[nx][ny] != null:
+                return false
+                
+        # Check active collisions against other players' falling pieces
+        for other_p in range(num_players):
+            if other_p == p_idx: continue
+            var other = active_pieces[other_p]
+            if other == null or other.is_empty(): continue
+            if other.get("is_simulating", false): continue
+            for ob in other.blocks:
+                var onx = int(other.pos.x + ob.x)
+                var ony = int(other.pos.y + ob.y)
+                if nx == onx and ny == ony:
+                    return false
+    return true
+
+func get_closest_wall_segment(point: Vector2) -> Dictionary:
+    var min_dist = 999999.0
+    var closest_seg = {"a": Vector2.ZERO, "b": Vector2.ZERO, "dist": 999999.0}
+    if well_polygon.size() < 3:
+        return closest_seg
+        var rotated_center = local_center.rotated(piece.sim_rot)
+        var pixel_pos = piece.sim_pos + rotated_center
+        
+        # 1. Collision with well_polygon
+        if well_polygon.size() > 2:
+            var inside = Geometry2D.is_point_in_polygon(pixel_pos, well_polygon)
+            if not inside:
+                var seg = get_closest_wall_segment(pixel_pos)
+                var closest_pt = Geometry2D.get_closest_point_to_segment(pixel_pos, seg.a, seg.b)
+                var pen = closest_pt - pixel_pos
+                if pen.length() > 0.1:
+                    total_force += pen * 3000.0
+                    total_torque += rotated_center.x * (pen.y * 3000.0) - rotated_center.y * (pen.x * 3000.0)
+                    collision_count += 1
+                    piece.sim_pos += pen * 0.3
+                    
+        # 2. Collision with placed grid cells
+        var gx = int(pixel_pos.x / BLOCK_SIZE)
+        var gy = int(pixel_pos.y / BLOCK_SIZE)
+        if gx >= 0 and gx < grid_width and gy >= 0 and gy < grid_height:
+            var cell = grid[gx][gy]
+            if cell != null and cell != Color(0.1, 0.1, 0.1, 0.5): # placed piece
+                var cell_center = Vector2(gx * BLOCK_SIZE + BLOCK_SIZE / 2.0, gy * BLOCK_SIZE + BLOCK_SIZE / 2.0)
+                var diff = pixel_pos - cell_center
+                if diff.length_squared() > 0:
+                    var abs_diff = Vector2(abs(diff.x), abs(diff.y))
+                    var pen_x = BLOCK_SIZE - abs_diff.x
+                    var pen_y = BLOCK_SIZE - abs_diff.y
+                    var pen = Vector2.ZERO
+                    if pen_x > 0 and pen_y > 0:
+        draw_rect(rect, color, false, 1.5)
+
+func draw_background_grid():
+    var grid_spacing = 80.0
+    var line_color = Color(1.0, 1.0, 1.0, 0.08) # thin white lattice
+    for x in range(0, 1920, int(grid_spacing)):
+        draw_line(Vector2(x, 0), Vector2(x, 1080), line_color, 1.0)
+    for y in range(0, 1080, int(grid_spacing)):
+        draw_line(Vector2(0, y), Vector2(1920, y), line_color, 1.0)
+
+func spawn_particle_burst(position: Vector2, color: Color, count: int = 15):
+    for j in range(count):
+        var angle = randf() * PI * 2.0
+        var speed = randf_range(50.0, 250.0)
+        active_particles.append({
+            "pos": position,
+            "vel": Vector2(cos(angle), sin(angle)) * speed,
+            "color": color,
+            "life": 0.4,
+            "max_life": 0.4
+        })
+
+func _process_particles(delta):
+    for j in range(active_particles.size() - 1, -1, -1):
+        var p = active_particles[j]
+        p.pos += p.vel * delta
+        p.life -= delta
+        if p.life <= 0.0:
+            active_particles.remove_at(j)
+
+func _draw():
+    if show_background and background_texture:
+        # Scale background photo rect to map_w * scale_factor and map_h * scale_factor centered at (offset_x, offset_y)
+        draw_texture_rect(background_texture, Rect2(offset_x, offset_y, map_w * scale_factor, map_h * scale_factor), false, Color(1, 1, 1, background_opacity))
+    
+    if settings.get("show_grid", true):
+        # Draw Background Grid
+        draw_background_grid()
+        
+    # Draw Grid Blocks
+    for x in range(grid_width):
+        for y in range(grid_height):
+            if grid[x][y] != null:
+                var rect = Rect2(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE-2, BLOCK_SIZE-2)
+                draw_glow_rect(rect, grid[x][y])
+                
+    # Draw Active Pieces for all players
+    for p in range(num_players):
+        if p >= active_pieces.size(): continue
+        if grid[gx][gy] == null:
+            return Vector2(gx, gy)
+            
+    # Search in expanding rings (radius 1 to 3)
+    for r in range(1, 4):
+        var best_cell = Vector2(-1, -1)
+        var min_d = 999999.0
+        var center_pixel = Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0)
+        
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                if abs(dx) != r and abs(dy) != r:
+                    continue
+                var nx = gx + dx
+                var ny = gy + dy
+                if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
+                    if grid[nx][ny] == null:
+                        var cell_pixel = Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0)
+                        var d = center_pixel.distance_to(cell_pixel)
+                        if d < min_d:
+                            min_d = d
+                            best_cell = Vector2(nx, ny)
+        if best_cell.x != -1:
+            return best_cell
+            
+    return Vector2(gx, gy) # Fallback
+
+func lock_simulating_piece(p_idx: int):
+    var piece = active_pieces[p_idx]
+    if piece == null or piece.is_empty(): return
+    
+    for b in piece.blocks:
+        var local_center = b * BLOCK_SIZE + Vector2(BLOCK_SIZE / 2.0, BLOCK_SIZE / 2.0)
+        var rotated_center = local_center.rotated(piece.sim_rot)
+        var pixel_pos = piece.sim_pos + rotated_center
+        
+        var gx = int(round(pixel_pos.x / BLOCK_SIZE))
+        var gy = int(round(pixel_pos.y / BLOCK_SIZE))
+        
+        gx = clamp(gx, 0, grid_width - 1)
+        gy = clamp(gy, 0, grid_height - 1)
+        
+        # Use robust search to find nearest empty cell if gy, gx is occupied or wall
+        if grid[gx][gy] != null:
+            var target_cell = find_nearest_empty_cell(gx, gy)
+            gx = int(target_cell.x)
+            gy = int(target_cell.y)
+            
+        grid[gx][gy] = piece.color
+        spawn_particle_burst(Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0), piece.color, 4)
+            
+    check_lines(p_idx)
+    spawn_piece(p_idx)
+
+func lock_piece(p_idx: int):
+    var piece = active_pieces[p_idx]
+    for b in piece.blocks:
+        var nx = int(piece.pos.x + b.x)
+        var ny = int(piece.pos.y + b.y)
+        if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
+            grid[nx][ny] = piece.color
+            spawn_particle_burst(Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0), piece.color, 4)
+        
+    check_lines(p_idx)
+    spawn_piece(p_idx)
+    
+func check_lines(p_idx: int):
+    var lines_cleared = 0
+    for y in range(grid_height):
+        var full = true
+        var has_playable = false
+        for x in range(grid_width):
+            if grid[x][y] == null:
+                full = false
+                break
+            if grid[x][y] != Color(0.1, 0.1, 0.1, 0.5):
+                has_playable = true
+                
+        if full and has_playable:
+            lines_cleared += 1
+            for x in range(grid_width):
+                if grid[x][y] != Color(0.1, 0.1, 0.1, 0.5) and grid[x][y] != null:
+                    spawn_particle_burst(Vector2(x * BLOCK_SIZE + BLOCK_SIZE/2.0, y * BLOCK_SIZE + BLOCK_SIZE/2.0), grid[x][y], 12)
+            for drop_y in range(y, 0, -1):
+                for x in range(grid_width):
+                    if grid[x][drop_y] != Color(0.1, 0.1, 0.1, 0.5):
+                        if grid[x][drop_y-1] != Color(0.1, 0.1, 0.1, 0.5):
+                            grid[x][drop_y] = grid[x][drop_y-1]
+                        else:
+                            grid[x][drop_y] = null
+            for x in range(grid_width):
+                if grid[x][0] != Color(0.1, 0.1, 0.1, 0.5):
+                    grid[x][0] = null
+                    
+    if lines_cleared > 0:
+        scores[p_idx] += lines_cleared * 100
+        send_ipc_message({"type": "score", "data": {"player": p_idx + 1, "score": scores[p_idx]}})
+
+func draw_glow_rect(rect: Rect2, color: Color):
+    if color == Color(0.0, 0.0, 0.0, 0.0):
+        return
+    if color == Color(0.1, 0.1, 0.1, 0.5):
+        if current_skin == "classic":
+            draw_rect(rect, Color(0.02, 0.02, 0.02, 1.0))
+        # For neon, do not draw the wall block at all, let the black background show
+        return
+        
+    if current_skin == "classic":
+        # Flat classic block with solid dark borders
+        draw_rect(rect, color)
+        draw_rect(rect, Color.BLACK, false, 2.0)
+    else:
+        # Neon glowing translucent block: saturated translucent fill, 1px neon edge, punchy soft glow
+        # Soft glow: drop-shadow (draw a slightly larger rect with low opacity)
+        draw_rect(Rect2(rect.position - Vector2(4, 4), rect.size + Vector2(8, 8)), Color(color.r, color.g, color.b, 0.4), false, 4.0)
+        # Translucent fill (35% to read its color on black)
+        draw_rect(rect, Color(color.r, color.g, color.b, 0.35))
+        # 1px neon edge
+        draw_rect(rect, color, false, 1.5)
+
+func draw_background_grid():
+    var grid_spacing = 80.0
+    var line_color = Color(1.0, 1.0, 1.0, 0.08) # thin white lattice
+    for x in range(0, 1920, int(grid_spacing)):
+        draw_line(Vector2(x, 0), Vector2(x, 1080), line_color, 1.0)
+    for y in range(0, 1080, int(grid_spacing)):
+        draw_line(Vector2(0, y), Vector2(1920, y), line_color, 1.0)
+
+func spawn_particle_burst(position: Vector2, color: Color, count: int = 15):
+    for j in range(count):
+        var angle = randf() * PI * 2.0
+        var speed = randf_range(50.0, 250.0)
+        active_particles.append({
+            "pos": position,
+            "vel": Vector2(cos(angle), sin(angle)) * speed,
+            "color": color,
+            "life": 0.4,
+            "max_life": 0.4
+        })
+
+func _process_particles(delta):
+    for j in range(active_particles.size() - 1, -1, -1):
+        var p = active_particles[j]
+        p.pos += p.vel * delta
+        p.life -= delta
+        if p.life <= 0.0:
+            active_particles.remove_at(j)
+
+func _draw_background_layer():
+    if not show_reference:
+        return
+    var tex: Texture2D = null
+            for drop_y in range(y, 0, -1):
+                for x in range(grid_width):
+                    if grid[x][drop_y] != Color(0.1, 0.1, 0.1, 0.5):
+                        if grid[x][drop_y-1] != Color(0.1, 0.1, 0.1, 0.5):
+                            grid[x][drop_y] = grid[x][drop_y-1]
+                        else:
+                            grid[x][drop_y] = null
+            for x in range(grid_width):
+                if grid[x][0] != Color(0.1, 0.1, 0.1, 0.5):
+                    grid[x][0] = null
+                    
+    if lines_cleared > 0:
+        scores[p_idx] += lines_cleared * 100
+        send_ipc_message({"type": "score", "data": {"player": p_idx + 1, "score": scores[p_idx]}})
+
+func draw_glow_rect(rect: Rect2, color: Color):
+    if color == Color(0.1, 0.1, 0.1, 0.5):
+        if current_skin == "classic":
+            draw_rect(rect, Color(0.02, 0.02, 0.02, 1.0))
+        # For neon, do not draw the wall block at all, let the black background show
+        return
+        
+    if gx >= 0 and gx < grid_width and gy >= 0 and gy < grid_height:
+        if grid[gx][gy] == null:
+            return Vector2(gx, gy)
+            
+    # Search in expanding rings (radius 1 to 3)
+    for r in range(1, 4):
+        var best_cell = Vector2(-1, -1)
+        var min_d = 999999.0
+        var center_pixel = Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0)
+        
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                if abs(dx) != r and abs(dy) != r:
+                    continue
+                var nx = gx + dx
+                var ny = gy + dy
+                if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
+                    if grid[nx][ny] == null:
+                        var cell_pixel = Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0)
+                        var d = center_pixel.distance_to(cell_pixel)
+                        if d < min_d:
+                            min_d = d
+                            best_cell = Vector2(nx, ny)
+        if best_cell.x != -1:
+            return best_cell
+            
+    return Vector2(gx, gy) # Fallback
+
+func lock_simulating_piece(p_idx: int):
+    var piece = active_pieces[p_idx]
+    if piece == null or piece.is_empty(): return
+    
+    for b in piece.blocks:
+        var local_center = b * BLOCK_SIZE + Vector2(BLOCK_SIZE / 2.0, BLOCK_SIZE / 2.0)
+        var rotated_center = local_center.rotated(piece.sim_rot)
+        var pixel_pos = piece.sim_pos + rotated_center
+        
+        var gx = int(round(pixel_pos.x / BLOCK_SIZE))
+        var gy = int(round(pixel_pos.y / BLOCK_SIZE))
+        
+        gx = clamp(gx, 0, grid_width - 1)
+        gy = clamp(gy, 0, grid_height - 1)
+        
+        # Use robust search to find nearest empty cell if gy, gx is occupied or wall
+        if grid[gx][gy] != null:
+            var target_cell = find_nearest_empty_cell(gx, gy)
+            gx = int(target_cell.x)
+            gy = int(target_cell.y)
+            
+        draw_rect(rect, color, false, 1.5)
+
+func draw_background_grid():
+    var grid_spacing = 80.0
+    var line_color = Color(1.0, 1.0, 1.0, 0.08) # thin white lattice
+    for x in range(0, 1920, int(grid_spacing)):
+        draw_line(Vector2(x, 0), Vector2(x, 1080), line_color, 1.0)
+    for y in range(0, 1080, int(grid_spacing)):
+        draw_line(Vector2(0, y), Vector2(1920, y), line_color, 1.0)
+
+func spawn_particle_burst(position: Vector2, color: Color, count: int = 15):
+    for j in range(count):
+        var angle = randf() * PI * 2.0
+        var speed = randf_range(50.0, 250.0)
+        active_particles.append({
+            "pos": position,
+            "vel": Vector2(cos(angle), sin(angle)) * speed,
+            "color": color,
+            "life": 0.4,
+            "max_life": 0.4
+        })
+
+func _process_particles(delta):
+    for j in range(active_particles.size() - 1, -1, -1):
+        var p = active_particles[j]
+        p.pos += p.vel * delta
+        p.life -= delta
+        if p.life <= 0.0:
+            active_particles.remove_at(j)
+
+func _draw():
+    if show_background and background_texture:
+        # Scale background photo rect to map_w * scale_factor and map_h * scale_factor centered at (offset_x, offset_y)
+        draw_texture_rect(background_texture, Rect2(offset_x, offset_y, map_w * scale_factor, map_h * scale_factor), false, Color(1, 1, 1, background_opacity))
+    
+    if settings.get("show_grid", true):
+        # Draw Background Grid
+        draw_background_grid()
+        
+    # Draw Grid Blocks
+    for x in range(grid_width):
+        for y in range(grid_height):
+            if grid[x][y] != null:
+                var rect = Rect2(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE-2, BLOCK_SIZE-2)
+                draw_glow_rect(rect, grid[x][y])
+                
+    # Draw Active Pieces for all players
+    for p in range(num_players):
+        if p >= active_pieces.size(): continue
+        if grid[gx][gy] == null:
+            return Vector2(gx, gy)
+            
+    # Search in expanding rings (radius 1 to 3)
+    for r in range(1, 4):
+        var best_cell = Vector2(-1, -1)
+        var min_d = 999999.0
+        var center_pixel = Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0)
+        
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                if abs(dx) != r and abs(dy) != r:
+                    continue
+                var nx = gx + dx
+                var ny = gy + dy
+                if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
+                    if grid[nx][ny] == null:
+                        var cell_pixel = Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0)
+                        var d = center_pixel.distance_to(cell_pixel)
+                        if d < min_d:
+                            min_d = d
+                            best_cell = Vector2(nx, ny)
+        if best_cell.x != -1:
+            return best_cell
+            
+    return Vector2(gx, gy) # Fallback
+
+func lock_simulating_piece(p_idx: int):
+    var piece = active_pieces[p_idx]
+    if piece == null or piece.is_empty(): return
+    
+    for b in piece.blocks:
+        var local_center = b * BLOCK_SIZE + Vector2(BLOCK_SIZE / 2.0, BLOCK_SIZE / 2.0)
+        var rotated_center = local_center.rotated(piece.sim_rot)
+        var pixel_pos = piece.sim_pos + rotated_center
+        
+        var gx = int(round(pixel_pos.x / BLOCK_SIZE))
+        var gy = int(round(pixel_pos.y / BLOCK_SIZE))
+        
+        gx = clamp(gx, 0, grid_width - 1)
+        gy = clamp(gy, 0, grid_height - 1)
+        
+        # Use robust search to find nearest empty cell if gy, gx is occupied or wall
+        if grid[gx][gy] != null:
+            var target_cell = find_nearest_empty_cell(gx, gy)
+            gx = int(target_cell.x)
+            gy = int(target_cell.y)
+            
+        grid[gx][gy] = piece.color
+        spawn_particle_burst(Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0), piece.color, 4)
+            
+    check_lines(p_idx)
+    spawn_piece(p_idx)
+
+func lock_piece(p_idx: int):
+    var piece = active_pieces[p_idx]
+    for b in piece.blocks:
+        var nx = int(piece.pos.x + b.x)
+        var ny = int(piece.pos.y + b.y)
+        if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
+            grid[nx][ny] = piece.color
+            spawn_particle_burst(Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0), piece.color, 4)
+        
+    check_lines(p_idx)
+    spawn_piece(p_idx)
+    
+func check_lines(p_idx: int):
+    var lines_cleared = 0
+    for y in range(grid_height):
+        var full = true
+        var has_playable = false
+        for x in range(grid_width):
+            if grid[x][y] == null:
+                full = false
+                break
+            if grid[x][y] != Color(0.1, 0.1, 0.1, 0.5):
+                has_playable = true
+                
+        if full and has_playable:
+            lines_cleared += 1
+            for x in range(grid_width):
+                if grid[x][y] != Color(0.1, 0.1, 0.1, 0.5) and grid[x][y] != null:
+                    spawn_particle_burst(Vector2(x * BLOCK_SIZE + BLOCK_SIZE/2.0, y * BLOCK_SIZE + BLOCK_SIZE/2.0), grid[x][y], 12)
+            for drop_y in range(y, 0, -1):
+                for x in range(grid_width):
+                    if grid[x][drop_y] != Color(0.1, 0.1, 0.1, 0.5):
+                        if grid[x][drop_y-1] != Color(0.1, 0.1, 0.1, 0.5):
+                            grid[x][drop_y] = grid[x][drop_y-1]
+                        else:
+                            grid[x][drop_y] = null
+            for x in range(grid_width):
+                if grid[x][0] != Color(0.1, 0.1, 0.1, 0.5):
+                    grid[x][0] = null
+                    
+    if lines_cleared > 0:
+        scores[p_idx] += lines_cleared * 100
+        send_ipc_message({"type": "score", "data": {"player": p_idx + 1, "score": scores[p_idx]}})
+
+func draw_glow_rect(rect: Rect2, color: Color):
+    if color == Color(0.0, 0.0, 0.0, 0.0):
+        return
+    if color == Color(0.1, 0.1, 0.1, 0.5):
+        if current_skin == "classic":
+            draw_rect(rect, Color(0.02, 0.02, 0.02, 1.0))
+        # For neon, do not draw the wall block at all, let the black background show
+        return
+        
+    if current_skin == "classic":
+        # Flat classic block with solid dark borders
+        draw_rect(rect, color)
+        draw_rect(rect, Color.BLACK, false, 2.0)
+    else:
+        # Neon glowing translucent block: saturated translucent fill, 1px neon edge, punchy soft glow
+        # Soft glow: drop-shadow (draw a slightly larger rect with low opacity)
+        draw_rect(Rect2(rect.position - Vector2(4, 4), rect.size + Vector2(8, 8)), Color(color.r, color.g, color.b, 0.4), false, 4.0)
+        # Translucent fill (35% to read its color on black)
+        draw_rect(rect, Color(color.r, color.g, color.b, 0.35))
+        # 1px neon edge
+        draw_rect(rect, color, false, 1.5)
+
+func draw_background_grid():
+    var grid_spacing = 80.0
+    var line_color = Color(1.0, 1.0, 1.0, 0.08) # thin white lattice
+    for x in range(0, 1920, int(grid_spacing)):
+        draw_line(Vector2(x, 0), Vector2(x, 1080), line_color, 1.0)
+    for y in range(0, 1080, int(grid_spacing)):
+        draw_line(Vector2(0, y), Vector2(1920, y), line_color, 1.0)
+
+func spawn_particle_burst(position: Vector2, color: Color, count: int = 15):
+    for j in range(count):
+        var angle = randf() * PI * 2.0
+        var speed = randf_range(50.0, 250.0)
+        active_particles.append({
+            "pos": position,
+            "vel": Vector2(cos(angle), sin(angle)) * speed,
+            "color": color,
+            "life": 0.4,
+            "max_life": 0.4
+        })
+
+func _process_particles(delta):
+    for j in range(active_particles.size() - 1, -1, -1):
+        var p = active_particles[j]
+        p.pos += p.vel * delta
+        p.life -= delta
+        if p.life <= 0.0:
+            active_particles.remove_at(j)
+
+func _draw_background_layer():
+    if not show_reference:
+        return
+    var tex: Texture2D = null
+            for drop_y in range(y, 0, -1):
+                for x in range(grid_width):
+                    if grid[x][drop_y] != Color(0.1, 0.1, 0.1, 0.5):
+                        if grid[x][drop_y-1] != Color(0.1, 0.1, 0.1, 0.5):
+                            grid[x][drop_y] = grid[x][drop_y-1]
+                        else:
+                            grid[x][drop_y] = null
+            for x in range(grid_width):
+                if grid[x][0] != Color(0.1, 0.1, 0.1, 0.5):
+                    grid[x][0] = null
+                    
+    if lines_cleared > 0:
+        scores[p_idx] += lines_cleared * 100
+        send_ipc_message({"type": "score", "data": {"player": p_idx + 1, "score": scores[p_idx]}})
+
+func draw_glow_rect(rect: Rect2, color: Color):
+    if color == Color(0.1, 0.1, 0.1, 0.5):
+        if current_skin == "classic":
+            draw_rect(rect, Color(0.02, 0.02, 0.02, 1.0))
+        # For neon, do not draw the wall block at all, let the black background show
+        return
+        
+    if gx >= 0 and gx < grid_width and gy >= 0 and gy < grid_height:
+        if grid[gx][gy] == null:
+            return Vector2(gx, gy)
+            
+    # Search in expanding rings (radius 1 to 3)
+    for r in range(1, 4):
+        var best_cell = Vector2(-1, -1)
+        var min_d = 999999.0
+        var center_pixel = Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0)
+        
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                if abs(dx) != r and abs(dy) != r:
+                    continue
+                var nx = gx + dx
+                var ny = gy + dy
+                if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
+                    if grid[nx][ny] == null:
+                        var cell_pixel = Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0)
+                        var d = center_pixel.distance_to(cell_pixel)
+                        if d < min_d:
+                            min_d = d
+                            best_cell = Vector2(nx, ny)
+        if best_cell.x != -1:
+            return best_cell
+            
+    return Vector2(gx, gy) # Fallback
+
+func lock_simulating_piece(p_idx: int):
+    var piece = active_pieces[p_idx]
+    if piece == null or piece.is_empty(): return
+    
+    for b in piece.blocks:
+        var local_center = b * BLOCK_SIZE + Vector2(BLOCK_SIZE / 2.0, BLOCK_SIZE / 2.0)
+        var rotated_center = local_center.rotated(piece.sim_rot)
+        var pixel_pos = piece.sim_pos + rotated_center
+        
+        var gx = int(round(pixel_pos.x / BLOCK_SIZE))
+        var gy = int(round(pixel_pos.y / BLOCK_SIZE))
+        
+        gx = clamp(gx, 0, grid_width - 1)
+        gy = clamp(gy, 0, grid_height - 1)
+        
+        # Use robust search to find nearest empty cell if gy, gx is occupied or wall
+        if grid[gx][gy] != null:
+            var target_cell = find_nearest_empty_cell(gx, gy)
+            gx = int(target_cell.x)
+            gy = int(target_cell.y)
+            
+        draw_rect(rect, color, false, 1.5)
+
+func draw_background_grid():
+    var grid_spacing = 80.0
+    var line_color = Color(1.0, 1.0, 1.0, 0.08) # thin white lattice
+    for x in range(0, 1920, int(grid_spacing)):
+        draw_line(Vector2(x, 0), Vector2(x, 1080), line_color, 1.0)
+    for y in range(0, 1080, int(grid_spacing)):
+        draw_line(Vector2(0, y), Vector2(1920, y), line_color, 1.0)
+
+func spawn_particle_burst(position: Vector2, color: Color, count: int = 15):
+    for j in range(count):
+        var angle = randf() * PI * 2.0
+        var speed = randf_range(50.0, 250.0)
+        active_particles.append({
+            "pos": position,
+            "vel": Vector2(cos(angle), sin(angle)) * speed,
+            "color": color,
+            "life": 0.4,
+            "max_life": 0.4
+        })
+
+func _process_particles(delta):
+    for j in range(active_particles.size() - 1, -1, -1):
+        var p = active_particles[j]
+        p.pos += p.vel * delta
+        p.life -= delta
+        if p.life <= 0.0:
+            active_particles.remove_at(j)
+
+func _draw():
+    if show_background and background_texture:
+        # Scale background photo rect to map_w * scale_factor and map_h * scale_factor centered at (offset_x, offset_y)
+        draw_texture_rect(background_texture, Rect2(offset_x, offset_y, map_w * scale_factor, map_h * scale_factor), false, Color(1, 1, 1, background_opacity))
+    
+    if settings.get("show_grid", true):
+        # Draw Background Grid
+        draw_background_grid()
+        
+    # Draw Grid Blocks
+    for x in range(grid_width):
+        for y in range(grid_height):
+            if grid[x][y] != null:
+                var rect = Rect2(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE-2, BLOCK_SIZE-2)
+                draw_glow_rect(rect, grid[x][y])
+                
+    # Draw Active Pieces for all players
+    for p in range(num_players):
+        if p >= active_pieces.size(): continue
+        if grid[gx][gy] == null:
+            return Vector2(gx, gy)
+            
+    # Search in expanding rings (radius 1 to 3)
+    for r in range(1, 4):
+        var best_cell = Vector2(-1, -1)
+        var min_d = 999999.0
+        var center_pixel = Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0)
+        
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                if abs(dx) != r and abs(dy) != r:
+                    continue
+                var nx = gx + dx
+                var ny = gy + dy
+                if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
+                    if grid[nx][ny] == null:
+                        var cell_pixel = Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0)
+                        var d = center_pixel.distance_to(cell_pixel)
+                        if d < min_d:
+                            min_d = d
+                            best_cell = Vector2(nx, ny)
+        if best_cell.x != -1:
+            return best_cell
+            
+    return Vector2(gx, gy) # Fallback
+
+func lock_simulating_piece(p_idx: int):
+    var piece = active_pieces[p_idx]
+    if piece == null or piece.is_empty(): return
+    
+    for b in piece.blocks:
+        var local_center = b * BLOCK_SIZE + Vector2(BLOCK_SIZE / 2.0, BLOCK_SIZE / 2.0)
+        var rotated_center = local_center.rotated(piece.sim_rot)
+        var pixel_pos = piece.sim_pos + rotated_center
+        
+        var gx = int(round(pixel_pos.x / BLOCK_SIZE))
+        var gy = int(round(pixel_pos.y / BLOCK_SIZE))
+        
+        gx = clamp(gx, 0, grid_width - 1)
+        gy = clamp(gy, 0, grid_height - 1)
+        
+        # Use robust search to find nearest empty cell if gy, gx is occupied or wall
+        if grid[gx][gy] != null:
+            var target_cell = find_nearest_empty_cell(gx, gy)
+            gx = int(target_cell.x)
+            gy = int(target_cell.y)
+            
+        grid[gx][gy] = piece.color
+        spawn_particle_burst(Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0), piece.color, 4)
+            
+    check_lines(p_idx)
+    spawn_piece(p_idx)
+
+func lock_piece(p_idx: int):
+    var piece = active_pieces[p_idx]
+    for b in piece.blocks:
+        var nx = int(piece.pos.x + b.x)
+        var ny = int(piece.pos.y + b.y)
+        if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
+            grid[nx][ny] = piece.color
+            spawn_particle_burst(Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0), piece.color, 4)
+        
+    check_lines(p_idx)
+    spawn_piece(p_idx)
+    
+func check_lines(p_idx: int):
+    var lines_cleared = 0
+    for y in range(grid_height):
+        var full = true
+        var has_playable = false
+        for x in range(grid_width):
+            if grid[x][y] == null:
+                full = false
+                break
+            if grid[x][y] != Color(0.1, 0.1, 0.1, 0.5):
+                has_playable = true
+                
+        if full and has_playable:
+            lines_cleared += 1
+            for x in range(grid_width):
+                if grid[x][y] != Color(0.1, 0.1, 0.1, 0.5) and grid[x][y] != null:
+                    spawn_particle_burst(Vector2(x * BLOCK_SIZE + BLOCK_SIZE/2.0, y * BLOCK_SIZE + BLOCK_SIZE/2.0), grid[x][y], 12)
+            for drop_y in range(y, 0, -1):
+                for x in range(grid_width):
+                    if grid[x][drop_y] != Color(0.1, 0.1, 0.1, 0.5):
+                        if grid[x][drop_y-1] != Color(0.1, 0.1, 0.1, 0.5):
+                            grid[x][drop_y] = grid[x][drop_y-1]
+                        else:
+                            grid[x][drop_y] = null
+            for x in range(grid_width):
+                if grid[x][0] != Color(0.1, 0.1, 0.1, 0.5):
+                    grid[x][0] = null
+                    
+    if lines_cleared > 0:
+        scores[p_idx] += lines_cleared * 100
+        send_ipc_message({"type": "score", "data": {"player": p_idx + 1, "score": scores[p_idx]}})
+
+func draw_glow_rect(rect: Rect2, color: Color):
+    if color == Color(0.0, 0.0, 0.0, 0.0):
+        return
+    if color == Color(0.1, 0.1, 0.1, 0.5):
+        if current_skin == "classic":
+            draw_rect(rect, Color(0.02, 0.02, 0.02, 1.0))
+        # For neon, do not draw the wall block at all, let the black background show
+        return
+        
+    if current_skin == "classic":
+        # Flat classic block with solid dark borders
+        draw_rect(rect, color)
+        draw_rect(rect, Color.BLACK, false, 2.0)
+    else:
+        # Neon glowing translucent block: saturated translucent fill, 1px neon edge, punchy soft glow
+        # Soft glow: drop-shadow (draw a slightly larger rect with low opacity)
+        draw_rect(Rect2(rect.position - Vector2(4, 4), rect.size + Vector2(8, 8)), Color(color.r, color.g, color.b, 0.4), false, 4.0)
+        # Translucent fill (35% to read its color on black)
+        draw_rect(rect, Color(color.r, color.g, color.b, 0.35))
+        # 1px neon edge
+        draw_rect(rect, color, false, 1.5)
+
+func draw_background_grid():
+    var grid_spacing = 80.0
+    var line_color = Color(1.0, 1.0, 1.0, 0.08) # thin white lattice
+    for x in range(0, 1920, int(grid_spacing)):
+        draw_line(Vector2(x, 0), Vector2(x, 1080), line_color, 1.0)
+    for y in range(0, 1080, int(grid_spacing)):
+        draw_line(Vector2(0, y), Vector2(1920, y), line_color, 1.0)
+
+func spawn_particle_burst(position: Vector2, color: Color, count: int = 15):
+    for j in range(count):
+        var angle = randf() * PI * 2.0
+        var speed = randf_range(50.0, 250.0)
+        active_particles.append({
+            "pos": position,
+            "vel": Vector2(cos(angle), sin(angle)) * speed,
+            "color": color,
+            "life": 0.4,
+            "max_life": 0.4
+        })
+
+func _process_particles(delta):
+    for j in range(active_particles.size() - 1, -1, -1):
+        var p = active_particles[j]
+        p.pos += p.vel * delta
+        p.life -= delta
+        if p.life <= 0.0:
+            active_particles.remove_at(j)
+
+func _draw_background_layer():
+    if not show_reference:
+        return
+    var tex: Texture2D = null
+            for drop_y in range(y, 0, -1):
+                for x in range(grid_width):
+                    if grid[x][drop_y] != Color(0.1, 0.1, 0.1, 0.5):
+                        if grid[x][drop_y-1] != Color(0.1, 0.1, 0.1, 0.5):
+                            grid[x][drop_y] = grid[x][drop_y-1]
+                        else:
+                            grid[x][drop_y] = null
+            for x in range(grid_width):
+                if grid[x][0] != Color(0.1, 0.1, 0.1, 0.5):
+                    grid[x][0] = null
+                    
+    if lines_cleared > 0:
+        scores[p_idx] += lines_cleared * 100
+        send_ipc_message({"type": "score", "data": {"player": p_idx + 1, "score": scores[p_idx]}})
+
+func draw_glow_rect(rect: Rect2, color: Color):
+    if color == Color(0.1, 0.1, 0.1, 0.5):
+        if current_skin == "classic":
+            draw_rect(rect, Color(0.02, 0.02, 0.02, 1.0))
+        # For neon, do not draw the wall block at all, let the black background show
+        return
+        
+    if gx >= 0 and gx < grid_width and gy >= 0 and gy < grid_height:
+        if grid[gx][gy] == null:
+            return Vector2(gx, gy)
+            
+    # Search in expanding rings (radius 1 to 3)
+    for r in range(1, 4):
+        var best_cell = Vector2(-1, -1)
+        var min_d = 999999.0
+        var center_pixel = Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0)
+        
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                if abs(dx) != r and abs(dy) != r:
+                    continue
+                var nx = gx + dx
+                var ny = gy + dy
+                if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
+                    if grid[nx][ny] == null:
+                        var cell_pixel = Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0)
+                        var d = center_pixel.distance_to(cell_pixel)
+                        if d < min_d:
+                            min_d = d
+                            best_cell = Vector2(nx, ny)
+        if best_cell.x != -1:
+            return best_cell
+            
+    return Vector2(gx, gy) # Fallback
+
+func lock_simulating_piece(p_idx: int):
+    var piece = active_pieces[p_idx]
+    if piece == null or piece.is_empty(): return
+    
+    for b in piece.blocks:
+        var local_center = b * BLOCK_SIZE + Vector2(BLOCK_SIZE / 2.0, BLOCK_SIZE / 2.0)
+        var rotated_center = local_center.rotated(piece.sim_rot)
+        var pixel_pos = piece.sim_pos + rotated_center
+        
+        var gx = int(round(pixel_pos.x / BLOCK_SIZE))
+        var gy = int(round(pixel_pos.y / BLOCK_SIZE))
+        
+        gx = clamp(gx, 0, grid_width - 1)
+        gy = clamp(gy, 0, grid_height - 1)
+        
+        # Use robust search to find nearest empty cell if gy, gx is occupied or wall
+        if grid[gx][gy] != null:
+            var target_cell = find_nearest_empty_cell(gx, gy)
+            gx = int(target_cell.x)
+            gy = int(target_cell.y)
+            
+        draw_rect(rect, color, false, 1.5)
+
+func draw_background_grid():
+    var grid_spacing = 80.0
+    var line_color = Color(1.0, 1.0, 1.0, 0.08) # thin white lattice
+    for x in range(0, 1920, int(grid_spacing)):
+        draw_line(Vector2(x, 0), Vector2(x, 1080), line_color, 1.0)
+    for y in range(0, 1080, int(grid_spacing)):
+        draw_line(Vector2(0, y), Vector2(1920, y), line_color, 1.0)
+
+func spawn_particle_burst(position: Vector2, color: Color, count: int = 15):
+    for j in range(count):
+        var angle = randf() * PI * 2.0
+        var speed = randf_range(50.0, 250.0)
+        active_particles.append({
+            "pos": position,
+            "vel": Vector2(cos(angle), sin(angle)) * speed,
+            "color": color,
+            "life": 0.4,
+            "max_life": 0.4
+        })
+
+func _process_particles(delta):
+    for j in range(active_particles.size() - 1, -1, -1):
+        var p = active_particles[j]
+        p.pos += p.vel * delta
+        p.life -= delta
+        if p.life <= 0.0:
+            active_particles.remove_at(j)
+
+func _draw():
+    if show_background and background_texture:
+        # Scale background photo rect to map_w * scale_factor and map_h * scale_factor centered at (offset_x, offset_y)
+        draw_texture_rect(background_texture, Rect2(offset_x, offset_y, map_w * scale_factor, map_h * scale_factor), false, Color(1, 1, 1, background_opacity))
+    
+    if settings.get("show_grid", true):
+        # Draw Background Grid
+        draw_background_grid()
+        
+    # Draw Grid Blocks
+    for x in range(grid_width):
+        for y in range(grid_height):
+            if grid[x][y] != null:
+                var rect = Rect2(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE-2, BLOCK_SIZE-2)
+                draw_glow_rect(rect, grid[x][y])
+                
+    # Draw Active Pieces for all players
+    for p in range(num_players):
+        if p >= active_pieces.size(): continue
+        if grid[gx][gy] == null:
+            return Vector2(gx, gy)
+            
+    # Search in expanding rings (radius 1 to 3)
+    for r in range(1, 4):
+        var best_cell = Vector2(-1, -1)
+        var min_d = 999999.0
+        var center_pixel = Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0)
+        
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                if abs(dx) != r and abs(dy) != r:
+                    continue
+                var nx = gx + dx
+                var ny = gy + dy
+                if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
+                    if grid[nx][ny] == null:
+                        var cell_pixel = Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0)
+                        var d = center_pixel.distance_to(cell_pixel)
+                        if d < min_d:
+                            min_d = d
+                            best_cell = Vector2(nx, ny)
+        if best_cell.x != -1:
+            return best_cell
+            
+    return Vector2(gx, gy) # Fallback
+
+func lock_simulating_piece(p_idx: int):
+    var piece = active_pieces[p_idx]
+    if piece == null or piece.is_empty(): return
+    
+    for b in piece.blocks:
+        var local_center = b * BLOCK_SIZE + Vector2(BLOCK_SIZE / 2.0, BLOCK_SIZE / 2.0)
+        var rotated_center = local_center.rotated(piece.sim_rot)
+        var pixel_pos = piece.sim_pos + rotated_center
+        
+        var gx = int(round(pixel_pos.x / BLOCK_SIZE))
+        var gy = int(round(pixel_pos.y / BLOCK_SIZE))
+        
+        gx = clamp(gx, 0, grid_width - 1)
+        gy = clamp(gy, 0, grid_height - 1)
+        
+        # Use robust search to find nearest empty cell if gy, gx is occupied or wall
+        if grid[gx][gy] != null:
+            var target_cell = find_nearest_empty_cell(gx, gy)
+            gx = int(target_cell.x)
+            gy = int(target_cell.y)
+            
+        grid[gx][gy] = piece.color
+        spawn_particle_burst(Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0), piece.color, 4)
+            
+    check_lines(p_idx)
+    spawn_piece(p_idx)
+
+func lock_piece(p_idx: int):
+    var piece = active_pieces[p_idx]
+    for b in piece.blocks:
+        var nx = int(piece.pos.x + b.x)
+        var ny = int(piece.pos.y + b.y)
+        if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
+            grid[nx][ny] = piece.color
+            spawn_particle_burst(Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0), piece.color, 4)
+        
+    check_lines(p_idx)
+    spawn_piece(p_idx)
+    
+func check_lines(p_idx: int):
+    var lines_cleared = 0
+    for y in range(grid_height):
+        var full = true
+        var has_playable = false
+        for x in range(grid_width):
+            if grid[x][y] == null:
+                full = false
+                break
+            if grid[x][y] != Color(0.1, 0.1, 0.1, 0.5):
+                has_playable = true
+                
+        if full and has_playable:
+            lines_cleared += 1
+            for x in range(grid_width):
+                if grid[x][y] != Color(0.1, 0.1, 0.1, 0.5) and grid[x][y] != null:
+                    spawn_particle_burst(Vector2(x * BLOCK_SIZE + BLOCK_SIZE/2.0, y * BLOCK_SIZE + BLOCK_SIZE/2.0), grid[x][y], 12)
+            for drop_y in range(y, 0, -1):
+                for x in range(grid_width):
+                    if grid[x][drop_y] != Color(0.1, 0.1, 0.1, 0.5):
+                        if grid[x][drop_y-1] != Color(0.1, 0.1, 0.1, 0.5):
+                            grid[x][drop_y] = grid[x][drop_y-1]
+                        else:
+                            grid[x][drop_y] = null
+            for x in range(grid_width):
+                if grid[x][0] != Color(0.1, 0.1, 0.1, 0.5):
+                    grid[x][0] = null
+                    
+    if lines_cleared > 0:
+        scores[p_idx] += lines_cleared * 100
+        send_ipc_message({"type": "score", "data": {"player": p_idx + 1, "score": scores[p_idx]}})
+
+func draw_glow_rect(rect: Rect2, color: Color):
+    if color == Color(0.0, 0.0, 0.0, 0.0):
+        return
+    if color == Color(0.1, 0.1, 0.1, 0.5):
+        if current_skin == "classic":
+            draw_rect(rect, Color(0.02, 0.02, 0.02, 1.0))
+        # For neon, do not draw the wall block at all, let the black background show
+        return
+        
+    if current_skin == "classic":
+        # Flat classic block with solid dark borders
+        draw_rect(rect, color)
+        draw_rect(rect, Color.BLACK, false, 2.0)
+    else:
+        # Neon glowing translucent block: saturated translucent fill, 1px neon edge, punchy soft glow
+        # Soft glow: drop-shadow (draw a slightly larger rect with low opacity)
+        draw_rect(Rect2(rect.position - Vector2(4, 4), rect.size + Vector2(8, 8)), Color(color.r, color.g, color.b, 0.4), false, 4.0)
+        # Translucent fill (35% to read its color on black)
+        draw_rect(rect, Color(color.r, color.g, color.b, 0.35))
+        # 1px neon edge
+        draw_rect(rect, color, false, 1.5)
+
+func draw_background_grid():
+    var grid_spacing = 80.0
+    var line_color = Color(1.0, 1.0, 1.0, 0.08) # thin white lattice
+    for x in range(0, 1920, int(grid_spacing)):
+        draw_line(Vector2(x, 0), Vector2(x, 1080), line_color, 1.0)
+    for y in range(0, 1080, int(grid_spacing)):
+        draw_line(Vector2(0, y), Vector2(1920, y), line_color, 1.0)
+
+func spawn_particle_burst(position: Vector2, color: Color, count: int = 15):
+    for j in range(count):
+        var angle = randf() * PI * 2.0
+        var speed = randf_range(50.0, 250.0)
+        active_particles.append({
+            "pos": position,
+            "vel": Vector2(cos(angle), sin(angle)) * speed,
+            "color": color,
+            "life": 0.4,
+            "max_life": 0.4
+        })
+
+func _process_particles(delta):
+    for j in range(active_particles.size() - 1, -1, -1):
+        var p = active_particles[j]
+        p.pos += p.vel * delta
+        p.life -= delta
+        if p.life <= 0.0:
+            active_particles.remove_at(j)
+
+func _draw_background_layer():
+    if not show_reference:
+        return
+    var tex: Texture2D = null
+            for drop_y in range(y, 0, -1):
+                for x in range(grid_width):
+                    if grid[x][drop_y] != Color(0.1, 0.1, 0.1, 0.5):
+                        if grid[x][drop_y-1] != Color(0.1, 0.1, 0.1, 0.5):
+                            grid[x][drop_y] = grid[x][drop_y-1]
+                        else:
+                            grid[x][drop_y] = null
+            for x in range(grid_width):
+                if grid[x][0] != Color(0.1, 0.1, 0.1, 0.5):
+                    grid[x][0] = null
+                    
+    if lines_cleared > 0:
+        scores[p_idx] += lines_cleared * 100
+        send_ipc_message({"type": "score", "data": {"player": p_idx + 1, "score": scores[p_idx]}})
+
+func draw_glow_rect(rect: Rect2, color: Color):
+    if color == Color(0.1, 0.1, 0.1, 0.5):
+        if current_skin == "classic":
+            draw_rect(rect, Color(0.02, 0.02, 0.02, 1.0))
+        # For neon, do not draw the wall block at all, let the black background show
+        return
+        
+    if gx >= 0 and gx < grid_width and gy >= 0 and gy < grid_height:
+        if grid[gx][gy] == null:
+            return Vector2(gx, gy)
+            
+    # Search in expanding rings (radius 1 to 3)
+    for r in range(1, 4):
+        var best_cell = Vector2(-1, -1)
+        var min_d = 999999.0
+        var center_pixel = Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0)
+        
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                if abs(dx) != r and abs(dy) != r:
+                    continue
+                var nx = gx + dx
+                var ny = gy + dy
+                if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
+                    if grid[nx][ny] == null:
+                        var cell_pixel = Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0)
+                        var d = center_pixel.distance_to(cell_pixel)
+                        if d < min_d:
+                            min_d = d
+                            best_cell = Vector2(nx, ny)
+        if best_cell.x != -1:
+            return best_cell
+            
+    return Vector2(gx, gy) # Fallback
+
+func lock_simulating_piece(p_idx: int):
+    var piece = active_pieces[p_idx]
+    if piece == null or piece.is_empty(): return
+    
+    for b in piece.blocks:
+        var local_center = b * BLOCK_SIZE + Vector2(BLOCK_SIZE / 2.0, BLOCK_SIZE / 2.0)
+        var rotated_center = local_center.rotated(piece.sim_rot)
+        var pixel_pos = piece.sim_pos + rotated_center
+        
+        var gx = int(round(pixel_pos.x / BLOCK_SIZE))
+        var gy = int(round(pixel_pos.y / BLOCK_SIZE))
+        
+        gx = clamp(gx, 0, grid_width - 1)
+        gy = clamp(gy, 0, grid_height - 1)
+        
+        # Use robust search to find nearest empty cell if gy, gx is occupied or wall
+        if grid[gx][gy] != null:
+            var target_cell = find_nearest_empty_cell(gx, gy)
+            gx = int(target_cell.x)
+            gy = int(target_cell.y)
+            
+        draw_rect(rect, color, false, 1.5)
+
+func draw_background_grid():
+    var grid_spacing = 80.0
+    var line_color = Color(1.0, 1.0, 1.0, 0.08) # thin white lattice
+    for x in range(0, 1920, int(grid_spacing)):
+        draw_line(Vector2(x, 0), Vector2(x, 1080), line_color, 1.0)
+    for y in range(0, 1080, int(grid_spacing)):
+        draw_line(Vector2(0, y), Vector2(1920, y), line_color, 1.0)
+
+func spawn_particle_burst(position: Vector2, color: Color, count: int = 15):
+    for j in range(count):
+        var angle = randf() * PI * 2.0
+        var speed = randf_range(50.0, 250.0)
+        active_particles.append({
+            "pos": position,
+            "vel": Vector2(cos(angle), sin(angle)) * speed,
+            "color": color,
+            "life": 0.4,
+            "max_life": 0.4
+        })
+
+func _process_particles(delta):
+    for j in range(active_particles.size() - 1, -1, -1):
+        var p = active_particles[j]
+        p.pos += p.vel * delta
+        p.life -= delta
+        if p.life <= 0.0:
+            active_particles.remove_at(j)
+
+func _draw():
+    if show_background and background_texture:
+        # Scale background photo rect to map_w * scale_factor and map_h * scale_factor centered at (offset_x, offset_y)
+        draw_texture_rect(background_texture, Rect2(offset_x, offset_y, map_w * scale_factor, map_h * scale_factor), false, Color(1, 1, 1, background_opacity))
+    
+    if settings.get("show_grid", true):
+        # Draw Background Grid
+        draw_background_grid()
+        
+    # Draw Grid Blocks
+    for x in range(grid_width):
+        for y in range(grid_height):
+            if grid[x][y] != null:
+                var rect = Rect2(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE-2, BLOCK_SIZE-2)
+                draw_glow_rect(rect, grid[x][y])
+                
+    # Draw Active Pieces for all players
+    for p in range(num_players):
+        if p >= active_pieces.size(): continue
+        if grid[gx][gy] == null:
+            return Vector2(gx, gy)
+            
+    # Search in expanding rings (radius 1 to 3)
+    for r in range(1, 4):
+        var best_cell = Vector2(-1, -1)
+        var min_d = 999999.0
+        var center_pixel = Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0)
+        
+        for dy in range(-r, r + 1):
+            for dx in range(-r, r + 1):
+                if abs(dx) != r and abs(dy) != r:
+                    continue
+                var nx = gx + dx
+                var ny = gy + dy
+                if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
+                    if grid[nx][ny] == null:
+                        var cell_pixel = Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0)
+                        var d = center_pixel.distance_to(cell_pixel)
+                        if d < min_d:
+                            min_d = d
+                            best_cell = Vector2(nx, ny)
+        if best_cell.x != -1:
+            return best_cell
+            
+    return Vector2(gx, gy) # Fallback
+
+func lock_simulating_piece(p_idx: int):
+    var piece = active_pieces[p_idx]
+    if piece == null or piece.is_empty(): return
+    
+    for b in piece.blocks:
+        var local_center = b * BLOCK_SIZE + Vector2(BLOCK_SIZE / 2.0, BLOCK_SIZE / 2.0)
+        var rotated_center = local_center.rotated(piece.sim_rot)
+        var pixel_pos = piece.sim_pos + rotated_center
+        
+        var gx = int(round(pixel_pos.x / BLOCK_SIZE))
+        var gy = int(round(pixel_pos.y / BLOCK_SIZE))
+        
+        gx = clamp(gx, 0, grid_width - 1)
+        gy = clamp(gy, 0, grid_height - 1)
+        
+        # Use robust search to find nearest empty cell if gy, gx is occupied or wall
+        if grid[gx][gy] != null:
+            var target_cell = find_nearest_empty_cell(gx, gy)
+            gx = int(target_cell.x)
+            gy = int(target_cell.y)
+            
+        grid[gx][gy] = piece.color
+        spawn_particle_burst(Vector2(gx * BLOCK_SIZE + BLOCK_SIZE/2.0, gy * BLOCK_SIZE + BLOCK_SIZE/2.0), piece.color, 4)
+            
+    check_lines(p_idx)
+    spawn_piece(p_idx)
+
+func lock_piece(p_idx: int):
+    var piece = active_pieces[p_idx]
+    for b in piece.blocks:
+        var nx = int(piece.pos.x + b.x)
+        var ny = int(piece.pos.y + b.y)
+        if nx >= 0 and nx < grid_width and ny >= 0 and ny < grid_height:
+            grid[nx][ny] = piece.color
+            spawn_particle_burst(Vector2(nx * BLOCK_SIZE + BLOCK_SIZE/2.0, ny * BLOCK_SIZE + BLOCK_SIZE/2.0), piece.color, 4)
+        
+    check_lines(p_idx)
+    spawn_piece(p_idx)
+    
+func check_lines(p_idx: int):
+    var lines_cleared = 0
+    for y in range(grid_height):
+        var full = true
+        var has_playable = false
+        for x in range(grid_width):
+            if grid[x][y] == null:
+                full = false
+                break
+            if grid[x][y] != Color(0.1, 0.1, 0.1, 0.5):
+                has_playable = true
+                
+        if full and has_playable:
+            lines_cleared += 1
+            for x in range(grid_width):
+                if grid[x][y] != Color(0.1, 0.1, 0.1, 0.5) and grid[x][y] != null:
+                    spawn_particle_burst(Vector2(x * BLOCK_SIZE + BLOCK_SIZE/2.0, y * BLOCK_SIZE + BLOCK_SIZE/2.0), grid[x][y], 12)
+            for drop_y in range(y, 0, -1):
+                for x in range(grid_width):
+                    if grid[x][drop_y] != Color(0.1, 0.1, 0.1, 0.5):
+                        if grid[x][drop_y-1] != Color(0.1, 0.1, 0.1, 0.5):
+                            grid[x][drop_y] = grid[x][drop_y-1]
+                        else:
+                            grid[x][drop_y] = null
+            for x in range(grid_width):
+                if grid[x][0] != Color(0.1, 0.1, 0.1, 0.5):
+                    grid[x][0] = null
+                    
+    if lines_cleared > 0:
+        scores[p_idx] += lines_cleared * 100
+        send_ipc_message({"type": "score", "data": {"player": p_idx + 1, "score": scores[p_idx]}})
+
+func draw_glow_rect(rect: Rect2, color: Color):
+    if color == Color(0.0, 0.0, 0.0, 0.0):
+        return
+    if color == Color(0.1, 0.1, 0.1, 0.5):
+        if current_skin == "classic":
+            draw_rect(rect, Color(0.02, 0.02, 0.02, 1.0))
+        # For neon, do not draw the wall block at all, let the black background show
+        return
+        
+    if current_skin == "classic":
+        # Flat classic block with solid dark borders
+        draw_rect(rect, color)
+        draw_rect(rect, Color.BLACK, false, 2.0)
+    else:
+        # Neon glowing translucent block: saturated translucent fill, 1px neon edge, punchy soft glow
+        # Soft glow: drop-shadow (draw a slightly larger rect with low opacity)
+        draw_rect(Rect2(rect.position - Vector2(4, 4), rect.size + Vector2(8, 8)), Color(color.r, color.g, color.b, 0.4), false, 4.0)
+        # Translucent fill (35% to read its color on black)
+        draw_rect(rect, Color(color.r, color.g, color.b, 0.35))
+        # 1px neon edge
+        draw_rect(rect, color, false, 1.5)
+
+func draw_background_grid():
+    var grid_spacing = 80.0
+    var line_color = Color(1.0, 1.0, 1.0, 0.08) # thin white lattice
+    for x in range(0, 1920, int(grid_spacing)):
+        draw_line(Vector2(x, 0), Vector2(x, 1080), line_color, 1.0)
+    for y in range(0, 1080, int(grid_spacing)):
+        draw_line(Vector2(0, y), Vector2(1920, y), line_color, 1.0)
+
+func spawn_particle_burst(position: Vector2, color: Color, count: int = 15):
+    for j in range(count):
+        var angle = randf() * PI * 2.0
+        var speed = randf_range(50.0, 250.0)
+        active_particles.append({
+            "pos": position,
+            "vel": Vector2(cos(angle), sin(angle)) * speed,
+            "color": color,
+            "life": 0.4,
+            "max_life": 0.4
+        })
+
+func _process_particles(delta):
+    for j in range(active_particles.size() - 1, -1, -1):
+        var p = active_particles[j]
+        p.pos += p.vel * delta
+        p.life -= delta
+        if p.life <= 0.0:
+            active_particles.remove_at(j)
+
+func _draw_background_layer():
+    if not show_reference:
+        return
+    var tex: Texture2D = null
+            for drop_y in range(y, 0, -1):
+                for x in range(grid_width):
+                    if grid[x][drop_y] != Color(0.1, 0.1, 0.1, 0.5):
+                        if grid[x][drop_y-1] != Color(0.1, 0.1, 0.1, 0.5):
+                            grid[x][drop_y] = grid[x][drop_y-1]
+                        else:
+                            grid[x][drop_y] = null
+            for x in range(grid_width):
+                if grid[x][0] != Color(0.1, 0.1, 0.1, 0.5):
+                    grid[x][0] = null
+                    
+    if lines_cleared > 0:
+        scores[p_idx] += lines_cleared * 100
+        send_ipc_message({"type": "score", "data": {"player": p_idx + 1, "score": scores[p_idx]}})
+
+func draw_glow_rect(rect: Rect2, color: Color):
+    if color == Color(0.1, 0.1, 0.1, 0.5):
+        if current_skin == "classic":
+            draw_rect(rect, Color(0.02, 0.02, 0.02, 1.0))
+        # For neon, do not draw the wall block at all, let the black background show
+        return
+        
     if current_skin == "classic":
         # Flat classic block with solid dark borders
         draw_rect(rect, color)

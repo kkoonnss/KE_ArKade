@@ -449,7 +449,15 @@ func _seed_barriers(count: int, classes: Array, hit_points: int):
         barriers.append({"cell": _pos_to_cell(p), "pos": p, "hp": hit_points})
 
 func _input(event):
-    if event is InputEventKey and event.pressed and not event.echo:
+	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
+		if "game_state" in self and game_state != "playing":
+			if has_method("_reset_game"): _reset_game()
+			elif has_method("reset_game"): reset_game()
+		elif "state" in self and state != "playing":
+			if has_method("_reset_game"): _reset_game()
+			elif has_method("reset_game"): reset_game()
+
+	if event is InputEventKey and event.pressed and not event.echo:
         if event.keycode == KEY_TAB:
             tab_menu.visible = not tab_menu.visible
         elif event.keycode == KEY_F1:

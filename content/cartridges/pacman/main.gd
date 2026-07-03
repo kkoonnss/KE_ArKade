@@ -549,75 +549,97 @@ func _apply_tunnel_fill_mask(layout: Dictionary, node_map: Dictionary, target_co
     layout["pickups"] = filtered_pickups
 
 func _build_tunnel_fill_keep(node_map: Dictionary, target_cols: int, target_rows: int, spawn_gx: int, spawn_gy: int) -> Dictionary:
-    var open := {}
+    var M := {}
+    var unvisited := {}
     for key in node_map.keys():
-        open[str(key)] = true
-    if open.is_empty():
+        unvisited[key] = true
+        
+    if unvisited.is_empty():
         return {}
+        
+    # Prioritize spawn cell if it exists
+    if spawn_gx >= 0 and spawn_gy >= 0:
+        var spawn_key = "%d:%d" % [spawn_gx, spawn_gy]
+        if unvisited.has(spawn_key):
+            _grow_maze_tree(spawn_key, M, unvisited, node_map)
+            
+    while not unvisited.is_empty():
+        var keys = unvisited.keys()
+        var seed_key = keys[randi() % keys.size()]
+        _grow_maze_tree(seed_key, M, unvisited, node_map)
+        
+    # Identify extra cells that are in the original level but not in M (the maze)
+    var extra_cells := []
     var protected := {}
+    
+    # Protect a 3x3 area around player spawn
     if spawn_gx >= 0 and spawn_gy >= 0:
         for oy in range(-1, 2):
             for ox in range(-1, 2):
                 protected["%d:%d" % [spawn_gx + ox, spawn_gy + oy]] = true
-    var original_count = open.size()
-    var max_remove = int(round(float(original_count) * clamp(tunnel_fill * 0.72, 0.0, 0.72)))
-    var removed = 0
-    var pass_count = 0
-    while removed < max_remove and pass_count < 24:
-        var candidates = []
-        for key in open.keys():
-            if protected.has(key):
-                continue
-            var cell = _key_to_cell(str(key))
-            var neighbors = _open_neighbors(cell.x, cell.y, open, "")
-            var degree = neighbors.size()
-            if degree < 2:
-                continue
-            var left = open.has("%d:%d" % [cell.x - 1, cell.y])
-            var right = open.has("%d:%d" % [cell.x + 1, cell.y])
-            var up = open.has("%d:%d" % [cell.x, cell.y - 1])
-            var down = open.has("%d:%d" % [cell.x, cell.y + 1])
-            var in_block = _open_block_count(cell.x, cell.y, open) > 0
-            if not (in_block or (left and right) or (up and down) or degree >= 3):
-                continue
-            var score = 0
-            if in_block:
-                score += 6
-            if left and right:
-                score += 3
-            if up and down:
-                score += 3
-            score += degree
-            score += ((cell.x + cell.y + pass_count) % 2)
-            candidates.append({"cell": cell, "score": score})
-        if candidates.is_empty():
-            break
-        candidates.sort_custom(func(a, b):
-            if int(a["score"]) == int(b["score"]):
-                var ac: Vector2i = a["cell"]
-                var bc: Vector2i = b["cell"]
-                if ac.y == bc.y:
-                    return ac.x < bc.x
-                return ac.y < bc.y
-            return int(a["score"]) > int(b["score"])
-        )
-        var changed = false
-        for item in candidates:
-            if removed >= max_remove:
+                
+    for key in node_map.keys():
+        if not M.has(key) and not protected.has(key):
+            extra_cells.append(key)
+            
+    # Randomly shuffle the extra cells
+    extra_cells.shuffle()
+    
+    # Keep set initially contains all cells in node_map
+    var keep := {}
+    for key in node_map.keys():
+        keep[key] = true
+        
+    # The slider 'tunnel_fill' represents the percentage of double lanes to close.
+    # At 0.0 (0%), we keep 100% of the extra cells (i.e. keep the base level).
+    # At 1.0 (100%), we remove 100% of the extra cells (i.e. keep only the maze + protected cells).
+    # So we remove a fraction 'tunnel_fill' of the extra cells.
+    var num_to_remove = int(round(tunnel_fill * float(extra_cells.size())))
+    for i in range(num_to_remove):
+        keep.erase(extra_cells[i])
+        
+    return keep
+
+func _grow_maze_tree(seed_key: String, M: Dictionary, unvisited: Dictionary, node_map: Dictionary):
+    M[seed_key] = true
+    unvisited.erase(seed_key)
+    
+    var active_set = [seed_key]
+    while not active_set.is_empty():
+        # Pick the last element (DFS/Backtracker behavior, generates corridors)
+        var current_key = active_set[-1]
+        var current_cell = _key_to_cell(current_key)
+        
+        var neighbors = []
+        for dir in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+            var nx = current_cell.x + dir.x
+            var ny = current_cell.y + dir.y
+            var nkey = "%d:%d" % [nx, ny]
+            if node_map.has(nkey) and not M.has(nkey):
+                neighbors.append(nkey)
+                
+        neighbors.shuffle()
+        
+        var added = false
+        for nkey in neighbors:
+            var m_neighbors = 0
+            var ncell = _key_to_cell(nkey)
+            for dir in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+                var nnx = ncell.x + dir.x
+                var nny = ncell.y + dir.y
+                var nnkey = "%d:%d" % [nnx, nny]
+                if M.has(nnkey):
+                    m_neighbors += 1
+            
+            if m_neighbors == 1:
+                M[nkey] = true
+                unvisited.erase(nkey)
+                active_set.append(nkey)
+                added = true
                 break
-            var cell: Vector2i = item["cell"]
-            var key = "%d:%d" % [cell.x, cell.y]
-            if not open.has(key) or protected.has(key):
-                continue
-            if not _can_remove_tunnel_cell(cell.x, cell.y, open):
-                continue
-            open.erase(key)
-            removed += 1
-            changed = true
-        if not changed:
-            break
-        pass_count += 1
-    return open
+                
+        if not added:
+            active_set.pop_back()
 
 func _nearest_layout_key(px: float, py: float, node_map: Dictionary) -> String:
     var best_key = ""
@@ -635,52 +657,6 @@ func _key_to_cell(key: String) -> Vector2i:
     if parts.size() != 2:
         return Vector2i.ZERO
     return Vector2i(int(parts[0]), int(parts[1]))
-
-func _open_neighbors(gx: int, gy: int, open: Dictionary, skip_key: String) -> Array:
-    var out = []
-    for dir in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
-        var nx = gx + dir.x
-        var ny = gy + dir.y
-        var key = "%d:%d" % [nx, ny]
-        if key == skip_key:
-            continue
-        if open.has(key):
-            out.append(Vector2i(nx, ny))
-    return out
-
-func _open_block_count(gx: int, gy: int, open: Dictionary) -> int:
-    var count = 0
-    for oy in [-1, 0]:
-        for ox in [-1, 0]:
-            var a = "%d:%d" % [gx + ox, gy + oy]
-            var b = "%d:%d" % [gx + ox + 1, gy + oy]
-            var c = "%d:%d" % [gx + ox, gy + oy + 1]
-            var d = "%d:%d" % [gx + ox + 1, gy + oy + 1]
-            if open.has(a) and open.has(b) and open.has(c) and open.has(d):
-                count += 1
-    return count
-
-func _can_remove_tunnel_cell(gx: int, gy: int, open: Dictionary) -> bool:
-    var key = "%d:%d" % [gx, gy]
-    var neighbors = _open_neighbors(gx, gy, open, key)
-    if neighbors.size() < 2:
-        return false
-    var start: Vector2i = neighbors[0]
-    var queue = [start]
-    var visited := {}
-    visited["%d:%d" % [start.x, start.y]] = true
-    while not queue.is_empty():
-        var cur: Vector2i = queue.pop_front()
-        for next in _open_neighbors(cur.x, cur.y, open, key):
-            var next_key = "%d:%d" % [next.x, next.y]
-            if visited.has(next_key):
-                continue
-            visited[next_key] = true
-            queue.append(next)
-    for n in neighbors:
-        if not visited.has("%d:%d" % [n.x, n.y]):
-            return false
-    return true
 
 func _assign_power_pellets(layout: Dictionary):
     var all_pickups = layout.get("pickups", [])
