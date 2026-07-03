@@ -5,8 +5,8 @@ wave: 2
 priority: P2
 lane: cartridge
 archetype: arena
-status: ready
-owner_agent: ""
+status: in_progress
+owner_agent: "Gemini"
 touches: [content/cartridges/space_invaders]
 locks_required: [cart-space_invaders]
 depends_on: [TASK-INT-01-adapter-library, TASK-INT-02-controls-toolkit, TASK-INT-cart-galaga]
