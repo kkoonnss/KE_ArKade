@@ -305,6 +305,28 @@ var adapter_platforms = []
 var adapter_spawns = []
 
 func load_level():
+    grid.clear()
+    walkable.clear()
+    solids.clear()
+    
+    if level_dir != "":
+        var sem = level_dir.path_join("derived").path_join("occupancy.png")
+        if FileAccess.file_exists(sem):
+            var sem_img = Image.load_from_file(sem)
+            if sem_img:
+                map_w = sem_img.get_width()
+                map_h = sem_img.get_height()
+                cell_px = 32.0
+                var w = max(1, int(map_w / cell_px))
+                var h = max(1, int(map_h / cell_px))
+                for y in range(h):
+                    var row = []
+                    for x in range(w):
+                        var p = sem_img.get_pixel(min(map_w - 1, int(x * cell_px)), min(map_h - 1, int(y * cell_px)))
+                        row.append(1 if p.r > current_semantic_threshold else 2)
+                    grid.append(row)
+        _load_reference()
+        
     if game_id == "donkey_kong":
         logical_w = map_w / max(0.1, current_level_scale)
         logical_h = map_h / max(0.1, current_level_scale)
@@ -313,9 +335,7 @@ func load_level():
         logical_w = map_w
         logical_h = map_h
         kill_zone_y = logical_h + 100.0
-    grid.clear()
-    walkable.clear()
-    solids.clear()
+        
     var loaded = false
     
     var SL = load(_repo_root().path_join("app/shared/shared_loader.gd"))
@@ -333,30 +353,7 @@ func load_level():
     var layout = adapter.interpret(level_dir, {}, knobs)
     adapter_platforms = layout.get("platforms", [])
     adapter_spawns = layout.get("spawns", [])
-    
-    if level_dir != "":
-        var sem = level_dir.path_join("derived").path_join("occupancy.png")
-        if FileAccess.file_exists(sem):
-            var sem_img = Image.load_from_file(sem)
-            if sem_img:
-                cell_px = 32.0
-                var w = max(1, int(sem_img.get_width() / cell_px))
-                var h = max(1, int(sem_img.get_height() / cell_px))
-                for y in range(h):
-                    var row = []
-                    for x in range(w):
-                        var p = sem_img.get_pixel(min(sem_img.get_width() - 1, int(x * cell_px)), min(sem_img.get_height() - 1, int(y * cell_px)))
-                        row.append(1 if p.r > current_semantic_threshold else 2)
-                    grid.append(row)
-    
-    if level_dir != "":
-        var sem = level_dir.path_join("derived").path_join("occupancy.png")
-        if FileAccess.file_exists(sem):
-            var img = Image.load_from_file(sem)
-            if img:
-                map_w = img.get_width()
-                map_h = img.get_height()
-        _load_reference()
+
     _update_scale()
 func _load_occupancy():
     if level_dir == "":
