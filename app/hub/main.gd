@@ -56,6 +56,7 @@ var _resize_timer: Timer
 
 func _ready():
 	set_process_input(true)
+	set_process(true)
 	_ensure_hub_input_actions()
 	if scenes_grid is GridContainer: scenes_grid.columns = _calculate_grid_columns()
 	
@@ -327,16 +328,20 @@ func _grab_first_focusable_control(node: Node) -> bool:
 			return true
 	return false
 
+func _process(delta):
+	var scroll_container = get_node_or_null("UI/Content/MainPanel/ScrollContainer")
+	if scroll_container:
+		var right_y = Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
+		if abs(right_y) > 0.2:
+			scroll_container.scroll_vertical += int(right_y * 1000 * delta)
+
 func _is_focus_recovery_event(event: InputEvent) -> bool:
 	return event.is_action_pressed("ui_up") or event.is_action_pressed("ui_down") or event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right") or event.is_action_pressed("ui_accept") or event.is_action_pressed("ui_cancel")
 
 func _input(event: InputEvent):
+	
 	if event is InputEventJoypadMotion and event.axis == JOY_AXIS_RIGHT_Y:
-		var scroll = 0
-		var scroll_container = get_node_or_null("UI/Content/MainPanel/ScrollContainer")
-		if scroll_container and abs(event.axis_value) > 0.2:
-			scroll = int(event.axis_value * 40)
-			scroll_container.scroll_vertical += scroll
+		get_viewport().set_input_as_handled()
 		if scroll != 0:
 			get_viewport().set_input_as_handled()
 			return
@@ -598,7 +603,8 @@ func display_levels():
 		# Build scene header
 		var header_btn = Button.new()
 		var pretty_name = scene_name.replace("scene_", "").replace("_", " ").capitalize()
-		header_btn.text = "▼ " + pretty_name
+		header_btn.text = "▶ " + pretty_name
+		header_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		header_btn.add_theme_font_size_override("font_size", 28)
 		header_btn.add_theme_color_override("font_color", color_cyan)
 		header_btn.focus_mode = Control.FOCUS_ALL
@@ -619,6 +625,7 @@ func display_levels():
 		grid.columns = _calculate_grid_columns()
 		grid.add_theme_constant_override("h_separation", 16)
 		grid.add_theme_constant_override("v_separation", 16)
+		grid.visible = false
 		scroll_vbox.add_child(grid)
 		
 		header_btn.pressed.connect(func():
