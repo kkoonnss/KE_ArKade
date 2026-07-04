@@ -342,9 +342,7 @@ func _input(event: InputEvent):
 	
 	if event is InputEventJoypadMotion and event.axis == JOY_AXIS_RIGHT_Y:
 		get_viewport().set_input_as_handled()
-		if scroll != 0:
-			get_viewport().set_input_as_handled()
-			return
+		return
 
 	if event.is_action_pressed("ui_cancel"):
 		_handle_hub_cancel()
@@ -638,18 +636,67 @@ func display_levels():
 		
 		var index = 0
 		var level_buttons = []
+		
+		var raw_levels = []
 		l_dir.list_dir_begin()
 		var file_name = l_dir.get_next()
 		while file_name != "":
 			if l_dir.current_is_dir() and not file_name.begins_with("."):
-				var prefer_focus = file_name == selected_level_name or (selected_level_name == "" and file_name == last_known_level)
-				var btn = _create_level_card(file_name, levels_dir_path, grid, index, false, prefer_focus, scene_name)
-				level_buttons.append(btn)
-				all_focus_buttons.append(btn)
-				if prefer_focus:
-					_pending_menu_focus = btn
-				index += 1
+				raw_levels.append(file_name)
 			file_name = l_dir.get_next()
+			
+		var process_levels = []
+		if scene_name == "scene_classic_pack":
+			var favs = []
+			var others = []
+			var all_carts = get_sorted_cartridges()
+			var cart_map = {}
+			for c in all_carts:
+				cart_map[c.id] = c
+				
+			for lf in raw_levels:
+				var cid = _cart_id_for_classic_level(lf)
+				if cart_map.has(cid):
+					var cart = cart_map[cid]
+					if cart.favorite:
+						favs.append({"file": lf, "cart": cart})
+					else:
+						others.append({"file": lf, "cart": cart})
+				else:
+					others.append({"file": lf, "cart": null})
+			
+			favs.sort_custom(func(a,b): return _get_cartridge_sort_name(a.cart.game_name) < _get_cartridge_sort_name(b.cart.game_name))
+			others.sort_custom(func(a,b): 
+				if a.cart and b.cart: return _get_cartridge_sort_name(a.cart.game_name) < _get_cartridge_sort_name(b.cart.game_name)
+				return a.file < b.file
+			)
+			
+			for f in favs: process_levels.append({"file": f.file, "idx": f.cart.absolute_index})
+			if favs.size() > 0 and others.size() > 0:
+				var rem = favs.size() % grid.columns
+				if rem > 0:
+					for i in range(grid.columns - rem):
+						process_levels.append({"file": "", "idx": -1})
+			for o in others: process_levels.append({"file": o.file, "idx": o.cart.absolute_index if o.cart else -1})
+		else:
+			raw_levels.sort()
+			for lf in raw_levels:
+				process_levels.append({"file": lf, "idx": index})
+				index += 1
+				
+		for item in process_levels:
+			var fname = item.file
+			if fname == "":
+				var pad = Control.new()
+				grid.add_child(pad)
+				continue
+				
+			var prefer_focus = fname == selected_level_name or (selected_level_name == "" and fname == last_known_level)
+			var btn = _create_level_card(fname, levels_dir_path, grid, item.idx, false, prefer_focus, scene_name)
+			level_buttons.append(btn)
+			all_focus_buttons.append(btn)
+			if prefer_focus:
+				_pending_menu_focus = btn
 			
 		var cols = grid.columns
 		_chain_horizontal_focus(level_buttons, cols)
