@@ -1134,17 +1134,14 @@ func _draw_barrel(b: Dictionary, color: Color):
         draw_rect(Rect2(pos + Vector2(-hw, -hh), Vector2(hw * 2.0, hh * 2.0)), Color(color.r, color.g, color.b, 0.4), true)
         
         # Outer bounds
-        _glow_line(pos + Vector2(-hw, -hh), pos + Vector2(hw, -hh), color, 2.0)
-        _glow_line(pos + Vector2(-hw, hh), pos + Vector2(hw, hh), color, 2.0)
-        _glow_line(pos + Vector2(-hw, -hh), pos + Vector2(-hw, hh), color, 2.0)
-        _glow_line(pos + Vector2(hw, -hh), pos + Vector2(hw, hh), color, 2.0)
+        draw_rect(Rect2(pos + Vector2(-hw, -hh), Vector2(hw * 2.0, hh * 2.0)), color, false, 2.0)
         
         # Hoops (Vertical lines)
         _glow_line(pos + Vector2(-hw + 6, -hh), pos + Vector2(-hw + 6, hh), color, 1.5)
         _glow_line(pos + Vector2(hw - 6, -hh), pos + Vector2(hw - 6, hh), color, 1.5)
         
         # Rolling Planks (Horizontal lines)
-        var t = -pos.y / 8.0
+        var t = pos.y / 8.0
         for i in range(3):
             var offset = fmod(t + (i * (hh * 2.0 / 3.0)), hh * 2.0)
             if offset < 0: offset += hh * 2.0
