@@ -2,14 +2,14 @@
 run_id: codex_hub_design_preview_alignment_2026-07-04
 agent: codex
 session_start: 2026-07-04T00:00:00-07:00
-session_end: 2026-07-04T00:09:29-07:00
+session_end: 2026-07-04T00:12:00-07:00
 task_id: TASK-INT-10-design-live-preview
 lane: hub
 lock_held: hub-design
 status: pending_kons_verify
 pre_edit_commit: 7b11dc0
-close_commit: pending
-backup_status: pending_check
+close_commit: 6aa518b
+backup_status: pushed
 backup_remote: https://github.com/kkoonnss/KE_ArKade.git
 escalations:
   - vault/40-agent-runs/OPEN_QUESTIONS.md#2026-07-04-additions-codex-hub-design-takeover
@@ -48,7 +48,9 @@ Hub gate evidence:
 
 - Remote: `origin -> https://github.com/kkoonnss/KE_ArKade.git`.
 - Branch before close commit: `master...origin/master [ahead 16]`.
-- Local hook was hotfixed before the close commit; push result will be checked after commit.
+- Local hook was hotfixed before the close commit.
+- Post-commit hook result: `SUCCESS: pushed master and tags.`
+- Evidence from `_Briefs/governance/scripts/logs/push_backup.log`: `02422b3..6aa518b master -> master`; tag `pre-edit/hub/design-preview-7b11dc0` pushed.
 
 ## Open Questions
 
