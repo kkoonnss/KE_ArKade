@@ -63,6 +63,7 @@ var current_semantic_threshold = 0.5
 var current_map_bridge_type = "platforms"
 var logical_w = 1920.0
 var logical_h = 1080.0
+var kill_zone_y = 1080.0
 var barrel_spawner = {}
 var player_spawn = Vector2.ZERO
 var current_slope_angle = 1.0
@@ -307,9 +308,11 @@ func load_level():
     if game_id == "donkey_kong":
         logical_w = map_w / max(0.1, current_level_scale)
         logical_h = map_h / max(0.1, current_level_scale)
+        kill_zone_y = logical_h + 100.0
     else:
         logical_w = map_w
         logical_h = map_h
+        kill_zone_y = logical_h + 100.0
     grid.clear()
     walkable.clear()
     solids.clear()
@@ -789,12 +792,17 @@ func _setup_custom_donkey_kong():
     if platforms.size() > 0:
         var lowest_p = platforms[0]
         var highest_p = platforms[0]
+        var lowest_y_val = 0.0
         for p in platforms:
             var cy = (p["y_left"] + p["y_right"]) / 2.0
             var ly = (lowest_p["y_left"] + lowest_p["y_right"]) / 2.0
             var hy = (highest_p["y_left"] + highest_p["y_right"]) / 2.0
             if cy > ly: lowest_p = p
             if cy < hy: highest_p = p
+            if p["y_left"] > lowest_y_val: lowest_y_val = p["y_left"]
+            if p["y_right"] > lowest_y_val: lowest_y_val = p["y_right"]
+            
+        kill_zone_y = max(kill_zone_y, lowest_y_val + 100.0)
             
         player_spawn = Vector2(lowest_p["rect"].position.x + lowest_p["rect"].size.x * 0.8, lowest_p["y_right"] - 13)
         barrel_spawner = {
@@ -1142,7 +1150,7 @@ func _tick_barrel(delta):
                     b["vel"].x = dir * max(current_vx, 100.0)
                 elif abs(b["vel"].x) < 10:
                     b["vel"].x = [-1, 1][randi() % 2] * current_vx
-        if b["pos"].x < -100 or b["pos"].x > logical_w + 100 or b["pos"].y > logical_h + 100:
+        if b["pos"].x < -100 or b["pos"].x > logical_w + 100 or b["pos"].y > kill_zone_y:
             barrels.remove_at(i)
             continue
         for p in dk_players:
@@ -1523,7 +1531,7 @@ func _platform_move(delta, can_jump: bool):
                 pos.y = py - 20
                 vel.y = 0
                 player["on_ground"] = true
-    if not player["on_ground"] and pos.y > logical_h and game_id in ["donkey_kong", "bubble_bobble", "joust"]:
+    if not player["on_ground"] and pos.y > kill_zone_y and game_id in ["donkey_kong", "bubble_bobble", "joust"]:
         _lose_life()
         return
     player["pos"] = _clamp(pos)
@@ -1562,7 +1570,7 @@ func _dk_platform_move(p: Dictionary, idx: int, delta: float, can_jump: bool):
                 pos.y = py - 20
                 vel.y = 0
                 p["on_ground"] = true
-    if not p["on_ground"] and pos.y >= logical_h - 1:
+    if not p["on_ground"] and pos.y >= kill_zone_y:
         p["dead"] = true
         _lose_life()
         return
