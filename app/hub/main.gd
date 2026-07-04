@@ -408,8 +408,8 @@ func _update_scale_from_columns():
 	var card_width = float(available_width) / float(target_columns)
 	hub_card_scale = (card_width - 16.0) / 232.0
 	
-	# Clamp scale to prevent cards from being taller than the screen
-	var max_scale = (vp_height - 120.0) / 380.0
+	# Clamp scale to prevent cards from being taller than the available ScrollContainer height
+	var max_scale = (vp_height - 186.0) / 380.0
 	if hub_card_scale > max_scale:
 		hub_card_scale = max_scale
 		
@@ -571,24 +571,89 @@ func display_levels():
 	viewing_levels = true
 	_reset_menu_focus()
 	clear_main_panel()
-	var base_dir = ProjectSettings.globalize_path("res://").path_join("../../content/scenes").path_join(current_scene).path_join("levels")
-	var dir = DirAccess.open(base_dir)
-	if dir:
-		dir.list_dir_begin()
-		var file_name = dir.get_next()
+	
+	var scenes_dir_path = ProjectSettings.globalize_path("res://").path_join("../../content/scenes")
+	var scenes_dir = DirAccess.open(scenes_dir_path)
+	if not scenes_dir:
+		return
+		
+	var scenes = []
+	scenes_dir.list_dir_begin()
+	var s_name = scenes_dir.get_next()
+	while s_name != "":
+		if scenes_dir.current_is_dir() and not s_name.begins_with("."):
+			scenes.append(s_name)
+		s_name = scenes_dir.get_next()
+		
+	scenes.sort()
+	
+	var all_focus_buttons = []
+	var first_header = null
+	
+	for scene_name in scenes:
+		var levels_dir_path = scenes_dir_path.path_join(scene_name).path_join("levels")
+		var l_dir = DirAccess.open(levels_dir_path)
+		if not l_dir: continue
+		
+		# Build scene header
+		var header_btn = Button.new()
+		var pretty_name = scene_name.replace("scene_", "").replace("_", " ").capitalize()
+		header_btn.text = "▼ " + pretty_name
+		header_btn.add_theme_font_size_override("font_size", 28)
+		header_btn.add_theme_color_override("font_color", color_cyan)
+		header_btn.focus_mode = Control.FOCUS_ALL
+		header_btn.custom_minimum_size = Vector2(0, 60)
+		style_grid_button(header_btn)
+		
+		var margin = MarginContainer.new()
+		margin.add_theme_constant_override("margin_top", 12)
+		margin.add_theme_constant_override("margin_bottom", 12)
+		margin.add_child(header_btn)
+		scroll_vbox.add_child(margin)
+		
+		all_focus_buttons.append(header_btn)
+		if first_header == null:
+			first_header = header_btn
+		
+		var grid = GridContainer.new()
+		grid.columns = _calculate_grid_columns()
+		grid.add_theme_constant_override("h_separation", 16)
+		grid.add_theme_constant_override("v_separation", 16)
+		scroll_vbox.add_child(grid)
+		
+		header_btn.pressed.connect(func():
+			grid.visible = not grid.visible
+			if grid.visible:
+				header_btn.text = "▼ " + pretty_name
+			else:
+				header_btn.text = "▶ " + pretty_name
+		)
+		
 		var index = 0
-		var focus_buttons = []
+		var level_buttons = []
+		l_dir.list_dir_begin()
+		var file_name = l_dir.get_next()
 		while file_name != "":
-			if dir.current_is_dir() and not file_name.begins_with("."): 
+			if l_dir.current_is_dir() and not file_name.begins_with("."):
 				var prefer_focus = file_name == selected_level_name or (selected_level_name == "" and file_name == last_known_level)
-				focus_buttons.append(_create_level_card(file_name, base_dir, scenes_grid, index, false, prefer_focus))
+				var btn = _create_level_card(file_name, levels_dir_path, grid, index, false, prefer_focus, scene_name)
+				level_buttons.append(btn)
+				all_focus_buttons.append(btn)
+				if prefer_focus:
+					_pending_menu_focus = btn
 				index += 1
-			file_name = dir.get_next()
-		if scenes_grid: scenes_grid.columns = _calculate_grid_columns()
-		var cols = scenes_grid.columns if scenes_grid else 4
-		_chain_horizontal_focus(focus_buttons, cols)
-		_wire_vertical_focus_neighbors(focus_buttons, cols)
-		_wire_auto_scroll(focus_buttons, $UI/Content/MainPanel/ScrollContainer)
+			file_name = l_dir.get_next()
+			
+		var cols = grid.columns
+		_chain_horizontal_focus(level_buttons, cols)
+		_wire_vertical_focus_neighbors(level_buttons, cols)
+		
+	if _pending_menu_focus == null and first_header != null:
+		_pending_menu_focus = first_header
+		
+	# Vertical focus logic for headers
+	_wire_vertical_focus_neighbors(all_focus_buttons, 1) # This is a bit complex for a mix of grids and headers, but auto-scroll relies on global_position anyway
+	_wire_auto_scroll(all_focus_buttons, $UI/Content/MainPanel/ScrollContainer)
 	_focus_current_menu()
 func _on_level_selected(level_name: String):
 	selected_level_name = level_name
@@ -1150,14 +1215,18 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	
 	return title_btn
 
-func _create_level_card(level_name: String, levels_dir: String, container: Control, display_index: int = -1, is_scene: bool = false, prefer_focus: bool = false):
+func _create_level_card(level_name: String, levels_dir: String, container: Control, display_index: int = -1, is_scene: bool = false, prefer_focus: bool = false, override_scene_name: String = ""):
 	var btn = Button.new()
 	btn.custom_minimum_size = Vector2(256 * hub_card_scale, 284 * hub_card_scale)
 	btn.focus_mode = Control.FOCUS_ALL
 	if is_scene:
 		btn.pressed.connect(func(): _on_scene_selected(level_name))
 	else:
-		btn.pressed.connect(func(): _on_level_selected(level_name))
+		btn.pressed.connect(func():
+			if override_scene_name != "":
+				current_scene = override_scene_name
+			_on_level_selected(level_name)
+		)
 	container.add_child(btn)
 
 	var margin = MarginContainer.new()
