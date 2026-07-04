@@ -330,11 +330,11 @@ func load_level():
     if game_id == "donkey_kong":
         logical_w = map_w / max(0.1, current_level_scale)
         logical_h = map_h / max(0.1, current_level_scale)
-        kill_zone_y = logical_h + 100.0
+        kill_zone_y = logical_h + 40.0
     else:
         logical_w = map_w
         logical_h = map_h
-        kill_zone_y = logical_h + 100.0
+        kill_zone_y = logical_h + 40.0
         
     var loaded = false
     
@@ -813,8 +813,6 @@ func _setup_custom_donkey_kong():
             if cy < hy: highest_p = p
             if p["y_left"] > lowest_y_val: lowest_y_val = p["y_left"]
             if p["y_right"] > lowest_y_val: lowest_y_val = p["y_right"]
-            
-        kill_zone_y = max(kill_zone_y, lowest_y_val + 100.0)
             
         player_spawn = Vector2(lowest_p["rect"].position.x + lowest_p["rect"].size.x * 0.8, lowest_p["y_right"] - 13)
         barrel_spawner = {
@@ -1546,7 +1544,7 @@ func _platform_move(delta, can_jump: bool):
     if not player["on_ground"] and pos.y > kill_zone_y and game_id in ["donkey_kong", "bubble_bobble", "joust"]:
         _lose_life()
         return
-    player["pos"] = _clamp(pos)
+    player["pos"] = Vector2(clamp(pos.x, 0, logical_w), pos.y)
     player["vel"] = vel
 
 
@@ -1586,7 +1584,7 @@ func _dk_platform_move(p: Dictionary, idx: int, delta: float, can_jump: bool):
         p["dead"] = true
         _lose_life()
         return
-    p["pos"] = _clamp(pos)
+    p["pos"] = Vector2(clamp(pos.x, 0, logical_w), pos.y)
     p["vel"] = vel
 
 func _platform_y(pos: Vector2) -> float:

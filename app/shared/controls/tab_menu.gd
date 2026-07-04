@@ -848,6 +848,7 @@ func _load_settings():
 				k.value = bool(settings[k.id])
 			elif k.type == "enum":
 				k.value = str(settings[k.id])
+			emit_signal("knob_changed", k.id, k.value)
 
 func _save_settings():
 	if level_dir == "":
