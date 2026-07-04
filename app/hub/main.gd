@@ -220,19 +220,24 @@ func _prefer_menu_focus(control: Control):
 		control.focus_mode = Control.FOCUS_ALL
 	_pending_menu_focus = control
 
-func _chain_horizontal_focus(buttons: Array):
+func _chain_horizontal_focus(buttons: Array, columns: int = 4):
 	for i in range(buttons.size()):
 		var button = buttons[i] as Control
 		if button == null or not is_instance_valid(button):
 			continue
-		if i > 0:
+		if i > 0 and (i % columns) != 0:
 			var previous = buttons[i - 1] as Control
 			if previous != null and is_instance_valid(previous):
 				button.focus_neighbor_left = button.get_path_to(previous)
-		if i < buttons.size() - 1:
+		else:
+			button.focus_neighbor_left = NodePath()
+			
+		if i < buttons.size() - 1 and ((i + 1) % columns) != 0:
 			var next = buttons[i + 1] as Control
 			if next != null and is_instance_valid(next):
 				button.focus_neighbor_right = button.get_path_to(next)
+		else:
+			button.focus_neighbor_right = NodePath()
 
 func _wire_vertical_focus_neighbors(buttons: Array, columns: int):
 	for i in range(buttons.size()):
@@ -362,17 +367,8 @@ func _input(event: InputEvent):
 
 	if event.is_action_pressed("ui_left") and not in_sidenav and owner != null and games_overlay == null:
 		var nav = get_node_or_null("UI/Content/SideNav")
-		var should_go_left = false
+		var should_go_left = owner.focus_neighbor_left.is_empty()
 		
-		# If we're on the left edge of a grid, move to sidenav
-		var parent = owner.get_parent()
-		if parent is GridContainer and parent.columns > 0:
-			var idx = owner.get_index()
-			if idx % parent.columns == 0:
-				should_go_left = true
-		else:
-			should_go_left = true
-			
 		if should_go_left:
 			if _last_nav_focus and is_instance_valid(_last_nav_focus) and _last_nav_focus.is_inside_tree() and _last_nav_focus.is_visible_in_tree():
 				_last_nav_focus.grab_focus()
@@ -964,11 +960,6 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	bottom_margin.add_child(bottom_vbox)
 
 	var title_btn = Button.new()
-	var active_skin_name = current_skin if current_skin != "" else default_skin
-	var display_title = active_skin_name if current_skin != "" else game_name
-	if skins.size() > 1:
-		display_title = "< " + display_title + " >"
-	title_btn.text = display_title
 	title_btn.custom_minimum_size = Vector2(0, 36 * hub_card_scale)
 	title_btn.add_theme_font_size_override("font_size", int(16 * hub_card_scale))
 	title_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -990,7 +981,17 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 		_launch_game(cart_id)
 	)
 	
+	var _update_title = func():
+		if skins.size() > 1 and title_btn.has_focus():
+			var curr = current_skin if current_skin != "" else default_skin
+			title_btn.text = "< (X)  " + curr + "  (Y) >"
+		else:
+			title_btn.text = game_name
+			
 	if skins.size() > 1:
+		title_btn.focus_entered.connect(_update_title)
+		title_btn.focus_exited.connect(_update_title)
+		
 		title_btn.gui_input.connect(func(event):
 			var step = 0
 			if event is InputEventJoypadButton and event.pressed:
@@ -1007,6 +1008,8 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 				_cycle_skin(cart_id, skins, step)
 				title_btn.accept_event()
 		)
+		
+	_update_title.call()
 
 	bottom_vbox.add_child(title_btn)
 	_remember_menu_focus(title_btn)
@@ -1096,19 +1099,37 @@ func _create_level_card(level_name: String, levels_dir: String, container: Contr
 	var tex_rect = TextureRect.new()
 	tex_rect.custom_minimum_size = Vector2(232 * hub_card_scale, 176 * hub_card_scale)
 	tex_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	tex_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if FileAccess.file_exists(thumb_path):
 		var img = Image.load_from_file(thumb_path)
 		if img: tex_rect.texture = ImageTexture.create_from_image(img)
+	else:
+		var placeholder = ColorRect.new()
+		placeholder.color = Color(0.1, 0.1, 0.15)
+		placeholder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		var pl_lbl = Label.new()
+		pl_lbl.text = "No Image"
+		pl_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		pl_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		pl_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		placeholder.add_child(pl_lbl)
+		tex_rect.add_child(placeholder)
 		
 	if display_index >= 0:
+		var num_bg = ColorRect.new()
+		num_bg.color = Color(0.15, 0.15, 0.15, 0.9)
+		num_bg.custom_minimum_size = Vector2(32, 32)
+		num_bg.position = Vector2(8, 8)
 		var number_lbl = Label.new()
 		number_lbl.text = str(display_index + 1) + "."
-		number_lbl.add_theme_font_size_override("font_size", 22)
+		number_lbl.add_theme_font_size_override("font_size", 18)
 		number_lbl.add_theme_color_override("font_color", Color(0, 0.9, 1.0))
-		number_lbl.position = Vector2(8, 8)
-		tex_rect.add_child(number_lbl)
+		number_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		number_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		number_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		num_bg.add_child(number_lbl)
+		tex_rect.add_child(num_bg)
 		
 	vbox.add_child(tex_rect)
 	
@@ -1135,8 +1156,10 @@ func _create_level_card(level_name: String, levels_dir: String, container: Contr
 	title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_lbl.add_theme_font_size_override("font_size", 18)
+	title_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	title_lbl.add_theme_font_size_override("font_size", int(18 * hub_card_scale))
 	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	text_container.add_child(title_lbl)
 	
 	
@@ -1196,8 +1219,12 @@ func _level_card_thumb_path(level_dir: String, cart_id: String) -> String:
 func _first_existing_file(base_dir: String, file_names: Array) -> String:
 	for file_name in file_names:
 		var path = base_dir.path_join(str(file_name))
-		if FileAccess.file_exists(path):
-			return path
+		if FileAccess.file_exists(path): return path
+		path = base_dir.path_join(str(file_name).replace(".png", ".jpg"))
+		if FileAccess.file_exists(path): return path
+		path = base_dir.path_join(str(file_name).replace(".png", ".jpeg"))
+		if FileAccess.file_exists(path): return path
+	return ""
 	return ""
 
 
@@ -1384,26 +1411,28 @@ func _get_skin_list(manifest: Dictionary, game_name: String) -> Array:
 
 
 func _cycle_skin(cart_id: String, skin_names: Array, step: int):
-
 	if skin_names.is_empty():
-
 		return
 
+	var focus_owner = get_viewport().gui_get_focus_owner()
+	var focus_index = -1
+	if focus_owner and focus_owner in _game_title_focus_buttons:
+		focus_index = _game_title_focus_buttons.find(focus_owner)
+
 	var current = str(selected_skins.get(cart_id, skin_names[0]))
-
 	var idx = skin_names.find(current)
-
 	if idx < 0:
-
 		idx = 0
-
 	idx = (idx + step + skin_names.size()) % skin_names.size()
-
 	selected_skins[cart_id] = str(skin_names[idx])
-
 	save_favorites()
-
 	_refresh_card_views()
+
+	if focus_index >= 0 and focus_index < _game_title_focus_buttons.size():
+		var btn = _game_title_focus_buttons[focus_index]
+		if is_instance_valid(btn):
+			_remember_menu_focus(btn)
+			btn.grab_focus()
 
 
 
@@ -1570,9 +1599,9 @@ func _get_default_skin_name(manifest: Dictionary, game_name: String) -> String:
 func _refresh_card_views():
 
 	if current_tab == "games":
-
 		display_games()
-
+	elif current_tab == "scenes":
+		display_scenes()
 	elif current_tab == "levels" and launch_dialog and launch_dialog.visible and selected_level_name != "":
 
 		_on_level_selected(selected_level_name)
