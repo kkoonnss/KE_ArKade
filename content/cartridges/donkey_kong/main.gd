@@ -60,6 +60,7 @@ var current_extra_fill = 0.5
 var current_ladder_density = 1.0
 var current_max_ladder_length = 300.0
 var current_allow_broken_ladders = true
+var current_semantic_collisions = true
 var current_semantic_threshold = 0.5
 var current_map_bridge_type = "platforms"
 var logical_w = 1920.0
@@ -223,6 +224,7 @@ func _build_ui():
     tab_menu.register_knob_bool("allow_broken_ladders", "Break Ladders", current_allow_broken_ladders, "Secondary")
     tab_menu.register_knob_enum("map_bridge_type", "Map Bridge Type", current_map_bridge_type, ["platforms", "bridges"], "Secondary")
     tab_menu.register_knob_float("semantic_threshold", "Semantic Threshold", 0.5, 0.0, 1.0, 0.05, "Secondary")
+    tab_menu.register_knob_bool("semantic_collisions", "Semantic Collisions", current_semantic_collisions, "Secondary")
     tab_menu.register_knob_enum("background_view", "Background View", background_view, ["final", "photo", "semantic"], "Preview")
     tab_menu.register_knob_bool("reference", "Background Layer", show_reference, "Preview")
     tab_menu.register_knob_float("reference_opacity", "Background Opacity", reference_opacity, 0.0, 1.0, 0.05, "Preview")
@@ -276,6 +278,10 @@ func _on_knob_changed(knob_id: String, value):
         reset_game()
     elif knob_id == "allow_broken_ladders":
         current_allow_broken_ladders = bool(value)
+        load_level()
+        reset_game()
+    elif knob_id == "semantic_collisions":
+        current_semantic_collisions = bool(value)
         load_level()
         reset_game()
     elif knob_id == "max_ladder_length":
@@ -631,7 +637,7 @@ func _setup_custom_donkey_kong():
     var cs = max(0.1, current_level_scale)
     
     # 1. Custom Walls (Islands)
-    if grid.size() > 0:
+    if current_semantic_collisions and grid.size() > 0:
         for y in range(grid.size()):
             var row = grid[y]
             for x in range(row.size()):
