@@ -25,7 +25,9 @@ var collapsed_groups = {}
 var overlay_mode: String = "start"
 var selected_menu_index: int = 0
 var menu_axis_cooldown: float = 0.0
-
+var _joy_scroll_state: int = 0
+var _joy_scroll_timer: float = 0.0
+var _joy_scroll_is_repeating: bool = false
 var level_name: String = "GAME"
 var cartridge_id: String = "unknown"
 var level_dir: String = ""
@@ -290,9 +292,23 @@ func _process(delta):
 
 		if dir != 0:
 			if _joy_scroll_state != dir:
+				if _joy_scroll_state != 0:
+					var ev_up = InputEventAction.new()
+					ev_up.action = "ui_up"
+					ev_up.pressed = false
+					Input.parse_input_event(ev_up)
+					var ev_down = InputEventAction.new()
+					ev_down.action = "ui_down"
+					ev_down.pressed = false
+					Input.parse_input_event(ev_down)
 				_joy_scroll_state = dir
 				_joy_scroll_timer = 0.4
 				_joy_scroll_is_repeating = false
+				
+				var ev = InputEventAction.new()
+				ev.action = "ui_down" if dir == 1 else "ui_up"
+				ev.pressed = true
+				Input.parse_input_event(ev)
 			else:
 				_joy_scroll_timer -= delta
 				if _joy_scroll_timer <= 0.0:
@@ -303,11 +319,16 @@ func _process(delta):
 					ev.action = "ui_down" if dir == 1 else "ui_up"
 					ev.pressed = true
 					Input.parse_input_event(ev)
-					var ev_rel = InputEventAction.new()
-					ev_rel.action = ev.action
-					ev_rel.pressed = false
-					Input.parse_input_event(ev_rel)
 		else:
+			if _joy_scroll_state != 0:
+				var ev_up = InputEventAction.new()
+				ev_up.action = "ui_up"
+				ev_up.pressed = false
+				Input.parse_input_event(ev_up)
+				var ev_down = InputEventAction.new()
+				ev_down.action = "ui_down"
+				ev_down.pressed = false
+				Input.parse_input_event(ev_down)
 			_joy_scroll_state = 0
 			_joy_scroll_is_repeating = false
 
