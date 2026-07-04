@@ -1128,22 +1128,40 @@ func _tick_fire_guy(delta):
 
 func _draw_barrel(b: Dictionary, color: Color):
     var pos = b["pos"]
-    var angle = 0.0
     if b.get("ladder", false):
-        angle = pos.y / 12.0
-    else:
-        angle = pos.x / 12.0
+        var hw = 15.0
+        var hh = 11.0
+        draw_rect(Rect2(pos + Vector2(-hw, -hh), Vector2(hw * 2.0, hh * 2.0)), Color(color.r, color.g, color.b, 0.4), true)
         
-    draw_circle(pos, 12, Color(color.r, color.g, color.b, 0.4))
-    draw_arc(pos, 12, 0, TAU, 16, color, 2.0)
-    
-    var l1_s = pos + Vector2(-8, -8).rotated(angle)
-    var l1_e = pos + Vector2(8, 8).rotated(angle)
-    var l2_s = pos + Vector2(-8, 8).rotated(angle)
-    var l2_e = pos + Vector2(8, -8).rotated(angle)
-    
-    _glow_line(l1_s, l1_e, color, 1.5)
-    _glow_line(l2_s, l2_e, color, 1.5)
+        # Outer bounds
+        _glow_line(pos + Vector2(-hw, -hh), pos + Vector2(hw, -hh), color, 2.0)
+        _glow_line(pos + Vector2(-hw, hh), pos + Vector2(hw, hh), color, 2.0)
+        _glow_line(pos + Vector2(-hw, -hh), pos + Vector2(-hw, hh), color, 2.0)
+        _glow_line(pos + Vector2(hw, -hh), pos + Vector2(hw, hh), color, 2.0)
+        
+        # Hoops (Vertical lines)
+        _glow_line(pos + Vector2(-hw + 6, -hh), pos + Vector2(-hw + 6, hh), color, 1.5)
+        _glow_line(pos + Vector2(hw - 6, -hh), pos + Vector2(hw - 6, hh), color, 1.5)
+        
+        # Rolling Planks (Horizontal lines)
+        var t = -pos.y / 8.0
+        for i in range(3):
+            var offset = fmod(t + (i * (hh * 2.0 / 3.0)), hh * 2.0)
+            if offset < 0: offset += hh * 2.0
+            var y = -hh + offset
+            _glow_line(pos + Vector2(-hw, y), pos + Vector2(hw, y), color, 1.0)
+    else:
+        var angle = pos.x / 12.0
+        draw_circle(pos, 12, Color(color.r, color.g, color.b, 0.4))
+        draw_arc(pos, 12, 0, TAU, 16, color, 2.0)
+        
+        var l1_s = pos + Vector2(-8, -8).rotated(angle)
+        var l1_e = pos + Vector2(8, 8).rotated(angle)
+        var l2_s = pos + Vector2(-8, 8).rotated(angle)
+        var l2_e = pos + Vector2(8, -8).rotated(angle)
+        
+        _glow_line(l1_s, l1_e, color, 1.5)
+        _glow_line(l2_s, l2_e, color, 1.5)
 
 func _draw_fire_guy(pos: Vector2, color: Color):
     var msec = Time.get_ticks_msec()
