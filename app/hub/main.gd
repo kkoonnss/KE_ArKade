@@ -48,6 +48,7 @@ var _pending_menu_focus: Control = null
 var _game_title_focus_buttons: Array = []
 var _last_nav_focus: Control = null
 var _last_content_focus: Control = null
+var target_columns: int = 4
 var hub_card_scale: float = 1.0
 var scale_slider: HSlider = null
 
@@ -56,29 +57,7 @@ func _ready():
 	_ensure_hub_input_actions()
 	if scenes_grid is GridContainer: scenes_grid.columns = _calculate_grid_columns()
 	
-	var top_bar = get_node_or_null("UI/TopBar")
-	if top_bar and not scale_slider:
-		var scale_container = HBoxContainer.new()
-		scale_container.alignment = BoxContainer.ALIGNMENT_CENTER
-		var scale_lbl = Label.new()
-		scale_lbl.text = "Scale"
-		scale_lbl.add_theme_font_size_override("font_size", 20)
-		scale_lbl.add_theme_color_override("font_color", color_cyan)
-		scale_container.add_child(scale_lbl)
-		scale_slider = HSlider.new()
-		scale_slider.custom_minimum_size = Vector2(150, 0)
-		scale_slider.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		scale_slider.min_value = 0.5
-		scale_slider.max_value = 1.5
-		scale_slider.step = 0.1
-		scale_slider.value = hub_card_scale
-		scale_slider.value_changed.connect(func(v):
-			hub_card_scale = v
-			_refresh_card_views()
-		)
-		scale_container.add_child(scale_slider)
-		top_bar.add_child(scale_container)
-	
+	get_viewport().size_changed.connect(_update_scale_from_columns)
 	# Initialize scroll_vbox to wrap ScenesGrid
 	var scroll_container = $UI/Content/MainPanel/ScrollContainer
 	if scroll_container and scenes_grid:
@@ -110,10 +89,12 @@ func _ready():
 	if nav.has_node("ServiceBtn"): nav.get_node("ServiceBtn").pressed.connect(_on_log_pressed)
 	if nav.has_node("HelpBtn"): nav.get_node("HelpBtn").pressed.connect(_on_help_pressed)
 	
+	if nav.has_node("SettingsBtn"): nav.get_node("SettingsBtn").pressed.connect(display_settings)
+	
 	if nav.has_node("SortFavBtn"): nav.get_node("SortFavBtn").toggled.connect(_on_sort_favorites_toggled)
 	
 	var nav_buttons = []
-	for btn_name in ["ScenesBtn", "LevelsBtn", "GamesBtn", "DesignBtn", "CalibrateBtn", "ServiceBtn", "HelpBtn", "TestPatternBtn", "RestoreBtn"]:
+	for btn_name in ["ScenesBtn", "LevelsBtn", "GamesBtn", "DesignBtn", "CalibrateBtn", "SettingsBtn", "HelpBtn"]:
 		if nav.has_node(btn_name):
 			nav_buttons.append(nav.get_node(btn_name))
 	for i in range(nav_buttons.size()):
@@ -262,6 +243,7 @@ func _wire_vertical_focus_neighbors(buttons: Array, columns: int):
 func _wire_auto_scroll(buttons: Array, scroll_container: ScrollContainer):
 	if scroll_container == null:
 		return
+	scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	for b in buttons:
 		var button = b as Control
 		if button == null or not is_instance_valid(button):
@@ -269,7 +251,14 @@ func _wire_auto_scroll(buttons: Array, scroll_container: ScrollContainer):
 		button.focus_entered.connect(func():
 			_last_content_focus = button
 			if is_instance_valid(button) and is_instance_valid(scroll_container):
-				scroll_container.ensure_control_visible(button)
+				var offset = (button.global_position.y + button.size.y / 2.0) - (scroll_container.global_position.y + scroll_container.size.y / 2.0)
+				var target_scroll = scroll_container.scroll_vertical + offset
+				var max_scroll = scroll_container.get_v_scroll_bar().max_value - scroll_container.size.y
+				target_scroll = clamp(target_scroll, 0, max_scroll)
+				if target_scroll < 0: target_scroll = 0
+				
+				var tween = scroll_container.create_tween()
+				tween.tween_property(scroll_container, "scroll_vertical", target_scroll, 0.15).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 		)
 
 func _focus_current_menu():
@@ -401,10 +390,89 @@ func _handle_hub_cancel():
 	_focus_current_menu()
 
 func _calculate_grid_columns() -> int:
+	return target_columns
+
+func _update_scale_from_columns():
 	var vp_width = get_viewport_rect().size.x
 	var available_width = vp_width - 320
-	var card_width = (232 * hub_card_scale) + 16
-	return int(max(1, floor(available_width / card_width)))
+	var card_width = float(available_width) / float(target_columns)
+	hub_card_scale = (card_width - 16.0) / 232.0
+	if hub_card_scale < 0.2: hub_card_scale = 0.2
+	_refresh_card_views()
+
+func display_settings():
+	current_tab = "settings"
+	viewing_levels = false
+	_reset_menu_focus()
+	clear_main_panel()
+	
+	var vbox = VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 24)
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_vbox.add_child(vbox)
+	
+	var title = Label.new()
+	title.text = "Settings"
+	title.add_theme_font_size_override("font_size", 48)
+	title.add_theme_color_override("font_color", color_cyan)
+	vbox.add_child(title)
+	
+	var focus_buttons = []
+	
+	var cols_btn = Button.new()
+	cols_btn.text = "< (" + str(target_columns) + ") Columns >"
+	cols_btn.custom_minimum_size = Vector2(400, 64)
+	cols_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	style_grid_button(cols_btn)
+	cols_btn.gui_input.connect(func(event):
+		if event.is_action_pressed("ui_left", false, true):
+			if target_columns > 1:
+				target_columns -= 1
+				cols_btn.text = "< (" + str(target_columns) + ") Columns >"
+				_update_scale_from_columns()
+				cols_btn.accept_event()
+		elif event.is_action_pressed("ui_right", false, true):
+			if target_columns < 6:
+				target_columns += 1
+				cols_btn.text = "< (" + str(target_columns) + ") Columns >"
+				_update_scale_from_columns()
+				cols_btn.accept_event()
+	)
+	vbox.add_child(cols_btn)
+	focus_buttons.append(cols_btn)
+	
+	var log_btn = Button.new()
+	log_btn.text = "View Log"
+	log_btn.custom_minimum_size = Vector2(400, 64)
+	log_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	style_grid_button(log_btn)
+	log_btn.pressed.connect(_on_log_pressed)
+	vbox.add_child(log_btn)
+	focus_buttons.append(log_btn)
+	
+	var tp_btn = Button.new()
+	tp_btn.text = "Test Pattern"
+	tp_btn.custom_minimum_size = Vector2(400, 64)
+	tp_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	style_grid_button(tp_btn)
+	tp_btn.pressed.connect(_on_test_pattern_pressed)
+	vbox.add_child(tp_btn)
+	focus_buttons.append(tp_btn)
+	
+	var rest_btn = Button.new()
+	rest_btn.text = "Restore Default Scene"
+	rest_btn.custom_minimum_size = Vector2(400, 64)
+	rest_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	style_grid_button(rest_btn)
+	rest_btn.pressed.connect(_on_restore_pressed)
+	vbox.add_child(rest_btn)
+	focus_buttons.append(rest_btn)
+	
+	_chain_horizontal_focus(focus_buttons, 1)
+	_wire_vertical_focus_neighbors(focus_buttons, 1)
+	_wire_auto_scroll(focus_buttons, $UI/Content/MainPanel/ScrollContainer)
+	_focus_current_menu()
 
 func display_scenes():
 	current_tab = "scenes"

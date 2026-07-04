@@ -87,7 +87,13 @@ layout_mode = 2
 theme_override_font_sizes/font_size = 32
 text = "Devices"
 
+[node name="SettingsBtn" type="Button" parent="UI/Content/SideNav"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Settings"
+
 [node name="ServiceBtn" type="Button" parent="UI/Content/SideNav"]
+visible = false
 layout_mode = 2
 theme_override_font_sizes/font_size = 32
 text = "Log"
@@ -102,11 +108,13 @@ theme_override_font_sizes/font_size = 32
 text = " [ ? ] Help "
 
 [node name="TestPatternBtn" type="Button" parent="UI/Content/SideNav"]
+visible = false
 layout_mode = 2
 theme_override_font_sizes/font_size = 32
 text = "Test Pattern"
 
 [node name="RestoreBtn" type="Button" parent="UI/Content/SideNav"]
+visible = false
 layout_mode = 2
 theme_override_font_sizes/font_size = 32
 text = " Restore "
