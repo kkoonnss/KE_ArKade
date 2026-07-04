@@ -168,6 +168,7 @@ var preview_status_label: Label
 var is_preview_deriving: bool = false
 var preview_derive_thread: Thread
 var preview_dirty_since_derive: bool = true # true until we've derived at least once for current paint state
+var preview_last_derive_ok: bool = false
 
 func _ready():
     Palette = load(_get_repo_root().path_join("app/shared/palette.gd"))
@@ -736,11 +737,7 @@ func _apply_resolution_setting():
         
     _update_opacity()
     _update_resolution_label()
-    
-    current_level_dir = ""
-    preview_dirty_since_derive = true
-    if preview_active:
-        _refresh_preview()
+    _mark_preview_source_dirty(true)
 
 func _trigger_derive():
     if current_image_path == "" or is_deriving:
@@ -785,6 +782,7 @@ func _on_derive_finished(output: Array):
             semantic_image.convert(Image.FORMAT_RGBA8)
             semantic_texture.update(semantic_image)
             _update_resolution_label()
+            _mark_preview_source_dirty(true)
 
 func _input(event):
     # Preview toggle / game-cycle is always reachable, controller + keyboard,
@@ -816,8 +814,8 @@ func _input(event):
                 _open_preview_controls()
                 return
 
-    # While preview's secondary-controls overlay owns input, or while deriving in background, don't paint.
-    if preview_tab_menu != null or is_deriving:
+    # While preview owns the canvas, or while deriving in background, don't paint.
+    if preview_active or preview_tab_menu != null or is_deriving:
         return
 
     # Handle escaping brush mode
@@ -943,6 +941,7 @@ func _paint_at_cursor():
                 
     if painted:
         semantic_texture.update(semantic_image)
+        _mark_preview_source_dirty(false)
 
 func _on_btn_save_pressed():
     if not semantic_image: return
@@ -1187,6 +1186,7 @@ func _resolve_preview_level_dir() -> String:
 func _derive_preview_scratch_dir() -> String:
     var scratch_abs = ProjectSettings.globalize_path(preview_scratch_dir)
     DirAccess.make_dir_recursive_absolute(scratch_abs)
+    _clear_preview_derived_dir(scratch_abs)
     var map_path = scratch_abs.path_join("semantic_map.png")
     _save_semantic_map(map_path)
 
@@ -1203,16 +1203,41 @@ func _derive_preview_scratch_dir() -> String:
         {"cmd": "python3", "args": [py_script, scratch_abs]}
     ]
     var exit_code = -1
+    var full_output = ""
     for c in cmds:
         var output = []
         exit_code = OS.execute(c.cmd, c.args, output, true)
         var out_str = output[0] if output.size() > 0 else ""
+        full_output = out_str
         if out_str.find("is not recognized") != -1 or out_str.find("not found") != -1:
             continue
         break
 
+    var grid_path = scratch_abs.path_join("derived").path_join("grid.json")
+    preview_last_derive_ok = (exit_code == 0) and FileAccess.file_exists(grid_path)
+    if not preview_last_derive_ok:
+        printerr("Preview derive failed or produced no grid.json. Using adapter fallback. Exit code: ", exit_code)
+        if full_output != "":
+            printerr("Preview derive output:\n", full_output)
     preview_dirty_since_derive = false
     return scratch_abs
+
+func _clear_preview_derived_dir(scratch_abs: String) -> void:
+    var derived_dir = scratch_abs.path_join("derived")
+    if not DirAccess.dir_exists_absolute(derived_dir):
+        return
+    var dir = DirAccess.open(derived_dir)
+    if dir == null:
+        return
+    for file_name in dir.get_files():
+        DirAccess.remove_absolute(derived_dir.path_join(file_name))
+
+func _mark_preview_source_dirty(refresh_now: bool) -> void:
+    current_level_dir = ""
+    preview_dirty_since_derive = true
+    preview_last_derive_ok = false
+    if refresh_now and preview_active:
+        _refresh_preview()
 
 func _refresh_preview():
     if not preview_active or not semantic_image:
@@ -1238,6 +1263,8 @@ func _refresh_preview():
         preview_layout = adapter.fallback_layout(preview_level_dir, knobs)
 
     var src = "saved level" if preview_level_dir == current_level_dir else "unsaved paint (scratch derive)"
+    if preview_level_dir != current_level_dir and not preview_last_derive_ok:
+        src += ", fallback"
     preview_status_label.text = "Previewing %s — %s" % [game["title"], src]
     preview_overlay.queue_redraw()
 
