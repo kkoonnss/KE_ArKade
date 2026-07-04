@@ -247,10 +247,14 @@ func parse_simple_yaml(path: String) -> Dictionary:
 
 
 func _process(delta):
-    if game_state == "playing":
+    var is_overlay_active = false
+    if tab_menu and tab_menu.overlay_mode != "":
+        is_overlay_active = true
+
+    if game_state == "playing" and not is_overlay_active:
         game_time += delta
     menu_axis_cooldown = max(0.0, menu_axis_cooldown - delta)
-    if frightened_timer > 0.0:
+    if frightened_timer > 0.0 and not is_overlay_active and game_state == "playing":
         frightened_timer = max(0.0, frightened_timer - delta)
         if frightened_timer <= 0.0:
             frightened_chain_count = 0
@@ -264,10 +268,6 @@ func _process(delta):
                 var focused = get_viewport().gui_get_focus_owner()
                 if focused != null and (focused == parent_control or parent_control.is_ancestor_of(focused)):
                     is_tunnel_fill_focused = true
-                    
-        var is_overlay_active = false
-        if tab_menu and tab_menu.overlay_mode != "":
-            is_overlay_active = true
             
         if tab_menu and tab_menu.menu_overlay:
             var target_a = 0.15 if is_tunnel_fill_focused else 1.0
@@ -1112,6 +1112,24 @@ func _draw_ghost(pos: Vector2, color: Color, frightened: bool):
         draw_circle(pos + Vector2(_scaled_radius(6.5 * ratio), -_scaled_radius(3.5 * ratio)), _scaled_radius(5.0 * ratio), eye_white)
         draw_circle(pos + Vector2(-_scaled_radius(5.0 * ratio), -_scaled_radius(2.0 * ratio)), _scaled_radius(2.0 * ratio), pupil)
         draw_circle(pos + Vector2(_scaled_radius(8.0 * ratio), -_scaled_radius(2.0 * ratio)), _scaled_radius(2.0 * ratio), pupil)
+    else:
+        var face_color = Color(1.0, 0.16, 0.2) if flash_on else Color(1.0, 0.72, 0.08)
+        
+        # Eyes
+        draw_circle(pos + Vector2(-_scaled_radius(6.0 * ratio), -_scaled_radius(3.0 * ratio)), _scaled_radius(2.0 * ratio), face_color)
+        draw_circle(pos + Vector2(_scaled_radius(6.0 * ratio), -_scaled_radius(3.0 * ratio)), _scaled_radius(2.0 * ratio), face_color)
+        
+        # Wiggly zig-zag mouth
+        var mouth_pts = PackedVector2Array()
+        mouth_pts.append(pos + Vector2(-_scaled_radius(9.0 * ratio), _scaled_radius(6.0 * ratio)))
+        mouth_pts.append(pos + Vector2(-_scaled_radius(6.0 * ratio), _scaled_radius(3.0 * ratio)))
+        mouth_pts.append(pos + Vector2(-_scaled_radius(3.0 * ratio), _scaled_radius(6.0 * ratio)))
+        mouth_pts.append(pos + Vector2(0.0, _scaled_radius(3.0 * ratio)))
+        mouth_pts.append(pos + Vector2(_scaled_radius(3.0 * ratio), _scaled_radius(6.0 * ratio)))
+        mouth_pts.append(pos + Vector2(_scaled_radius(6.0 * ratio), _scaled_radius(3.0 * ratio)))
+        mouth_pts.append(pos + Vector2(_scaled_radius(9.0 * ratio), _scaled_radius(6.0 * ratio)))
+        
+        draw_polyline(mouth_pts, face_color, _scaled_width(2.0 * ratio), true)
 
 func _draw_particles():
     for p in active_particles:
