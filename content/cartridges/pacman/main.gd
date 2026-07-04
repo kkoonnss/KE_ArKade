@@ -658,18 +658,34 @@ func _is_graph_connected(keep: Dictionary) -> bool:
     
     var visited = {start: true}
     var queue = [start]
+    var q_idx = 0
     
-    while not queue.is_empty():
-        var curr = queue.pop_front()
+    while q_idx < queue.size():
+        var curr = queue[q_idx]
+        q_idx += 1
         var parts = curr.split(":")
         var cx = int(parts[0])
         var cy = int(parts[1])
         
-        for dir in [Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1), Vector2i(0,-1)]:
-            var nk = "%d:%d" % [cx + dir.x, cy + dir.y]
-            if keep.has(nk) and not visited.has(nk):
-                visited[nk] = true
-                queue.append(nk)
+        var n1 = "%d:%d" % [cx + 1, cy]
+        if keep.has(n1) and not visited.has(n1):
+            visited[n1] = true
+            queue.append(n1)
+            
+        var n2 = "%d:%d" % [cx - 1, cy]
+        if keep.has(n2) and not visited.has(n2):
+            visited[n2] = true
+            queue.append(n2)
+            
+        var n3 = "%d:%d" % [cx, cy + 1]
+        if keep.has(n3) and not visited.has(n3):
+            visited[n3] = true
+            queue.append(n3)
+            
+        var n4 = "%d:%d" % [cx, cy - 1]
+        if keep.has(n4) and not visited.has(n4):
+            visited[n4] = true
+            queue.append(n4)
                 
     return visited.size() == keep.size()
 
