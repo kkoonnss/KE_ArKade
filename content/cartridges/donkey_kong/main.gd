@@ -901,6 +901,7 @@ func _input(event):
                 return
         if event is InputEventKey and event.keycode == KEY_TAB:
             tab_menu.visible = not tab_menu.visible
+            paused = tab_menu.visible
             if tab_menu.visible:
                 _set_menu_mode(false)
         elif event is InputEventKey and event.keycode == KEY_F1:
@@ -928,7 +929,7 @@ func _process(delta):
     _splash(delta)
     if blanked:
         return
-    if paused or state != "playing":
+    if paused or state != "playing" or (tab_menu != null and tab_menu.overlay_mode != ""):
         queue_redraw()
         return
     if game_id == "donkey_kong":

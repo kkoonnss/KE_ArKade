@@ -308,7 +308,7 @@ func _process(delta):
     if heartbeat_timer >= 1.0:
         heartbeat_timer = 0.0
         _send_ipc({"type": "heartbeat", "data": {"score": score, "wanted": wanted}})
-    if paused or blanked or game_state != "playing":
+    if paused or blanked or game_state != "playing" or (tab_menu != null and tab_menu.overlay_mode != ""):
         queue_redraw()
         return
     _tick(delta)
