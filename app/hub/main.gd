@@ -394,9 +394,16 @@ func _calculate_grid_columns() -> int:
 
 func _update_scale_from_columns():
 	var vp_width = get_viewport_rect().size.x
+	var vp_height = get_viewport_rect().size.y
 	var available_width = vp_width - 320
 	var card_width = float(available_width) / float(target_columns)
 	hub_card_scale = (card_width - 16.0) / 232.0
+	
+	# Clamp scale to prevent cards from being taller than the screen
+	var max_scale = (vp_height - 120.0) / 380.0
+	if hub_card_scale > max_scale:
+		hub_card_scale = max_scale
+		
 	if hub_card_scale < 0.2: hub_card_scale = 0.2
 	_refresh_card_views()
 
@@ -426,18 +433,28 @@ func display_settings():
 	cols_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	style_grid_button(cols_btn)
 	cols_btn.gui_input.connect(func(event):
-		if event.is_action_pressed("ui_left", false, true):
-			if target_columns > 1:
-				target_columns -= 1
-				cols_btn.text = "< (" + str(target_columns) + ") Columns >"
-				_update_scale_from_columns()
+		var go_left = false
+		var go_right = false
+		if event.is_action_pressed("ui_left", false, true): go_left = true
+		elif event.is_action_pressed("ui_right", false, true): go_right = true
+		elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			if event.position.x < cols_btn.size.x * 0.3:
+				go_left = true
 				cols_btn.accept_event()
-		elif event.is_action_pressed("ui_right", false, true):
-			if target_columns < 6:
-				target_columns += 1
-				cols_btn.text = "< (" + str(target_columns) + ") Columns >"
-				_update_scale_from_columns()
+			elif event.position.x > cols_btn.size.x * 0.7:
+				go_right = true
 				cols_btn.accept_event()
+				
+		if go_left and target_columns > 1:
+			target_columns -= 1
+			cols_btn.text = "< (" + str(target_columns) + ") Columns >"
+			_update_scale_from_columns()
+			cols_btn.accept_event()
+		elif go_right and target_columns < 6:
+			target_columns += 1
+			cols_btn.text = "< (" + str(target_columns) + ") Columns >"
+			_update_scale_from_columns()
+			cols_btn.accept_event()
 	)
 	vbox.add_child(cols_btn)
 	focus_buttons.append(cols_btn)
@@ -1101,6 +1118,13 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 					step = -1
 				elif event.keycode == KEY_Y:
 					step = 1
+			elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+				if event.position.x < title_btn.size.x * 0.25:
+					step = -1
+					title_btn.accept_event()
+				elif event.position.x > title_btn.size.x * 0.75:
+					step = 1
+					title_btn.accept_event()
 			if step != 0:
 				_cycle_skin(cart_id, skins, step)
 				title_btn.accept_event()
