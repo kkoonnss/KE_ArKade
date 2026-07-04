@@ -304,11 +304,6 @@ func _process(delta):
 				_joy_scroll_state = dir
 				_joy_scroll_timer = 0.4
 				_joy_scroll_is_repeating = false
-				
-				var ev = InputEventAction.new()
-				ev.action = "ui_down" if dir == 1 else "ui_up"
-				ev.pressed = true
-				Input.parse_input_event(ev)
 			else:
 				_joy_scroll_timer -= delta
 				if _joy_scroll_timer <= 0.0:
