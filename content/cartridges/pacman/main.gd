@@ -73,6 +73,8 @@ var grid_min := Vector2i.ZERO
 var grid_max := Vector2i.ZERO
 var play_rect := Rect2(0, 0, 800, 600)
 var use_map_space_layout := false
+var closed_cells = []
+var is_tunnel_fill_focused: bool = false
 
 const PACMAN_GHOST_COLORS = [
     Color(1.0, 0.16, 0.2),
@@ -251,6 +253,15 @@ func _process(delta):
             frightened_chain_count = 0
     _process_ipc(delta)
     if visible:
+        is_tunnel_fill_focused = false
+        if tab_menu and tab_menu.overlay_mode == "settings":
+            var ctrl_info = tab_menu.settings_controls.get("tunnel_fill")
+            if ctrl_info and ctrl_info.get("control") != null:
+                var parent_control = ctrl_info["control"]
+                var focused = get_viewport().gui_get_focus_owner()
+                if focused != null and (focused == parent_control or parent_control.is_ancestor_of(focused)):
+                    is_tunnel_fill_focused = true
+                    
         if tab_menu.overlay_mode == "" and game_state in ["playing", "respawning"]:
             _process_player(delta)
             if game_state == "playing":
@@ -530,6 +541,7 @@ func _build_scaled_layout_from_grid() -> Dictionary:
     return layout
 
 func _apply_tunnel_fill_mask(layout: Dictionary, node_map: Dictionary, target_cols: int, target_rows: int, spawn_gx: int, spawn_gy: int):
+    closed_cells.clear()
     if tunnel_fill <= 0.01:
         return
     var keep = _build_tunnel_fill_keep(node_map, target_cols, target_rows, spawn_gx, spawn_gy)
@@ -540,6 +552,8 @@ func _apply_tunnel_fill_mask(layout: Dictionary, node_map: Dictionary, target_co
         var key = "%d:%d" % [int(n["gx"]), int(n["gy"])]
         if keep.has(key):
             filtered_nodes.append(n)
+        else:
+            closed_cells.append(Vector2(float(n["x"]), float(n["y"])))
     layout["nodes"] = filtered_nodes
     var filtered_pickups = []
     for p in layout["pickups"]:
@@ -853,6 +867,18 @@ func _draw():
     _draw_players()
     _draw_particles()
     _draw_hud()
+    _draw_tunnel_fill_visualization()
+
+func _draw_tunnel_fill_visualization():
+    if not is_tunnel_fill_focused or closed_cells.is_empty():
+        return
+    var cell_size = grid_cell_size * scale_factor
+    var rect_size = Vector2(cell_size * 0.88, cell_size * 0.88)
+    for pos in closed_cells:
+        var screen_pos = _world_to_screen(pos)
+        var rect = Rect2(screen_pos - rect_size * 0.5, rect_size)
+        draw_rect(rect, Color(1.0, 0.12, 0.12, 0.42), true)
+        draw_rect(rect, Color(1.0, 0.22, 0.22, 0.75), false, 2.0)
 
 func _draw_maze_skin():
     if walkable_cells.is_empty():
