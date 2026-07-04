@@ -346,7 +346,7 @@ func load_level():
                     var row = []
                     for x in range(w):
                         var p = sem_img.get_pixel(min(sem_img.get_width() - 1, int(x * cell_px)), min(sem_img.get_height() - 1, int(y * cell_px)))
-                        row.append(1 if p.r > 0.5 else 2)
+                        row.append(1 if p.r > current_semantic_threshold else 2)
                     grid.append(row)
     
     if level_dir != "":
@@ -639,25 +639,40 @@ func _setup_custom_donkey_kong():
     var extracted_platforms = []
     if grid.size() > 0:
         for y in range(1, grid.size()):
-            var current_platform_start_x = -1
-            for x in range(grid[y].size()):
-                var is_solid = grid[y][x] == 1
-                var is_top_edge = is_solid and grid[y-1][x] != 1
-                if is_top_edge:
-                    if current_platform_start_x == -1:
-                        current_platform_start_x = x
-                else:
-                    if current_platform_start_x != -1:
-                        var px1 = current_platform_start_x * cell_px
-                        var px2 = x * cell_px
-                        var py = y * cell_px
-                        extracted_platforms.append({"p1": Vector2(px1, py), "p2": Vector2(px2, py)})
-                        current_platform_start_x = -1
-            if current_platform_start_x != -1:
-                var px1 = current_platform_start_x * cell_px
-                var px2 = grid[y].size() * cell_px
-                var py = y * cell_px
-                extracted_platforms.append({"p1": Vector2(px1, py), "p2": Vector2(px2, py)})
+            if current_map_bridge_type == "bridges":
+                var first_x = -1
+                var last_x = -1
+                for x in range(grid[y].size()):
+                    var is_solid = grid[y][x] == 1
+                    var is_top_edge = is_solid and grid[y-1][x] != 1
+                    if is_top_edge:
+                        if first_x == -1: first_x = x
+                        last_x = x
+                if first_x != -1:
+                    var px1 = first_x * cell_px
+                    var px2 = (last_x + 1) * cell_px
+                    var py = y * cell_px
+                    extracted_platforms.append({"p1": Vector2(px1, py), "p2": Vector2(px2, py)})
+            else:
+                var current_platform_start_x = -1
+                for x in range(grid[y].size()):
+                    var is_solid = grid[y][x] == 1
+                    var is_top_edge = is_solid and grid[y-1][x] != 1
+                    if is_top_edge:
+                        if current_platform_start_x == -1:
+                            current_platform_start_x = x
+                    else:
+                        if current_platform_start_x != -1:
+                            var px1 = current_platform_start_x * cell_px
+                            var px2 = x * cell_px
+                            var py = y * cell_px
+                            extracted_platforms.append({"p1": Vector2(px1, py), "p2": Vector2(px2, py)})
+                            current_platform_start_x = -1
+                if current_platform_start_x != -1:
+                    var px1 = current_platform_start_x * cell_px
+                    var px2 = grid[y].size() * cell_px
+                    var py = y * cell_px
+                    extracted_platforms.append({"p1": Vector2(px1, py), "p2": Vector2(px2, py)})
                 
     var sorted_platforms = []
     for p in extracted_platforms:
