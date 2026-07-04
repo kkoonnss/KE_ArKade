@@ -33,6 +33,7 @@ Took over the timed-out hub-design/live-preview work per Kons approval and prese
 - `app/hub/design_screen.gd`: Preview now owns the canvas while active, preventing accidental paint writes under the overlay.
 - `.git/hooks/post-commit`: local-only hotfix to set `MSYS2_ARG_CONV_EXCL='*'` so `cmd.exe start "" /min ...` does not become `C:/Program Files/Git/min`.
 - `vault/35-locks/hub-design.md`: annotated Codex takeover.
+- `vault/35-locks/hub-design.md`: released after code commit; status remains `pending_kons_verify`.
 - `vault/40-agent-runs/OPEN_QUESTIONS.md`: added the tracked hook-template follow-up for `TASK-INFRA-github-remote-and-backup`.
 
 ## Verification
