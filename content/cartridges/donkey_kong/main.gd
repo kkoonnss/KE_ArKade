@@ -1618,7 +1618,7 @@ func _platform_y(pos: Vector2) -> float:
 
 func _on_ladder(pos: Vector2) -> bool:
     for l in ladders:
-        if l.grow(16).has_point(pos):
+        if l.grow_individual(16, 24, 16, 16).has_point(pos):
             return true
     return false
 
