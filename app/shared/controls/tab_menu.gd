@@ -609,10 +609,28 @@ func _build_knob_row(knob: Dictionary) -> Control:
 	outer.add_child(top)
 	var label = Label.new()
 	label.text = str(knob.label)
-	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.add_theme_color_override("font_color", Color.WHITE)
 	label.add_theme_font_size_override("font_size", 22)
 	top.add_child(label)
+	
+	if knob.id == "tunnel_fill":
+		var indicator = Control.new()
+		indicator.custom_minimum_size = Vector2(28, 28)
+		indicator.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		indicator.draw.connect(func():
+			var center = indicator.size * 0.5
+			var r = 10.0
+			indicator.draw_circle(center, r, Color(0.16, 0.55, 1.0))
+			var offset = 4.0
+			indicator.draw_line(center + Vector2(-offset, -offset), center + Vector2(offset, offset), Color.WHITE, 2.0)
+			indicator.draw_line(center + Vector2(offset, -offset), center + Vector2(-offset, offset), Color.WHITE, 2.0)
+		)
+		top.add_child(indicator)
+		
+	var spacer = Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(spacer)
+	
 	var value_label = Label.new()
 	value_label.text = _format_knob(knob)
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT

@@ -78,6 +78,7 @@ var use_map_space_layout := false
 var closed_cells = []
 var original_edges = []
 var is_tunnel_fill_focused: bool = false
+var is_tunnel_fill_preview_active: bool = false
 
 const PACMAN_GHOST_COLORS = [
     Color(1.0, 0.16, 0.2),
@@ -131,7 +132,7 @@ func _ready():
     add_child(tab_menu)
     tab_menu.register_knob_int("players", "Players", 1, 1, 4, 1, "Gameplay")
     tab_menu.register_knob_enum("skin", "Skin", "classic", ["classic", "neon"], "Gameplay")
-    tab_menu.register_knob_enum("background_view", "Background View", "final", ["final", "photo", "semantic", "secondary"], "Preview")
+    tab_menu.register_knob_enum("background_view", "Background View", "final", ["final", "photo", "semantic", "secondary", "tunnel_fill"], "Preview")
     tab_menu.register_knob_bool("reference", "Background Layer", false, "Preview")
     tab_menu.register_knob_float("reference_opacity", "Background Opacity", 0.15, 0.0, 1.0, 0.05, "Preview")
     tab_menu.register_knob_bool("show_debug_grid", "Scale Grid Overlay", false, "Preview")
@@ -163,6 +164,13 @@ func _input(event):
            (event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_START, JOY_BUTTON_A]):
             _restart_game()
             return
+            
+    if is_tunnel_fill_focused:
+        if (event is InputEventKey and event.pressed and event.keycode == KEY_X) or \
+           (event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_X):
+            is_tunnel_fill_preview_active = not is_tunnel_fill_preview_active
+            queue_redraw()
+            get_viewport().set_input_as_handled()
             
 func _apply_settings_from_menu():
     selected_players = tab_menu.get_knob_value("players")
@@ -268,9 +276,11 @@ func _process(delta):
                 var focused = get_viewport().gui_get_focus_owner()
                 if focused != null and (focused == parent_control or parent_control.is_ancestor_of(focused)):
                     is_tunnel_fill_focused = true
+        if not is_tunnel_fill_focused:
+            is_tunnel_fill_preview_active = false
             
         if tab_menu and tab_menu.menu_overlay:
-            var target_a = 0.15 if is_tunnel_fill_focused else 1.0
+            var target_a = 0.15 if is_tunnel_fill_preview_active else 1.0
             var current_bg_a = tab_menu.menu_overlay.color.a
             tab_menu.menu_overlay.color.a = lerp(current_bg_a, target_a * 0.82, delta * 15.0)
             tab_menu.splash_frame.modulate.a = lerp(tab_menu.splash_frame.modulate.a, target_a, delta * 15.0)
@@ -833,6 +843,8 @@ func _active_background_texture() -> Texture2D:
         return semantic_texture
     if background_view == "photo" and background_texture != null:
         return background_texture
+    if background_view == "tunnel_fill" and semantic_texture != null:
+        return semantic_texture
     return background_texture if background_texture != null else semantic_texture
 
 func _draw_alignment_grid():
@@ -932,7 +944,7 @@ func _draw():
     _draw_tunnel_fill_visualization()
 
 func _draw_tunnel_fill_visualization():
-    if not is_tunnel_fill_focused:
+    if not is_tunnel_fill_preview_active and background_view != "tunnel_fill":
         return
         
     # Draw all original/skeleton lines in grey first
