@@ -1,0 +1,59 @@
+filters:
+  and:
+    - file.inFolder("30-tasks")
+    - 'lane == "hub"'
+
+properties:
+  task_id:
+    displayName: "Task"
+  status:
+    displayName: "Status"
+  owner_agent:
+    displayName: "Holder"
+  priority:
+    displayName: "Priority"
+  locks_required:
+    displayName: "Locks"
+  closing_receipt:
+    displayName: "Receipt"
+
+views:
+  - type: table
+    name: "Takeover Queue"
+    filters:
+      and:
+        - 'status != "done"'
+    order:
+      - priority
+      - status
+      - task_id
+      - owner_agent
+      - locks_required
+      - closing_receipt
+  - type: table
+    name: "Pending Kons Verify"
+    filters:
+      and:
+        - 'status == "pending_kons_verify"'
+    order:
+      - priority
+      - task_id
+      - owner_agent
+      - closing_receipt
+  - type: table
+    name: "In Progress"
+    filters:
+      and:
+        - 'status == "in_progress"'
+    order:
+      - priority
+      - task_id
+      - owner_agent
+      - locks_required
+  - type: table
+    name: "All Hub"
+    order:
+      - status
+      - priority
+      - task_id
+      - owner_agent
