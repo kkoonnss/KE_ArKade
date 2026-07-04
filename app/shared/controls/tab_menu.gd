@@ -205,6 +205,9 @@ func _build_ui():
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		label.add_theme_color_override("font_color", Color.WHITE)
 		label.add_theme_font_size_override("font_size", 24)
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		_wire_menu_label_mouse(label, _i)
 		box.add_child(label)
 		menu_labels.append(label)
 
@@ -230,6 +233,43 @@ func _menu_panel_style(border_color: Color, fill_color: Color) -> StyleBoxFlat:
 	style.shadow_color = Color(0, 0, 0, 0.35)
 	style.shadow_size = 16
 	return style
+
+func _wire_menu_label_mouse(label: Label, index: int):
+	label.mouse_entered.connect(func():
+		_on_menu_label_mouse_entered(index)
+	)
+	label.gui_input.connect(func(event):
+		_on_menu_label_gui_input(event, index)
+	)
+
+func _on_menu_label_mouse_entered(index: int):
+	if not _menu_label_accepts_mouse(index):
+		return
+	if selected_menu_index == index:
+		return
+	selected_menu_index = index
+	_update_menu_overlay()
+
+func _on_menu_label_gui_input(event: InputEvent, index: int):
+	if not (event is InputEventMouseButton):
+		return
+	if event.button_index != MOUSE_BUTTON_LEFT or not event.pressed:
+		return
+	if not _menu_label_accepts_mouse(index):
+		return
+	selected_menu_index = index
+	_update_menu_overlay()
+	if index >= 0 and index < menu_labels.size():
+		var label = menu_labels[index] as Control
+		if label:
+			label.accept_event()
+	_menu_accept()
+
+func _menu_label_accepts_mouse(index: int) -> bool:
+	if overlay_mode == "settings":
+		return false
+	var items = _get_current_items()
+	return index >= 0 and index < items.size()
 
 func _set_overlay_mode(mode: String):
 	overlay_mode = mode
@@ -441,7 +481,7 @@ func _update_menu_overlay():
 		selected_menu_index = clamp(selected_menu_index, 0, items.size() - 1)
 	var title = level_name
 	var subtitle = "Projection-ready play with per-level tuning."
-	var hint = "A / Start / Enter selects. D-Pad / arrows move."
+	var hint = "Click or A / Start / Enter selects. D-Pad / arrows move."
 	var lines = []
 	if overlay_mode == "settings":
 		title = level_name + " SETTINGS"
@@ -450,7 +490,7 @@ func _update_menu_overlay():
 	elif overlay_mode == "help":
 		title = level_name + " HELP"
 		subtitle = "Adjust your setup and controls."
-		hint = "A / Start confirms. B / Escape goes back."
+		hint = "Click or A / Start confirms. B / Escape goes back."
 		for i in range(items.size()):
 			lines.append(_menu_line(items, i))
 	else:
@@ -463,11 +503,15 @@ func _update_menu_overlay():
 	menu_subtitle_label.text = subtitle
 	menu_hint_label.text = hint
 	for i in range(menu_labels.size()):
-		menu_labels[i].visible = overlay_mode != "settings"
-		menu_labels[i].text = lines[i] if i < lines.size() else ""
-		menu_labels[i].add_theme_color_override("font_color", Color.WHITE)
+		var label = menu_labels[i] as Label
+		var has_menu_item = overlay_mode != "settings" and i < lines.size()
+		label.visible = overlay_mode != "settings"
+		label.text = lines[i] if has_menu_item else ""
+		label.mouse_filter = Control.MOUSE_FILTER_STOP if has_menu_item else Control.MOUSE_FILTER_IGNORE
+		label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND if has_menu_item else Control.CURSOR_ARROW
+		label.add_theme_color_override("font_color", Color.WHITE)
 		if i < lines.size() and lines[i].begins_with(">"):
-			menu_labels[i].add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+			label.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
 
 func _menu_line(items: Array, index: int) -> String:
 	var prefix = "> " if index == selected_menu_index else "  "
@@ -756,7 +800,29 @@ func _scene_level_subtitle() -> String:
 		level_label = _numbered_level_title(level_id)
 	elif level_label == "":
 		level_label = _numbered_level_title(level_id)
-	return "Scene: %s   Level: %s" % [scene_name, level_label]
+	var res_str = _get_level_bg_res(level_dir)
+	var suffix = ""
+	if res_str != "":
+		suffix = "   RES: " + res_str
+	return "Scene: %s   Level: %s%s" % [scene_name, level_label, suffix]
+
+func _get_level_bg_res(dir: String) -> String:
+	if dir == "": return ""
+	var img_names = ["background.png", "background.jpg", "background.jpeg", "thumbnail.png", "thumbnail.jpg", "thumbnail.jpeg", "reference.png", "reference.jpg", "reference.jpeg", "photo.png", "photo.jpg", "photo.jpeg"]
+	for n in img_names:
+		var p = dir.path_join(n)
+		if FileAccess.file_exists(p):
+			var img = Image.load_from_file(p)
+			if img: return str(img.get_width()) + "x" + str(img.get_height())
+
+	var parent = dir.get_base_dir()
+	var scene_dir = parent.get_base_dir() if parent.get_file().to_lower() == "levels" else parent
+	for n in img_names:
+		var p = scene_dir.path_join(n)
+		if FileAccess.file_exists(p):
+			var img = Image.load_from_file(p)
+			if img: return str(img.get_width()) + "x" + str(img.get_height())
+	return ""
 
 func _pretty_level_token(text: String) -> String:
 	var cleaned = text.strip_edges().replace("\\", "/")
@@ -916,7 +982,7 @@ func _chain_settings_focus():
 			control.focus_neighbor_bottom = control.get_path_to(next)
 		if not control.has_meta("focus_connected"):
 			control.focus_entered.connect(func():
-				if settings_scroll and is_instance_valid(settings_scroll) and is_instance_valid(control):
+				if settings_scroll and is_instance_valid(settings_scroll) and is_instance_valid(control) and settings_scroll.is_ancestor_of(control):
 					settings_scroll.ensure_control_visible(control)
 			)
 			control.set_meta("focus_connected", true)
