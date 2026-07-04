@@ -74,6 +74,7 @@ var grid_max := Vector2i.ZERO
 var play_rect := Rect2(0, 0, 800, 600)
 var use_map_space_layout := false
 var closed_cells = []
+var original_edges = []
 var is_tunnel_fill_focused: bool = false
 
 const PACMAN_GHOST_COLORS = [
@@ -542,6 +543,23 @@ func _build_scaled_layout_from_grid() -> Dictionary:
 
 func _apply_tunnel_fill_mask(layout: Dictionary, node_map: Dictionary, target_cols: int, target_rows: int, spawn_gx: int, spawn_gy: int):
     closed_cells.clear()
+    original_edges.clear()
+    
+    # Collect all original edges from the full node_map
+    for key in node_map.keys():
+        var cell = _key_to_cell(key)
+        for dir in [Vector2i(1, 0), Vector2i(0, 1)]:
+            var other_key = "%d:%d" % [cell.x + dir.x, cell.y + dir.y]
+            if node_map.has(other_key):
+                var a_node = node_map[key]
+                var b_node = node_map[other_key]
+                original_edges.append({
+                    "a": Vector2(float(a_node.get("x", 0.0)), float(a_node.get("y", 0.0))),
+                    "b": Vector2(float(b_node.get("x", 0.0)), float(b_node.get("y", 0.0))),
+                    "a_key": key,
+                    "b_key": other_key
+                })
+                
     if tunnel_fill <= 0.01:
         return
     var keep = _build_tunnel_fill_keep(node_map, target_cols, target_rows, spawn_gx, spawn_gy)
@@ -870,15 +888,34 @@ func _draw():
     _draw_tunnel_fill_visualization()
 
 func _draw_tunnel_fill_visualization():
-    if not is_tunnel_fill_focused or closed_cells.is_empty():
+    if not is_tunnel_fill_focused:
         return
-    var cell_size = grid_cell_size * scale_factor
-    var rect_size = Vector2(cell_size * 0.88, cell_size * 0.88)
-    for pos in closed_cells:
-        var screen_pos = _world_to_screen(pos)
-        var rect = Rect2(screen_pos - rect_size * 0.5, rect_size)
-        draw_rect(rect, Color(1.0, 0.12, 0.12, 0.42), true)
-        draw_rect(rect, Color(1.0, 0.22, 0.22, 0.75), false, 2.0)
+        
+    # Draw all original/skeleton lines in grey first
+    for edge in original_edges:
+        var sa = _world_to_screen(edge["a"])
+        var sb = _world_to_screen(edge["b"])
+        draw_line(sa, sb, Color(0.35, 0.35, 0.35, 0.45), 2.0)
+        
+    # Draw open (green) and closed (red) tunnel lines
+    for edge in original_edges:
+        var sa = _world_to_screen(edge["a"])
+        var sb = _world_to_screen(edge["b"])
+        var is_closed = not walkable_cells.has(edge["a_key"]) or not walkable_cells.has(edge["b_key"])
+        if is_closed:
+            draw_line(sa, sb, Color(1.0, 0.22, 0.22, 0.8), 4.0)
+        else:
+            draw_line(sa, sb, Color(0.0, 1.0, 0.3, 0.85), 5.0)
+            
+    # Draw red blocks over closed cells
+    if not closed_cells.is_empty():
+        var cell_size = grid_cell_size * scale_factor
+        var rect_size = Vector2(cell_size * 0.88, cell_size * 0.88)
+        for pos in closed_cells:
+            var screen_pos = _world_to_screen(pos)
+            var rect = Rect2(screen_pos - rect_size * 0.5, rect_size)
+            draw_rect(rect, Color(1.0, 0.12, 0.12, 0.35), true)
+            draw_rect(rect, Color(1.0, 0.22, 0.22, 0.65), false, 2.0)
 
 func _draw_maze_skin():
     if walkable_cells.is_empty():
