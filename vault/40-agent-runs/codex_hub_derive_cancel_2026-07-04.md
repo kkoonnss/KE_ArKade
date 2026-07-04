@@ -2,13 +2,13 @@
 run_id: codex_hub_derive_cancel_2026-07-04
 agent: codex
 session_start: 2026-07-04T00:25:00-07:00
-session_end: 2026-07-04T00:38:31-07:00
+session_end: 2026-07-04T00:39:34-07:00
 task_id: TASK-INT-10-design-live-preview follow-up
 lane: hub
 lock_held: hub-design-derive-cancel
 status: pending_kons_verify
 pre_edit_commit: ad3e61e
-close_commit: pending_close_commit
+close_commit: 394f849
 backup_status: pushed
 backup_remote: https://github.com/kkoonnss/KE_ArKade.git
 escalations: []
@@ -45,10 +45,13 @@ OK: derive cancel smoke passed
 
 - Remote: `origin -> https://github.com/kkoonnss/KE_ArKade.git`
 - Hook evidence after implementation commit `e234e00`: pushed `master` and tag `pre-edit/hub/derive-cancel-ad3e61e` successfully.
+- Hook evidence after close/lock-release commit `394f849`: pushed `master` successfully.
 
 ```text
 [Sat 07/04/2026  0:38:18.37] RC=0 for git push origin master
 [Sat 07/04/2026  0:38:22.04] SUCCESS: pushed master and tags.
+[Sat 07/04/2026  0:39:30.82] RC=0 for git push origin master
+[Sat 07/04/2026  0:39:32.80] SUCCESS: pushed master and tags.
 ```
 
 ## Open questions
