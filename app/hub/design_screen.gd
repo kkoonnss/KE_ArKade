@@ -79,13 +79,18 @@ var derive_preset_profiles = {
     }
 }
 
-var derive_thread: Thread
+const DERIVE_BUTTON_IDLE_TEXT = "Run Derive"
+const DERIVE_BUTTON_CANCEL_TEXT = "Deriving .. (CANCEL)"
+
 var is_deriving: bool = false
 var needs_derive: bool = false
+var derive_process_id: int = -1
+var derive_cancel_requested: bool = false
+var derive_run_id: int = 0
+var active_temp_map_path: String = ""
 
 var class_buttons = []
 var temp_json_path = "user://temp_author_args.json"
-var temp_map_path = "user://temp_semantic_map.png"
 
 # --------------------------------------------------------------------------
 # Preview mode (TASK-INT-10)
@@ -181,6 +186,10 @@ func _ready():
 
     file_dialog.file_selected.connect(_on_file_selected)
     _build_preview_overlay()
+
+func _exit_tree():
+    if is_deriving and derive_process_id > 0 and OS.is_process_running(derive_process_id):
+        OS.kill(derive_process_id)
 
 func _create_section(title: String, parent: Control, default_open: bool = true) -> VBoxContainer:
     var header = Button.new()
@@ -389,8 +398,8 @@ func _build_ui():
     sec_derive.add_child(row_derive)
     
     btn_derive = Button.new()
-    btn_derive.text = "Run Derive"
-    btn_derive.pressed.connect(_trigger_derive)
+    btn_derive.text = DERIVE_BUTTON_IDLE_TEXT
+    btn_derive.pressed.connect(_on_derive_button_pressed)
     btn_derive.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     _style_button(btn_derive)
     row_derive.add_child(btn_derive)
@@ -740,49 +749,90 @@ func _apply_resolution_setting():
     _mark_preview_source_dirty(true)
 
 func _trigger_derive():
-    if current_image_path == "" or is_deriving:
+    if current_image_path == "":
+        return
+    if is_deriving:
+        needs_derive = true
         return
     is_deriving = true
+    derive_cancel_requested = false
+    derive_run_id += 1
+    active_temp_map_path = "user://temp_semantic_map_%d.png" % derive_run_id
     if btn_derive:
-        btn_derive.text = "Deriving..."
-        btn_derive.disabled = true
+        btn_derive.text = DERIVE_BUTTON_CANCEL_TEXT
+        btn_derive.disabled = false
     if loading_overlay:
         loading_overlay.visible = true
     
     cv_params["source_img_path"] = current_image_path
-    cv_params["output_map_path"] = ProjectSettings.globalize_path(temp_map_path)
+    cv_params["output_map_path"] = ProjectSettings.globalize_path(active_temp_map_path)
     
     var f = FileAccess.open(temp_json_path, FileAccess.WRITE)
     f.store_string(JSON.stringify(cv_params))
     f.close()
     
-    if derive_thread:
-        derive_thread.wait_to_finish()
-    derive_thread = Thread.new()
-    derive_thread.start(_run_derive_process)
-
-func _run_derive_process():
     var py_script = _get_repo_root().path_join("app/tools/level_authoring/author_backend.py")
-    var output = []
-    # Use python3 if on unix, python on windows, let's just use python
-    OS.execute("python", [py_script, ProjectSettings.globalize_path(temp_json_path)], output, true)
-    call_deferred("_on_derive_finished", output)
+    derive_process_id = _start_python_process(py_script, ProjectSettings.globalize_path(temp_json_path))
+    if derive_process_id <= 0:
+        printerr("Failed to start semantic derive process.")
+        _finish_derive_process(false)
 
-func _on_derive_finished(output: Array):
+func _on_derive_button_pressed():
+    if is_deriving:
+        _cancel_derive()
+    else:
+        _trigger_derive()
+
+func _start_python_process(script_path: String, json_path: String) -> int:
+    var cmds = [
+        {"cmd": "python", "args": PackedStringArray([script_path, json_path])},
+        {"cmd": "py", "args": PackedStringArray(["-3", script_path, json_path])},
+        {"cmd": "python3", "args": PackedStringArray([script_path, json_path])}
+    ]
+    for c in cmds:
+        var pid = OS.create_process(c.cmd, c.args, false)
+        if pid > 0:
+            return pid
+    return -1
+
+func _poll_derive_process():
+    if not is_deriving or derive_process_id <= 0:
+        return
+    if OS.is_process_running(derive_process_id):
+        return
+    _finish_derive_process(true)
+
+func _cancel_derive():
+    if not is_deriving:
+        return
+    derive_cancel_requested = true
+    needs_derive = false
+    if derive_process_id > 0 and OS.is_process_running(derive_process_id):
+        OS.kill(derive_process_id)
+    _finish_derive_process(false)
+
+func _finish_derive_process(apply_result: bool):
+    var result_path = active_temp_map_path
+    var should_rerun = needs_derive and not derive_cancel_requested and current_image_path != ""
+    needs_derive = false
     is_deriving = false
+    derive_process_id = -1
+    active_temp_map_path = ""
     if btn_derive:
-        btn_derive.text = "Run Derive"
+        btn_derive.text = DERIVE_BUTTON_IDLE_TEXT
         btn_derive.disabled = false
     if loading_overlay:
         loading_overlay.visible = false
-    if FileAccess.file_exists(temp_map_path):
-        var img = Image.load_from_file(temp_map_path)
+    if apply_result and result_path != "" and FileAccess.file_exists(result_path):
+        var img = Image.load_from_file(result_path)
         if img:
             semantic_image = img
             semantic_image.convert(Image.FORMAT_RGBA8)
             semantic_texture.update(semantic_image)
             _update_resolution_label()
             _mark_preview_source_dirty(true)
+    if should_rerun:
+        _trigger_derive()
 
 func _input(event):
     # Preview toggle / game-cycle is always reachable, controller + keyboard,
@@ -878,6 +928,8 @@ func _input(event):
             _update_opacity()
 
 func _process(delta):
+    _poll_derive_process()
+
     # While the preview overlay owns the screen, freeze paint input entirely.
     if preview_tab_menu != null:
         if virtual_cursor:
