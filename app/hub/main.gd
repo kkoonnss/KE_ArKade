@@ -1096,7 +1096,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	)
 	
 	var _update_title = func():
-		if skins.size() > 1 and title_btn.has_focus():
+		if skins.size() > 1 and (title_btn.has_focus() or title_btn.is_hovered()):
 			var curr = current_skin if current_skin != "" else default_skin
 			title_btn.text = "< (X)  " + curr + "  (Y) >"
 		else:
@@ -1105,6 +1105,8 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	if skins.size() > 1:
 		title_btn.focus_entered.connect(_update_title)
 		title_btn.focus_exited.connect(_update_title)
+		title_btn.mouse_entered.connect(_update_title)
+		title_btn.mouse_exited.connect(_update_title)
 		
 		title_btn.gui_input.connect(func(event):
 			var step = 0
@@ -1408,25 +1410,17 @@ func init_styling():
 	
 
 	style_nav_normal = StyleBoxFlat.new()
-
 	style_nav_normal.bg_color = color_black
-
 	style_nav_normal.set_border_width_all(0)
-
+	style_nav_normal.content_margin_left = 24
 	style_nav_normal.corner_detail = 1
-
 	
-
 	style_nav_active = StyleBoxFlat.new()
-
 	style_nav_active.bg_color = Color(0.0, 0.9, 1.0, 0.08)
-
 	style_nav_active.set_border_width_all(0)
-
 	style_nav_active.border_width_left = 3
-
 	style_nav_active.border_color = color_cyan
-
+	style_nav_active.content_margin_left = 24
 	style_nav_active.corner_detail = 1
 
 
