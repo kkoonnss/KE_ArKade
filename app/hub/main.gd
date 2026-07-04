@@ -616,14 +616,29 @@ func display_levels(specific_scene_name: String = ""):
 		s_name = scenes_dir.get_next()
 		
 	scenes.sort()
+	scenes.sort_custom(func(a, b):
+		var a_is_classic = (a == "scene_classic_pack" or "classic" in a.to_lower())
+		var b_is_classic = (b == "scene_classic_pack" or "classic" in b.to_lower())
+		if a_is_classic and not b_is_classic:
+			return true
+		if b_is_classic and not a_is_classic:
+			return false
+		return a < b
+	)
 	
 	var all_focus_buttons = []
 	var first_header = null
 	
 	for scene_name in scenes:
-		var levels_dir_path = scenes_dir_path.path_join(scene_name).path_join("levels")
+		if specific_scene_name != "" and scene_name != specific_scene_name:
+			continue
+		var scene_dir_path = scenes_dir_path.path_join(scene_name)
+		var nested_levels_dir_path = scene_dir_path.path_join("levels")
+		var levels_dir_path = nested_levels_dir_path
 		var l_dir = DirAccess.open(levels_dir_path)
-		if not l_dir: continue
+		var use_root_level = l_dir == null and FileAccess.file_exists(scene_dir_path.path_join("level.yaml"))
+		if use_root_level:
+			levels_dir_path = scenes_dir_path
 		
 		var grid: GridContainer = null
 		
@@ -665,10 +680,6 @@ func display_levels(specific_scene_name: String = ""):
 				_rebuild_levels_focus()
 			)
 		else:
-			# Skip scene if not the requested one
-			if scene_name != specific_scene_name:
-				continue
-			
 			grid = GridContainer.new()
 			grid.columns = _calculate_grid_columns()
 			grid.add_theme_constant_override("h_separation", 16)
@@ -681,12 +692,15 @@ func display_levels(specific_scene_name: String = ""):
 		var level_buttons = []
 		
 		var raw_levels = []
-		l_dir.list_dir_begin()
-		var file_name = l_dir.get_next()
-		while file_name != "":
-			if l_dir.current_is_dir() and not file_name.begins_with("."):
-				raw_levels.append(file_name)
-			file_name = l_dir.get_next()
+		if use_root_level:
+			raw_levels.append(scene_name)
+		elif l_dir != null:
+			l_dir.list_dir_begin()
+			var file_name = l_dir.get_next()
+			while file_name != "":
+				if l_dir.current_is_dir() and not file_name.begins_with("."):
+					raw_levels.append(file_name)
+				file_name = l_dir.get_next()
 			
 		var process_levels = []
 		if scene_name == "scene_classic_pack":
@@ -729,6 +743,16 @@ func display_levels(specific_scene_name: String = ""):
 			for lf in raw_levels:
 				process_levels.append({"file": lf, "idx": index})
 				index += 1
+		
+		if process_levels.is_empty():
+			var empty_lbl = Label.new()
+			empty_lbl.text = "No levels yet"
+			empty_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			empty_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			empty_lbl.custom_minimum_size = Vector2(256 * hub_card_scale, 96 * hub_card_scale)
+			empty_lbl.add_theme_font_size_override("font_size", int(16 * hub_card_scale))
+			empty_lbl.add_theme_color_override("font_color", color_ink_dim)
+			grid.add_child(empty_lbl)
 				
 		for item in process_levels:
 			var fname = item.file
@@ -974,6 +998,8 @@ func _launch_game(cart_id: String):
 	var base_dir = ProjectSettings.globalize_path("res://").path_join("../..").simplify_path()
 	var scene_dir = base_dir.path_join("content/scenes").path_join(current_scene)
 	var level_dir = scene_dir.path_join("levels").path_join(selected_level_name)
+	if not DirAccess.dir_exists_absolute(level_dir) and selected_level_name == current_scene and FileAccess.file_exists(scene_dir.path_join("level.yaml")):
+		level_dir = scene_dir
 	var cart_dir = base_dir.path_join("content/cartridges").path_join(cart_id)
 	
 	var launch_cmd = base_dir.path_join("Godot_v4.3-stable_win64.exe")
