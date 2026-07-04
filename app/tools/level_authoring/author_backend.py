@@ -124,10 +124,10 @@ class AuthoringBackend:
             feature_mask = cv2.dilate(feature_mask, np.ones((3, 3), np.uint8), iterations=iterations)
 
         border_px = max(2, min(h, w) // 80)
-        feature_mask[:border_px, :] = 255
-        feature_mask[-border_px:, :] = 255
-        feature_mask[:, :border_px] = 255
-        feature_mask[:, -border_px:] = 255
+        # feature_mask[:border_px, :] = 255
+        # feature_mask[-border_px:, :] = 255
+        # feature_mask[:, :border_px] = 255
+        # feature_mask[:, -border_px:] = 255
 
         open_mask = feature_mask == 0
         walkable_bias = int(self.args.get("walkable_bias", 72))
@@ -138,8 +138,15 @@ class AuthoringBackend:
 
         # Start with empty class
         map_bgr[:] = self._class_bgr("empty")
-        self._paint_class_mask(map_bgr, safe_walk, "path")
-        self._paint_class_mask(map_bgr, feature_mask > 0, "solid")
+        
+        invert_output = self.args.get("invert_output", False)
+        if invert_output:
+            dilated_edges = cv2.dilate((feature_mask > 0).astype(np.uint8), np.ones((5, 5), np.uint8), iterations=2) > 0
+            self._paint_class_mask(map_bgr, safe_walk, "solid")
+            self._paint_class_mask(map_bgr, dilated_edges, "path")
+        else:
+            self._paint_class_mask(map_bgr, safe_walk, "path")
+            self._paint_class_mask(map_bgr, feature_mask > 0, "solid")
 
         platform_strength = int(self.args.get("platform_bias", 45))
         if platform_strength > 0:

@@ -88,6 +88,7 @@ var derive_process_id: int = -1
 var derive_cancel_requested: bool = false
 var derive_run_id: int = 0
 var active_temp_map_path: String = ""
+var invert_source: bool = false
 
 var class_buttons = []
 var temp_json_path = "user://temp_author_args.json"
@@ -174,6 +175,7 @@ var is_preview_deriving: bool = false
 var preview_derive_thread: Thread
 var preview_dirty_since_derive: bool = true # true until we've derived at least once for current paint state
 var preview_last_derive_ok: bool = false
+var undo_image: Image = null
 
 func _ready():
     Palette = load(_get_repo_root().path_join("app/shared/palette.gd"))
@@ -346,51 +348,6 @@ func _build_ui():
     sec_file.add_child(lbl_res_info)
     _update_resolution_label()
     
-    var sec_brush = _create_section("Brush & Palette", sidebar_vbox, true)
-    
-    btn_brush = Button.new()
-    btn_brush.text = "Activate Brush"
-    btn_brush.pressed.connect(func():
-        _set_brush_mode(true)
-    )
-    _style_button(btn_brush)
-    sec_brush.add_child(btn_brush)
-    
-    var sld_sem_opacity = HSlider.new()
-    sld_sem_opacity.min_value = 0.0
-    sld_sem_opacity.max_value = 1.0
-    sld_sem_opacity.step = 0.05
-    sld_sem_opacity.value = semantic_opacity
-    sld_sem_opacity.value_changed.connect(func(v): semantic_opacity = v; _update_opacity())
-    _add_slider_group("Semantic Overlay Opacity", sld_sem_opacity, sec_brush)
-    
-    var sld_brush = HSlider.new()
-    sld_brush.min_value = 1
-    sld_brush.max_value = 100
-    sld_brush.value = brush_size
-    sld_brush.value_changed.connect(func(v): brush_size = int(v); virtual_cursor.size = Vector2(brush_size*2, brush_size*2))
-    _add_slider_group("Brush Size", sld_brush, sec_brush)
-    
-    var lbl_palette = Label.new()
-    lbl_palette.text = "Palette Colors"
-    lbl_palette.add_theme_font_size_override("font_size", 12)
-    lbl_palette.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
-    sec_brush.add_child(lbl_palette)
-    
-    var grid_palette = GridContainer.new()
-    grid_palette.columns = 2
-    grid_palette.add_theme_constant_override("h_separation", 6)
-    grid_palette.add_theme_constant_override("v_separation", 6)
-    sec_brush.add_child(grid_palette)
-    
-    for cid in Palette.CLASSES.keys():
-        var info = Palette.CLASSES[cid]
-        var btn = Button.new()
-        btn.text = info["name"]
-        btn.pressed.connect(func(): _select_class(cid))
-        grid_palette.add_child(btn)
-        class_buttons.append(btn)
-        
     var sec_derive = _create_section("Auto-Derive", sidebar_vbox, false)
     
     var row_derive = HBoxContainer.new()
@@ -453,6 +410,63 @@ func _build_ui():
     _add_slider("Feature Density", "feature_density", 0, 100, sec_derive)
     _add_slider("Hazard Density", "hazard_density", 0, 100, sec_derive)
 
+    var sec_preprocess = _create_section("Postprocess", sidebar_vbox, true)
+    
+    var chk_invert = CheckBox.new()
+    chk_invert.text = "Invert Roles (Walls<->Paths)"
+    chk_invert.button_pressed = invert_source
+    chk_invert.toggled.connect(func(pressed):
+        invert_source = pressed
+        if chk_auto_derive and chk_auto_derive.button_pressed:
+            _trigger_derive()
+    )
+    sec_preprocess.add_child(chk_invert)
+    
+    var sec_brush = _create_section("Brush & Palette", sidebar_vbox, true)
+    
+    btn_brush = Button.new()
+    btn_brush.text = "Activate Brush"
+    btn_brush.pressed.connect(func():
+        _set_brush_mode(true)
+    )
+    _style_button(btn_brush)
+    sec_brush.add_child(btn_brush)
+    
+    var sld_sem_opacity = HSlider.new()
+    sld_sem_opacity.min_value = 0.0
+    sld_sem_opacity.max_value = 1.0
+    sld_sem_opacity.step = 0.05
+    sld_sem_opacity.value = semantic_opacity
+    sld_sem_opacity.value_changed.connect(func(v): semantic_opacity = v; _update_opacity())
+    _add_slider_group("Semantic Overlay Opacity", sld_sem_opacity, sec_brush)
+    
+    var sld_brush = HSlider.new()
+    sld_brush.min_value = 1
+    sld_brush.max_value = 100
+    sld_brush.value = brush_size
+    sld_brush.value_changed.connect(func(v): brush_size = int(v); virtual_cursor.size = Vector2(brush_size*2, brush_size*2))
+    _add_slider_group("Brush Size", sld_brush, sec_brush)
+    
+    var lbl_palette = Label.new()
+    lbl_palette.text = "Palette Colors"
+    lbl_palette.add_theme_font_size_override("font_size", 12)
+    lbl_palette.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+    sec_brush.add_child(lbl_palette)
+    
+    var grid_palette = GridContainer.new()
+    grid_palette.columns = 2
+    grid_palette.add_theme_constant_override("h_separation", 6)
+    grid_palette.add_theme_constant_override("v_separation", 6)
+    sec_brush.add_child(grid_palette)
+    
+    for cid in Palette.CLASSES.keys():
+        var info = Palette.CLASSES[cid]
+        var btn = Button.new()
+        btn.text = info["name"]
+        btn.pressed.connect(func(): _select_class(cid))
+        grid_palette.add_child(btn)
+        class_buttons.append(btn)
+        
     var sec_preview = _create_section("Preview", sidebar_vbox, true)
 
     var lbl_preview_hint = Label.new()
@@ -766,6 +780,7 @@ func _trigger_derive():
     
     cv_params["source_img_path"] = current_image_path
     cv_params["output_map_path"] = ProjectSettings.globalize_path(active_temp_map_path)
+    cv_params["invert_output"] = invert_source
     
     var f = FileAccess.open(temp_json_path, FileAccess.WRITE)
     f.store_string(JSON.stringify(cv_params))
@@ -889,24 +904,22 @@ func _input(event):
             if event.pressed:
                 # Only start painting if the click originated on the canvas
                 if semantic_rect.get_global_rect().has_point(event.global_position):
+                    _save_undo_buffer()
                     is_painting = true
                     cursor_pos = semantic_rect.get_local_mouse_position()
                     _paint_at_cursor()
             else:
                 is_painting = false
 
-    elif brush_mode_active and event is InputEventJoypadMotion:
-        if event.axis == JOY_AXIS_LEFT_X:
-            if abs(event.axis_value) > 0.2:
-                cursor_pos.x += event.axis_value * 15.0
-        elif event.axis == JOY_AXIS_LEFT_Y:
-            if abs(event.axis_value) > 0.2:
-                cursor_pos.y += event.axis_value * 15.0
     elif brush_mode_active and event is InputEventJoypadButton:
         if event.button_index == JOY_BUTTON_A:
+            if event.pressed and not is_painting:
+                _save_undo_buffer()
             is_painting = event.pressed
             if is_painting:
                 _paint_at_cursor()
+        elif event.button_index == JOY_BUTTON_X and event.pressed:
+            _swap_undo_buffer()
         elif event.button_index == JOY_BUTTON_B:
             if event.pressed:
                 var prev_class = current_class_id
@@ -929,6 +942,20 @@ func _input(event):
 
 func _process(delta):
     _poll_derive_process()
+    
+    if brush_mode_active and not preview_active and preview_tab_menu == null and not is_deriving:
+        var ls_x = Input.get_joy_axis(0, JOY_AXIS_LEFT_X)
+        var ls_y = Input.get_joy_axis(0, JOY_AXIS_LEFT_Y)
+        if abs(ls_x) > 0.1 or abs(ls_y) > 0.1:
+            cursor_pos.x += ls_x * 800.0 * delta
+            cursor_pos.y += ls_y * 800.0 * delta
+
+        var rs_y = Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
+        if abs(rs_y) > 0.2:
+            var current_f = float(brush_size)
+            current_f += -rs_y * 100.0 * delta
+            brush_size = clamp(int(round(current_f)), 1, 100)
+            virtual_cursor.size = Vector2(brush_size*2, brush_size*2)
 
     # While the preview overlay owns the screen, freeze paint input entirely.
     if preview_tab_menu != null:
@@ -992,6 +1019,20 @@ func _paint_at_cursor():
                     painted = true
                 
     if painted:
+        semantic_texture.update(semantic_image)
+        _mark_preview_source_dirty(false)
+
+func _save_undo_buffer():
+    if semantic_image:
+        undo_image = Image.new()
+        undo_image.copy_from(semantic_image)
+
+func _swap_undo_buffer():
+    if semantic_image and undo_image:
+        var temp = Image.new()
+        temp.copy_from(semantic_image)
+        semantic_image.copy_from(undo_image)
+        undo_image = temp
         semantic_texture.update(semantic_image)
         _mark_preview_source_dirty(false)
 
