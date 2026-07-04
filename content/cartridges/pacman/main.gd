@@ -72,6 +72,8 @@ var walkable_cells := {}
 var grid_min := Vector2i.ZERO
 var grid_max := Vector2i.ZERO
 var play_rect := Rect2(0, 0, 800, 600)
+var cached_wall_segments: Array = []
+var cached_wall_corners: Array = []
 var use_map_space_layout := false
 var closed_cells = []
 var original_edges = []
@@ -378,6 +380,8 @@ func load_level():
     pickups.clear()
     for pk in layout.get("pickups", []):
         pickups.append({"x": pk["x"], "y": pk["y"], "power": pk.get("power", false)})
+    original_pickups = pickups.duplicate(true)
+    _rebuild_wall_cache()
 
 func _rebuild_walkable_cells():
     walkable_cells.clear()
@@ -397,6 +401,16 @@ func _rebuild_walkable_cells():
             grid_min.y = min(grid_min.y, gy)
             grid_max.x = max(grid_max.x, gx)
             grid_max.y = max(grid_max.y, gy)
+
+func _rebuild_wall_cache():
+    cached_wall_segments = _collect_merged_wall_segments()
+    var corners = {}
+    for seg in cached_wall_segments:
+        var a_key = "%0.2f:%0.2f" % [seg["a"].x, seg["a"].y]
+        var b_key = "%0.2f:%0.2f" % [seg["b"].x, seg["b"].y]
+        corners[a_key] = seg["a"]
+        corners[b_key] = seg["b"]
+    cached_wall_corners = corners.values()
 
 func _rebuild_maze_bounds():
     if graph_nodes.is_empty():
@@ -948,7 +962,7 @@ func _draw_tunnel_fill_visualization():
             draw_rect(rect, Color(1.0, 0.22, 0.22, 0.65), false, 2.0)
 
 func _draw_maze_skin():
-    if walkable_cells.is_empty():
+    if cached_wall_segments.is_empty():
         return
     var wall_color = Color(0.04, 0.2, 1.0)
     var edge_color = Color(0.22, 0.5, 1.0)
@@ -958,15 +972,11 @@ func _draw_maze_skin():
         print("PHASE 1 DEBUG - _draw_maze_skin: outer_width=", outer_width, " scale_factor=", scale_factor, " resolution_ratio=", resolution_ratio, " classic_wall_width_scale=", classic_wall_width_scale)
         _debug_drawn_once = true
     var inner_width = 2.2 * classic_wall_width_scale * resolution_ratio
-    var segments = _collect_merged_wall_segments()
-    var corners = {}
-    for seg in segments:
+    
+    for seg in cached_wall_segments:
         _draw_wall_segment(seg["a"], seg["b"], wall_color, edge_color, outer_width, inner_width)
-        var a_key = "%0.2f:%0.2f" % [seg["a"].x, seg["a"].y]
-        var b_key = "%0.2f:%0.2f" % [seg["b"].x, seg["b"].y]
-        corners[a_key] = seg["a"]
-        corners[b_key] = seg["b"]
-    for corner in corners.values():
+        
+    for corner in cached_wall_corners:
         _draw_wall_corner(corner, min(outer_width * 0.5, grid_cell_size * 0.15), wall_color, edge_color)
 
 func _has_walkable_cell(gx: int, gy: int) -> bool:
@@ -1049,9 +1059,9 @@ func _draw_pickups():
     for pk in pickups:
         var pos = _world_to_screen(Vector2(pk["x"], pk["y"]))
         if pk.get("power", false):
-            draw_circle(pos, _scaled_radius(7.0 * resolution_ratio), Color.WHITE)
+            draw_circle(pos, _scaled_radius(12.0 * resolution_ratio), Color.WHITE)
         else:
-            draw_circle(pos, _scaled_radius(2.1 * resolution_ratio), Color.WHITE)
+            draw_circle(pos, _scaled_radius(4.0 * resolution_ratio), Color.WHITE)
 
 func _draw_enemies():
     for i in range(enemies.size()):
@@ -1070,7 +1080,7 @@ func _draw_pacman(pos: Vector2, dir: Vector2):
     points.append(pos)
     var start_angle = angle + mouth
     var end_angle = angle + TAU - mouth
-    var radius = _scaled_radius(13.0 * _resolution_ratio())
+    var radius = _scaled_radius(22.0 * _resolution_ratio())
     var steps = 22
     for i in range(steps + 1):
         var t = lerpf(start_angle, end_angle, float(i) / float(steps))
@@ -1089,19 +1099,19 @@ func _draw_ghost(pos: Vector2, color: Color, frightened: bool):
     else:
         body = Color(0.22, 0.46, 1.0)
     var ratio = _resolution_ratio()
-    var rect = Rect2(pos - Vector2(_scaled_radius(11 * ratio), _scaled_radius(10 * ratio)), Vector2(_scaled_radius(22 * ratio), _scaled_radius(22 * ratio)))
-    draw_rect(Rect2(rect.position + Vector2(0, _scaled_radius(6 * ratio)), Vector2(rect.size.x, rect.size.y - _scaled_radius(6 * ratio))), body, true)
-    draw_circle(pos + Vector2(0, _scaled_radius(1 * ratio)), _scaled_radius(11.0 * ratio), body)
-    var foot_y = pos.y + _scaled_radius(12.0 * ratio)
+    var rect = Rect2(pos - Vector2(_scaled_radius(18 * ratio), _scaled_radius(16.5 * ratio)), Vector2(_scaled_radius(36 * ratio), _scaled_radius(36 * ratio)))
+    draw_rect(Rect2(rect.position + Vector2(0, _scaled_radius(10 * ratio)), Vector2(rect.size.x, rect.size.y - _scaled_radius(10 * ratio))), body, true)
+    draw_circle(pos + Vector2(0, _scaled_radius(2 * ratio)), _scaled_radius(18.0 * ratio), body)
+    var foot_y = pos.y + _scaled_radius(20.0 * ratio)
     for i in range(4):
-        draw_circle(Vector2(pos.x - _scaled_radius(8 * ratio) + i * _scaled_radius(5.3 * ratio), foot_y), _scaled_radius(2.7 * ratio), body)
+        draw_circle(Vector2(pos.x - _scaled_radius(13.5 * ratio) + i * _scaled_radius(9.0 * ratio), foot_y), _scaled_radius(4.5 * ratio), body)
     if not frightened:
         var eye_white = Color.WHITE
         var pupil = Color(0.0, 0.16, 0.62)
-        draw_circle(pos + Vector2(-_scaled_radius(4 * ratio), -_scaled_radius(2 * ratio)), _scaled_radius(3.0 * ratio), eye_white)
-        draw_circle(pos + Vector2(_scaled_radius(4 * ratio), -_scaled_radius(2 * ratio)), _scaled_radius(3.0 * ratio), eye_white)
-        draw_circle(pos + Vector2(-_scaled_radius(3 * ratio), -_scaled_radius(1 * ratio)), _scaled_radius(1.2 * ratio), pupil)
-        draw_circle(pos + Vector2(_scaled_radius(5 * ratio), -_scaled_radius(1 * ratio)), _scaled_radius(1.2 * ratio), pupil)
+        draw_circle(pos + Vector2(-_scaled_radius(6.5 * ratio), -_scaled_radius(3.5 * ratio)), _scaled_radius(5.0 * ratio), eye_white)
+        draw_circle(pos + Vector2(_scaled_radius(6.5 * ratio), -_scaled_radius(3.5 * ratio)), _scaled_radius(5.0 * ratio), eye_white)
+        draw_circle(pos + Vector2(-_scaled_radius(5.0 * ratio), -_scaled_radius(2.0 * ratio)), _scaled_radius(2.0 * ratio), pupil)
+        draw_circle(pos + Vector2(_scaled_radius(8.0 * ratio), -_scaled_radius(2.0 * ratio)), _scaled_radius(2.0 * ratio), pupil)
 
 func _draw_particles():
     for p in active_particles:
@@ -1183,7 +1193,7 @@ func _process_player(delta):
         if game_time > 0.5:
             for j in range(pickups.size() - 1, -1, -1):
                 var pickup = pickups[j]
-                if pos.distance_to(Vector2(pickup["x"], pickup["y"])) < max(15.0, grid_cell_size * 0.45):
+                if pos.distance_to(Vector2(pickup["x"], pickup["y"])) < max(20.0, grid_cell_size * 0.65):
                     var pickup_pos = Vector2(pickup["x"], pickup["y"])
                     pickups.remove_at(j)
                     var is_power = pickup.get("power", false)
@@ -1276,7 +1286,7 @@ func _process_enemies(delta):
         e["y"] = pos.y
         
         # Check collision with players
-        var catch_dist = max(20.0, grid_cell_size * 0.45)
+        var catch_dist = max(24.0, grid_cell_size * 0.65)
         for j in range(players.size()):
             var p = players[j]
             if p.get("alive", true):
