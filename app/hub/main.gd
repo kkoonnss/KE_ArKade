@@ -245,10 +245,25 @@ func _wire_vertical_focus_neighbors(buttons: Array, columns: int):
 			var up = buttons[i - columns] as Control
 			if up != null and is_instance_valid(up):
 				button.focus_neighbor_top = button.get_path_to(up)
+		else:
+			var target_idx = i
+			while target_idx + columns < buttons.size():
+				target_idx += columns
+			var bottom_btn = buttons[target_idx] as Control
+			if bottom_btn != null and is_instance_valid(bottom_btn):
+				button.focus_neighbor_top = button.get_path_to(bottom_btn)
+				
 		if i + columns < buttons.size():
 			var down = buttons[i + columns] as Control
 			if down != null and is_instance_valid(down):
 				button.focus_neighbor_bottom = button.get_path_to(down)
+		else:
+			var target_idx = i
+			while target_idx - columns >= 0:
+				target_idx -= columns
+			var top_btn = buttons[target_idx] as Control
+			if top_btn != null and is_instance_valid(top_btn):
+				button.focus_neighbor_bottom = button.get_path_to(top_btn)
 
 func _wire_auto_scroll(buttons: Array, scroll_container: ScrollContainer):
 	if scroll_container == null:
@@ -329,6 +344,8 @@ func _grab_first_focusable_control(node: Node) -> bool:
 	return false
 
 func _process(delta):
+	if launcher and launcher.running:
+		return
 	var scroll_container = get_node_or_null("UI/Content/MainPanel/ScrollContainer")
 	if scroll_container:
 		var right_y = Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
@@ -339,6 +356,8 @@ func _is_focus_recovery_event(event: InputEvent) -> bool:
 	return event.is_action_pressed("ui_up") or event.is_action_pressed("ui_down") or event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right") or event.is_action_pressed("ui_accept") or event.is_action_pressed("ui_cancel")
 
 func _input(event: InputEvent):
+	if launcher and launcher.running:
+		return
 	
 	if event is InputEventJoypadMotion and event.axis == JOY_AXIS_RIGHT_Y:
 		get_viewport().set_input_as_handled()
@@ -387,8 +406,8 @@ func _handle_hub_cancel():
 		display_scenes()
 		return
 	if current_tab == "games":
-		if current_scene != "":
-			display_levels()
+		if current_scene != "" and current_scene != "scene_classic_pack":
+			display_levels(current_scene)
 		else:
 			display_scenes()
 		return
@@ -407,9 +426,10 @@ func _calculate_grid_columns() -> int:
 func _update_scale_from_columns():
 	var vp_width = get_viewport_rect().size.x
 	var vp_height = get_viewport_rect().size.y
-	var available_width = vp_width - 320
+	# Fixed width: SideNav(300) + UI margins(128) + HBox separation(8) + Panel margins(16) + padding(8) = 460
+	var available_width = vp_width - 460
 	var card_width = float(available_width) / float(target_columns)
-	hub_card_scale = (card_width - 16.0) / 232.0
+	hub_card_scale = (card_width - 16.0) / 260.0
 	
 	# Clamp scale to prevent cards from being taller than the available ScrollContainer height
 	var max_scale = (vp_height - 186.0) / 380.0
@@ -447,8 +467,12 @@ func display_settings():
 	cols_btn.gui_input.connect(func(event):
 		var go_left = false
 		var go_right = false
-		if event.is_action_pressed("ui_left", false, true): go_left = true
-		elif event.is_action_pressed("ui_right", false, true): go_right = true
+		if event.is_action_pressed("ui_left", false, true):
+			if not (event is InputEventJoypadMotion) or Input.is_action_just_pressed("ui_left"):
+				go_left = true
+		elif event.is_action_pressed("ui_right", false, true):
+			if not (event is InputEventJoypadMotion) or Input.is_action_just_pressed("ui_right"):
+				go_right = true
 		elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 			if event.position.x < cols_btn.size.x * 0.3:
 				go_left = true
@@ -532,7 +556,8 @@ func display_scenes():
 	if scenes_grid: scenes_grid.columns = _calculate_grid_columns()
 	var focus_buttons = []
 	for i in range(scenes.size()):
-		focus_buttons.append(_create_level_card(scenes[i], base_dir, scenes_grid, i, true))
+		var prefer_focus = (scenes[i] == current_scene)
+		focus_buttons.append(_create_level_card(scenes[i], base_dir, scenes_grid, i, true, prefer_focus))
 	var cols = scenes_grid.columns if scenes_grid else 4
 	_chain_horizontal_focus(focus_buttons, cols)
 	_wire_vertical_focus_neighbors(focus_buttons, cols)
@@ -567,13 +592,15 @@ func _on_scene_selected(scene_name: String):
 		selected_level_name = ""
 		display_games()
 	else:
-		display_levels()
+		display_levels(scene_name)
 
-func display_levels():
+func display_levels(specific_scene_name: String = ""):
 	current_tab = "levels"
 	viewing_levels = true
 	_reset_menu_focus()
 	clear_main_panel()
+	if scenes_grid:
+		scenes_grid.visible = false
 	
 	var scenes_dir_path = ProjectSettings.globalize_path("res://").path_join("../../content/scenes")
 	var scenes_dir = DirAccess.open(scenes_dir_path)
@@ -598,41 +625,57 @@ func display_levels():
 		var l_dir = DirAccess.open(levels_dir_path)
 		if not l_dir: continue
 		
-		# Build scene header
-		var header_btn = Button.new()
-		var pretty_name = scene_name.replace("scene_", "").replace("_", " ").capitalize()
-		header_btn.text = "▶ " + pretty_name
-		header_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		header_btn.add_theme_font_size_override("font_size", 28)
-		header_btn.add_theme_color_override("font_color", color_cyan)
-		header_btn.focus_mode = Control.FOCUS_ALL
-		header_btn.custom_minimum_size = Vector2(0, 60)
-		style_grid_button(header_btn)
+		var grid: GridContainer = null
 		
-		var margin = MarginContainer.new()
-		margin.add_theme_constant_override("margin_top", 12)
-		margin.add_theme_constant_override("margin_bottom", 12)
-		margin.add_child(header_btn)
-		scroll_vbox.add_child(margin)
-		
-		all_focus_buttons.append(header_btn)
-		if first_header == null:
-			first_header = header_btn
-		
-		var grid = GridContainer.new()
-		grid.columns = _calculate_grid_columns()
-		grid.add_theme_constant_override("h_separation", 16)
-		grid.add_theme_constant_override("v_separation", 16)
-		grid.visible = false
-		scroll_vbox.add_child(grid)
-		
-		header_btn.pressed.connect(func():
-			grid.visible = not grid.visible
-			if grid.visible:
-				header_btn.text = "▼ " + pretty_name
-			else:
-				header_btn.text = "▶ " + pretty_name
-		)
+		if specific_scene_name == "":
+			# Build scene header for all-levels accordion view
+			var header_btn = Button.new()
+			var pretty_name = scene_name.replace("scene_", "").replace("_", " ").capitalize()
+			header_btn.text = "▶ " + pretty_name
+			header_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			header_btn.add_theme_font_size_override("font_size", 28)
+			header_btn.add_theme_color_override("font_color", color_cyan)
+			header_btn.focus_mode = Control.FOCUS_ALL
+			header_btn.custom_minimum_size = Vector2(0, 60)
+			style_grid_button(header_btn)
+			
+			var margin = MarginContainer.new()
+			margin.add_theme_constant_override("margin_top", 12)
+			margin.add_theme_constant_override("margin_bottom", 12)
+			margin.add_child(header_btn)
+			scroll_vbox.add_child(margin)
+			
+			all_focus_buttons.append(header_btn)
+			if first_header == null:
+				first_header = header_btn
+			
+			grid = GridContainer.new()
+			grid.columns = _calculate_grid_columns()
+			grid.add_theme_constant_override("h_separation", 16)
+			grid.add_theme_constant_override("v_separation", 16)
+			grid.visible = false
+			scroll_vbox.add_child(grid)
+			
+			header_btn.pressed.connect(func():
+				grid.visible = not grid.visible
+				if grid.visible:
+					header_btn.text = "▼ " + pretty_name
+				else:
+					header_btn.text = "▶ " + pretty_name
+				_rebuild_levels_focus()
+			)
+		else:
+			# Skip scene if not the requested one
+			if scene_name != specific_scene_name:
+				continue
+			
+			grid = GridContainer.new()
+			grid.columns = _calculate_grid_columns()
+			grid.add_theme_constant_override("h_separation", 16)
+			grid.add_theme_constant_override("v_separation", 16)
+			grid.visible = true
+			scroll_vbox.add_child(grid)
+
 		
 		var index = 0
 		var level_buttons = []
@@ -667,8 +710,11 @@ func display_levels():
 			
 			favs.sort_custom(func(a,b): return _get_cartridge_sort_name(a.cart.game_name) < _get_cartridge_sort_name(b.cart.game_name))
 			others.sort_custom(func(a,b): 
-				if a.cart and b.cart: return _get_cartridge_sort_name(a.cart.game_name) < _get_cartridge_sort_name(b.cart.game_name)
-				return a.file < b.file
+				var name_a = a.file
+				if a.cart: name_a = _get_cartridge_sort_name(a.cart.game_name)
+				var name_b = b.file
+				if b.cart: name_b = _get_cartridge_sort_name(b.cart.game_name)
+				return name_a < name_b
 			)
 			
 			for f in favs: process_levels.append({"file": f.file, "idx": f.cart.absolute_index})
@@ -706,7 +752,8 @@ func display_levels():
 		_pending_menu_focus = first_header
 		
 	# Vertical focus logic for headers
-	_wire_vertical_focus_neighbors(all_focus_buttons, 1) # This is a bit complex for a mix of grids and headers, but auto-scroll relies on global_position anyway
+	if specific_scene_name == "":
+		_rebuild_levels_focus()
 	_wire_auto_scroll(all_focus_buttons, $UI/Content/MainPanel/ScrollContainer)
 	_focus_current_menu()
 func _on_level_selected(level_name: String):
@@ -905,6 +952,9 @@ func _cart_id_for_classic_level(level_name: String) -> String:
 	return level_name.substr("classic_".length())
 
 func _launch_game(cart_id: String):
+	if launcher and launcher.running:
+		log_debug("Blocked attempt to double-launch cartridge.")
+		return
 	var launched_from_level_overlay = games_overlay != null and is_instance_valid(games_overlay)
 	_clear_games_overlay()
 	var classic_level = _classic_level_for_cart(cart_id)
@@ -931,6 +981,9 @@ func _launch_game(cart_id: String):
 	
 	if launcher:
 		launcher.launch(launch_cmd, args_template, scene_dir, level_dir)
+		if launcher.running:
+			$UI.process_mode = PROCESS_MODE_DISABLED
+			get_viewport().gui_disable_input = true
 
 func log_debug(msg: String):
 	print(msg)
@@ -1225,8 +1278,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	
 	var _update_title = func():
 		if skins.size() > 1 and (title_btn.has_focus() or title_btn.is_hovered() or cover_btn.is_hovered()):
-			var curr = current_skin if current_skin != "" else default_skin
-			title_btn.text = "< (X)  " + curr + "  (Y) >"
+			title_btn.text = "< (X)  " + game_name + "  (Y) >"
 		else:
 			title_btn.text = game_name
 			
@@ -1246,9 +1298,9 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 				elif event.button_index == JOY_BUTTON_Y:
 					step = 1
 			elif event is InputEventKey and event.pressed and not event.echo:
-				if event.keycode == KEY_X:
+				if event.keycode == KEY_X or event.keycode == KEY_COMMA:
 					step = -1
-				elif event.keycode == KEY_Y:
+				elif event.keycode == KEY_Y or event.keycode == KEY_PERIOD:
 					step = 1
 			elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 				if event.position.x < title_btn.size.x * 0.25:
@@ -1869,6 +1921,8 @@ func _refresh_card_views():
 
 
 func _on_cartridge_exited(clean: bool):
+	$UI.process_mode = PROCESS_MODE_INHERIT
+	get_viewport().gui_disable_input = false
 
 	print("Cartridge exited clean: ", clean)
 
@@ -1897,7 +1951,89 @@ func _return_to_last_level_focus():
 		return
 	current_scene = last_known_scene
 	selected_level_name = last_known_level
-	display_levels()
+	if current_scene == "scene_classic_pack":
+		display_scenes()
+	else:
+		display_levels(current_scene)
+
+func _rebuild_levels_focus():
+	var headers = []
+	var grids = []
+	
+	for child in scroll_vbox.get_children():
+		if child is MarginContainer:
+			var btn = child.get_child(0) as Button
+			if btn:
+				headers.append(btn)
+		elif child is GridContainer:
+			grids.append(child)
+			
+	var bottom_target = null
+	if headers.size() > 0:
+		var last_idx = headers.size() - 1
+		bottom_target = headers[last_idx]
+		var last_grid = grids[last_idx]
+		if last_grid.visible:
+			var last_cards = _get_focus_buttons_in_grid(last_grid)
+			if last_cards.size() > 0:
+				var cols = last_grid.columns
+				var last_row_start = (floor((last_cards.size() - 1) / cols)) * cols
+				bottom_target = last_cards[last_row_start]
+
+	# We assume headers.size() == grids.size()
+	for i in range(headers.size()):
+		var header = headers[i]
+		var grid = grids[i]
+		
+		# 1. Wire top neighbor of this header
+		if i == 0:
+			if bottom_target:
+				header.focus_neighbor_top = header.get_path_to(bottom_target)
+		else:
+			var prev_grid = grids[i - 1]
+			if prev_grid.visible:
+				var prev_cards = _get_focus_buttons_in_grid(prev_grid)
+				if prev_cards.size() > 0:
+					var cols = prev_grid.columns
+					var last_row_start = (floor((prev_cards.size() - 1) / cols)) * cols
+					header.focus_neighbor_top = header.get_path_to(prev_cards[last_row_start])
+			else:
+				header.focus_neighbor_top = header.get_path_to(headers[i - 1])
+				
+		# 2. Wire bottom neighbor of this header
+		if grid.visible:
+			var cards = _get_focus_buttons_in_grid(grid)
+			if cards.size() > 0:
+				header.focus_neighbor_bottom = header.get_path_to(cards[0])
+		else:
+			if i + 1 < headers.size():
+				header.focus_neighbor_bottom = header.get_path_to(headers[i + 1])
+			else:
+				header.focus_neighbor_bottom = header.get_path_to(headers[0])
+				
+		# 3. Wire cards boundaries
+		if grid.visible:
+			var cards = _get_focus_buttons_in_grid(grid)
+			var cols = grid.columns
+			if cards.size() > 0:
+				# Top row of cards point UP to the header
+				for col_idx in range(min(cols, cards.size())):
+					cards[col_idx].focus_neighbor_top = cards[col_idx].get_path_to(header)
+					
+				# Bottom row of cards point DOWN to the next header
+				var last_row_start = (floor((cards.size() - 1) / cols)) * cols
+				for col_idx in range(last_row_start, cards.size()):
+					if i + 1 < headers.size():
+						cards[col_idx].focus_neighbor_bottom = cards[col_idx].get_path_to(headers[i + 1])
+					else:
+						cards[col_idx].focus_neighbor_bottom = cards[col_idx].get_path_to(headers[0])
+
+func _get_focus_buttons_in_grid(grid: GridContainer) -> Array:
+	var buttons = []
+	for child in grid.get_children():
+		if child is Button and child.focus_mode != Control.FOCUS_NONE:
+			buttons.append(child)
+	return buttons
 
 
 
