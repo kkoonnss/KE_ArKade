@@ -158,7 +158,7 @@ func _ready():
 func _input(event):
     if game_state in ["game_over", "win"]:
         if (event is InputEventKey and event.pressed and event.keycode == KEY_ENTER) or \
-           (event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_START):
+           (event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_START, JOY_BUTTON_A]):
             _restart_game()
             return
             

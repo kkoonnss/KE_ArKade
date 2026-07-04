@@ -905,7 +905,7 @@ func _input(event):
                 _set_menu_mode(false)
         elif event is InputEventKey and event.keycode == KEY_F1:
             show_reference = not show_reference
-        elif event is InputEventKey and event.keycode == KEY_ENTER and state != "playing":
+        elif ((event is InputEventKey and event.keycode == KEY_ENTER) or (event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START])) and state != "playing":
             reset_game()
         elif (event is InputEventKey and event.keycode == KEY_ESCAPE) or (event is InputEventJoypadButton and event.button_index == JOY_BUTTON_BACK):
             state = "start"
@@ -1963,10 +1963,14 @@ func _draw_hud():
     draw_string(font, Vector2(18, 64), "SCORE " + str(score) + "  LIVES " + str(lives) + extra, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, C_CYAN)
     if paused:
         draw_string(font, get_viewport_rect().size * 0.5, "PAUSED", HORIZONTAL_ALIGNMENT_CENTER, -1, 46, Color.WHITE)
-    elif state == "game_over":
-        draw_string(font, get_viewport_rect().size * 0.5, "GAME OVER - ENTER", HORIZONTAL_ALIGNMENT_CENTER, -1, 44, C_RED)
-    elif state == "win":
-        draw_string(font, get_viewport_rect().size * 0.5, "WAVE CLEAR - ENTER", HORIZONTAL_ALIGNMENT_CENTER, -1, 44, C_GREEN)
+    elif state == "game_over" or state == "win":
+        var txt = "GAME OVER - ENTER" if state == "game_over" else "WAVE CLEAR - ENTER"
+        var col = C_RED if state == "game_over" else C_GREEN
+        var center = get_viewport_rect().size * 0.5
+        var text_size = font.get_string_size(txt, HORIZONTAL_ALIGNMENT_CENTER, -1, 44)
+        var rect = Rect2(center.x - text_size.x/2 - 20, center.y - text_size.y + 4, text_size.x + 40, text_size.y + 16)
+        draw_rect(rect, Color(0, 0, 0, 0.9))
+        draw_string(font, center, txt, HORIZONTAL_ALIGNMENT_CENTER, -1, 44, col)
 
 func _move_vec(idx: int = 0) -> Vector2:
     var v = Vector2.ZERO
