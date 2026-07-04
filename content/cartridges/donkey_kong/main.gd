@@ -91,6 +91,7 @@ var bricks = []
 var items = []
 var hazards = []
 var barrels = []
+var hammers = []
 var bubbles = []
 var rocks = []
 var generators = []
@@ -627,6 +628,7 @@ func _setup_custom_donkey_kong():
     walls.clear()
     fire_guys.clear()
     items.clear()
+    hammers.clear()
     
     var rng = RandomNumberGenerator.new()
     if current_level_seed < 0:
@@ -835,6 +837,15 @@ func _setup_custom_donkey_kong():
             "vel_x": 120
         }
         items.append({"pos": Vector2(highest_p["rect"].position.x + highest_p["rect"].size.x * 0.5, highest_p["y_left"] - 25)})
+        
+        var hammer_count = 0
+        for p in platforms:
+            if p != highest_p and p != lowest_p and randf() < 0.2 and hammer_count < 2:
+                var hx = p["rect"].position.x + p["rect"].size.x * rng.randf_range(0.2, 0.8)
+                var t = clamp((hx - p["rect"].position.x) / max(1.0, p["rect"].size.x), 0.0, 1.0)
+                var hy = lerp(p["y_left"], p["y_right"], t) - 15
+                hammers.append({"pos": Vector2(hx, hy), "active": true})
+                hammer_count += 1
         
         for i in range(current_fire_enemy_count):
             fire_guys.append({"pos": Vector2(lowest_p["rect"].position.x + lowest_p["rect"].size.x * 0.2, lowest_p["y_left"] - 13), "vel_x": 60, "cool": 0})
@@ -1104,18 +1115,35 @@ func _tick_fire_guy(delta):
                 _lose_life()
                 break
 
-func _draw_barrel(pos: Vector2, color: Color):
+func _draw_barrel(b: Dictionary, color: Color):
+    var pos = b["pos"]
+    var angle = 0.0
+    if b.get("ladder", false):
+        angle = pos.y / 12.0
+    else:
+        angle = pos.x / 12.0
+        
     draw_circle(pos, 12, Color(color.r, color.g, color.b, 0.4))
     draw_arc(pos, 12, 0, TAU, 16, color, 2.0)
-    _glow_line(pos + Vector2(-8, -8), pos + Vector2(8, 8), color, 1.5)
-    _glow_line(pos + Vector2(-8, 8), pos + Vector2(8, -8), color, 1.5)
+    
+    var l1_s = pos + Vector2(-8, -8).rotated(angle)
+    var l1_e = pos + Vector2(8, 8).rotated(angle)
+    var l2_s = pos + Vector2(-8, 8).rotated(angle)
+    var l2_e = pos + Vector2(8, -8).rotated(angle)
+    
+    _glow_line(l1_s, l1_e, color, 1.5)
+    _glow_line(l2_s, l2_e, color, 1.5)
 
 func _draw_fire_guy(pos: Vector2, color: Color):
+    var msec = Time.get_ticks_msec()
+    var offset_y = sin(msec * 0.01) * 3.0
+    var spread = cos(msec * 0.015) * 2.0
+    
     _glow_circle_outline(pos, 14, color, 2)
     draw_circle(pos + Vector2(-5, -2), 3, Color.YELLOW)
     draw_circle(pos + Vector2(5, -2), 3, Color.YELLOW)
-    _glow_line(pos + Vector2(-8, -14), pos + Vector2(0, -26), Color.YELLOW, 1.5)
-    _glow_line(pos + Vector2(8, -14), pos + Vector2(0, -26), Color.YELLOW, 1.5)
+    _glow_line(pos + Vector2(-8 - spread, -14 + offset_y), pos + Vector2(0, -26 + offset_y * 1.5), Color.YELLOW, 1.5)
+    _glow_line(pos + Vector2(8 + spread, -14 + offset_y), pos + Vector2(0, -26 + offset_y * 1.5), Color.YELLOW, 1.5)
 
 func _tick_barrel(delta):
     for i in range(dk_players.size()):
@@ -1123,8 +1151,21 @@ func _tick_barrel(delta):
         if p.get("dead", false): continue
         _dk_platform_move(p, i, delta, true)
         p["cool"] = max(0.0, p["cool"] - delta)
+        p["hammer_time"] = max(0.0, p.get("hammer_time", 0.0) - delta)
+        
+        if p["hammer_time"] > 0:
+            p["climbing"] = false
+            
+        for h in hammers:
+            if h.get("active", true) and p["pos"].distance_to(h["pos"]) < 30:
+                h["active"] = false
+                p["hammer_time"] = 8.0
+                score += 500
+                _emit_score()
+        
         if items.size() > 0 and p["pos"].distance_to(items[0]["pos"]) < 35:
             _win_wave()
+            
     if barrels.size() < 9 and randf() < delta * (0.9 + wave * 0.1):
         if not barrel_spawner.is_empty():
             barrels.append({"pos": barrel_spawner["pos"], "vel": Vector2(barrel_spawner["vel_x"], 0), "jumped": false, "ladder": false, "cooldown": 0.0})
@@ -1178,16 +1219,52 @@ func _tick_barrel(delta):
         if b["pos"].x < -100 or b["pos"].x > logical_w + 100 or b["pos"].y > kill_zone_y:
             barrels.remove_at(i)
             continue
+            
+        var b_removed = false
         for p in dk_players:
             if p.get("dead", false): continue
             var d = b["pos"].distance_to(p["pos"])
-            if d < 18:
+            if p.get("hammer_time", 0.0) > 0 and d < 35:
+                barrels.remove_at(i)
+                score += 300
+                _emit_score()
+                b_removed = true
+                _burst(b["pos"], Color.ORANGE, 15)
+                break
+            elif d < 18:
                 p["dead"] = true
                 _lose_life()
             elif d < 38 and p["vel"].y < -20 and not b["jumped"]:
                 b["jumped"] = true
                 score += 100
                 _emit_score()
+                
+        if b_removed:
+            continue
+
+    for i in range(fire_guys.size() - 1, -1, -1):
+        var fg = fire_guys[i]
+        fg["cool"] = max(0.0, fg["cool"] - delta)
+        
+        var fg_removed = false
+        for p in dk_players:
+            if p.get("dead", false): continue
+            var d = fg["pos"].distance_to(p["pos"])
+            if p.get("hammer_time", 0.0) > 0 and d < 35:
+                fire_guys.remove_at(i)
+                score += 300
+                _emit_score()
+                fg_removed = true
+                _burst(fg["pos"], Color.RED, 15)
+                break
+            elif d < 18:
+                p["dead"] = true
+                _lose_life()
+                
+        if fg_removed:
+            continue
+            
+        if fg["cool"] <= 0:
 
 
 func _barrel_ladder_x(pos: Vector2) -> float:
@@ -1743,7 +1820,7 @@ func _draw_platform_game(things, color: Color):
         if t.has("egg") and t["egg"]:
             _draw_egg(pos, C_YELLOW)
         elif t.has("jumped"):
-            _draw_barrel(pos, color)
+            _draw_barrel(t, color)
         else:
             _draw_platform_enemy(pos, color)
     for e in enemies:
@@ -1753,12 +1830,15 @@ func _draw_platform_game(things, color: Color):
         _draw_bubble(bub["pos"], C_CYAN)
     for item in items:
         _draw_pickup(item["pos"], C_YELLOW)
+    for h in hammers:
+        if h.get("active", true):
+            _draw_hammer(h["pos"], Color.YELLOW)
     var colors = [C_GREEN, Color.CORNFLOWER_BLUE, Color.HOT_PINK, Color.YELLOW]
     if game_id == "donkey_kong" and dk_players.size() > 0:
         for i in range(dk_players.size()):
             var p = dk_players[i]
             if not p.get("dead", false):
-                _draw_little_hero(p["pos"], colors[i % colors.size()])
+                _draw_little_hero(p["pos"], colors[i % colors.size()], p.get("hammer_time", 0.0))
     else:
         _draw_little_hero(player["pos"], C_GREEN)
 
@@ -1897,7 +1977,7 @@ func _draw_broken_ladder(rect: Rect2, color: Color):
     for y in range(int(bot_y), int(bot_y + bot_h), 20):
         _glow_line(Vector2(x1, y), Vector2(x2, y), color, 0.8)
 
-func _draw_little_hero(pos: Vector2, color: Color):
+func _draw_little_hero(pos: Vector2, color: Color, hammer_time: float = 0.0):
     _glow_circle(pos + Vector2(0, -12), 7, color)
     draw_rect(Rect2(pos + Vector2(-9, -4), Vector2(18, 22)), Color(color.r, color.g, color.b, 0.16), true)
     draw_rect(Rect2(pos + Vector2(-9, -4), Vector2(18, 22)), color, false, 1.3)
@@ -1907,6 +1987,21 @@ func _draw_little_hero(pos: Vector2, color: Color):
     _glow_line(pos + Vector2(4, 18), pos + Vector2(10, 28), color, 1.0)
     draw_circle(pos + Vector2(-3, -13), 1.8, Color.WHITE)
     draw_circle(pos + Vector2(3, -13), 1.8, Color.WHITE)
+    
+    if hammer_time > 0.0:
+        var msec = Time.get_ticks_msec()
+        var swing = sin(msec * 0.02)
+        var h_angle = PI/4 + swing * PI/2.5
+        var hand = pos + Vector2(12, 6)
+        var head = hand + Vector2(0, -22).rotated(h_angle)
+        _glow_line(hand, head, Color.SADDLE_BROWN, 2.5)
+        draw_rect(Rect2(head + Vector2(-8, -6), Vector2(16, 12)), Color.LIGHT_GRAY, true)
+        draw_rect(Rect2(head + Vector2(-8, -6), Vector2(16, 12)), Color.WHITE, false, 1.5)
+
+func _draw_hammer(pos: Vector2, color: Color):
+    _glow_line(pos + Vector2(0, 10), pos + Vector2(0, -6), Color.SADDLE_BROWN, 2.0)
+    draw_rect(Rect2(pos + Vector2(-6, -10), Vector2(12, 8)), Color.GRAY, true)
+    draw_rect(Rect2(pos + Vector2(-6, -10), Vector2(12, 8)), color, false, 1.0)
 
 func _draw_platform_enemy(pos: Vector2, color: Color):
     _glow_circle_outline(pos, 13, color, 2)
