@@ -59,6 +59,7 @@ var current_barrel_ladder_chance = 0.5
 var current_extra_fill = 0.5
 var current_ladder_density = 1.0
 var current_max_ladder_length = 300.0
+var current_allow_broken_ladders = true
 var current_semantic_threshold = 0.5
 var current_map_bridge_type = "platforms"
 var logical_w = 1920.0
@@ -219,6 +220,7 @@ func _build_ui():
     tab_menu.register_knob_float("extra_fill", "Extra Fill %", 0.5, 0.0, 1.0, 0.05, "Secondary")
     tab_menu.register_knob_float("ladder_density", "Ladder Density", 1.0, 0.0, 2.0, 0.1, "Secondary")
     tab_menu.register_knob_float("max_ladder_length", "Max Ladder Len", 300.0, 50.0, 800.0, 25.0, "Secondary")
+    tab_menu.register_knob_bool("allow_broken_ladders", "Break Ladders", current_allow_broken_ladders, "Secondary")
     tab_menu.register_knob_enum("map_bridge_type", "Map Bridge Type", current_map_bridge_type, ["platforms", "bridges"], "Secondary")
     tab_menu.register_knob_float("semantic_threshold", "Semantic Threshold", 0.5, 0.0, 1.0, 0.05, "Secondary")
     tab_menu.register_knob_enum("background_view", "Background View", background_view, ["final", "photo", "semantic"], "Preview")
@@ -270,6 +272,10 @@ func _on_knob_changed(knob_id: String, value):
         reset_game()
     elif knob_id == "ladder_density":
         current_ladder_density = float(value)
+        load_level()
+        reset_game()
+    elif knob_id == "allow_broken_ladders":
+        current_allow_broken_ladders = bool(value)
         load_level()
         reset_game()
     elif knob_id == "max_ladder_length":
@@ -489,6 +495,9 @@ func _add_dynamic_ladder(x: float, y_approx: float):
             ladders.append(Rect2(x, y_top, 6, length))
 
 func _add_dynamic_broken_ladder(x: float, y_approx: float):
+    if not current_allow_broken_ladders:
+        _add_dynamic_ladder(x, y_approx)
+        return
     var y_top = _platform_y(Vector2(x, y_approx))
     var y_bot = logical_h * 1.5
     for p in platforms:
@@ -1690,6 +1699,9 @@ func _draw_donkey_kong(pos: Vector2):
     draw_polyline(pts + PackedVector2Array([pts[0]]), Color.RED, 2.0)
 
 func _draw_platform_game(things, color: Color):
+    if show_debug_grid:
+        for w in walls:
+            draw_rect(w, Color(1, 0, 0, 0.3), true)
     if not barrel_spawner.is_empty():
         _draw_donkey_kong(barrel_spawner["pos"])
     for p in platforms:
