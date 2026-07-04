@@ -1071,9 +1071,9 @@ func _draw_pickups():
     for pk in pickups:
         var pos = _world_to_screen(Vector2(pk["x"], pk["y"]))
         if pk.get("power", false):
-            draw_circle(pos, _scaled_radius(12.0 * resolution_ratio), Color.WHITE)
+            draw_circle(pos, _scaled_radius(8.0 * resolution_ratio), Color.WHITE)
         else:
-            draw_circle(pos, _scaled_radius(4.0 * resolution_ratio), Color.WHITE)
+            draw_circle(pos, _scaled_radius(2.4 * resolution_ratio), Color.WHITE)
 
 func _draw_enemies():
     for i in range(enemies.size()):
@@ -1092,7 +1092,7 @@ func _draw_pacman(pos: Vector2, dir: Vector2):
     points.append(pos)
     var start_angle = angle + mouth
     var end_angle = angle + TAU - mouth
-    var radius = _scaled_radius(22.0 * _resolution_ratio())
+    var radius = _scaled_radius(14.0 * _resolution_ratio())
     var steps = 22
     for i in range(steps + 1):
         var t = lerpf(start_angle, end_angle, float(i) / float(steps))
@@ -1111,37 +1111,37 @@ func _draw_ghost(pos: Vector2, color: Color, frightened: bool):
     else:
         body = Color(0.22, 0.46, 1.0)
     var ratio = _resolution_ratio()
-    var rect = Rect2(pos - Vector2(_scaled_radius(18 * ratio), _scaled_radius(16.5 * ratio)), Vector2(_scaled_radius(36 * ratio), _scaled_radius(36 * ratio)))
-    draw_rect(Rect2(rect.position + Vector2(0, _scaled_radius(10 * ratio)), Vector2(rect.size.x, rect.size.y - _scaled_radius(10 * ratio))), body, true)
-    draw_circle(pos + Vector2(0, _scaled_radius(2 * ratio)), _scaled_radius(18.0 * ratio), body)
-    var foot_y = pos.y + _scaled_radius(20.0 * ratio)
+    var rect = Rect2(pos - Vector2(_scaled_radius(12.5 * ratio), _scaled_radius(11.5 * ratio)), Vector2(_scaled_radius(25 * ratio), _scaled_radius(25 * ratio)))
+    draw_rect(Rect2(rect.position + Vector2(0, _scaled_radius(7 * ratio)), Vector2(rect.size.x, rect.size.y - _scaled_radius(7 * ratio))), body, true)
+    draw_circle(pos + Vector2(0, _scaled_radius(1 * ratio)), _scaled_radius(12.5 * ratio), body)
+    var foot_y = pos.y + _scaled_radius(13.5 * ratio)
     for i in range(4):
-        draw_circle(Vector2(pos.x - _scaled_radius(13.5 * ratio) + i * _scaled_radius(9.0 * ratio), foot_y), _scaled_radius(4.5 * ratio), body)
+        draw_circle(Vector2(pos.x - _scaled_radius(9.0 * ratio) + i * _scaled_radius(6.0 * ratio), foot_y), _scaled_radius(3.0 * ratio), body)
     if not frightened:
         var eye_white = Color.WHITE
         var pupil = Color(0.0, 0.16, 0.62)
-        draw_circle(pos + Vector2(-_scaled_radius(6.5 * ratio), -_scaled_radius(3.5 * ratio)), _scaled_radius(5.0 * ratio), eye_white)
-        draw_circle(pos + Vector2(_scaled_radius(6.5 * ratio), -_scaled_radius(3.5 * ratio)), _scaled_radius(5.0 * ratio), eye_white)
-        draw_circle(pos + Vector2(-_scaled_radius(5.0 * ratio), -_scaled_radius(2.0 * ratio)), _scaled_radius(2.0 * ratio), pupil)
-        draw_circle(pos + Vector2(_scaled_radius(8.0 * ratio), -_scaled_radius(2.0 * ratio)), _scaled_radius(2.0 * ratio), pupil)
+        draw_circle(pos + Vector2(-_scaled_radius(4.5 * ratio), -_scaled_radius(2.2 * ratio)), _scaled_radius(3.5 * ratio), eye_white)
+        draw_circle(pos + Vector2(_scaled_radius(4.5 * ratio), -_scaled_radius(2.2 * ratio)), _scaled_radius(3.5 * ratio), eye_white)
+        draw_circle(pos + Vector2(-_scaled_radius(3.5 * ratio), -_scaled_radius(1.1 * ratio)), _scaled_radius(1.4 * ratio), pupil)
+        draw_circle(pos + Vector2(_scaled_radius(5.5 * ratio), -_scaled_radius(1.1 * ratio)), _scaled_radius(1.4 * ratio), pupil)
     else:
         var face_color = Color(1.0, 0.16, 0.2) if flash_on else Color(1.0, 0.72, 0.08)
         
         # Eyes
-        draw_circle(pos + Vector2(-_scaled_radius(6.0 * ratio), -_scaled_radius(3.0 * ratio)), _scaled_radius(2.0 * ratio), face_color)
-        draw_circle(pos + Vector2(_scaled_radius(6.0 * ratio), -_scaled_radius(3.0 * ratio)), _scaled_radius(2.0 * ratio), face_color)
+        draw_circle(pos + Vector2(-_scaled_radius(4.0 * ratio), -_scaled_radius(2.0 * ratio)), _scaled_radius(1.5 * ratio), face_color)
+        draw_circle(pos + Vector2(_scaled_radius(4.0 * ratio), -_scaled_radius(2.0 * ratio)), _scaled_radius(1.5 * ratio), face_color)
         
         # Wiggly zig-zag mouth
         var mouth_pts = PackedVector2Array()
-        mouth_pts.append(pos + Vector2(-_scaled_radius(9.0 * ratio), _scaled_radius(6.0 * ratio)))
-        mouth_pts.append(pos + Vector2(-_scaled_radius(6.0 * ratio), _scaled_radius(3.0 * ratio)))
-        mouth_pts.append(pos + Vector2(-_scaled_radius(3.0 * ratio), _scaled_radius(6.0 * ratio)))
-        mouth_pts.append(pos + Vector2(0.0, _scaled_radius(3.0 * ratio)))
-        mouth_pts.append(pos + Vector2(_scaled_radius(3.0 * ratio), _scaled_radius(6.0 * ratio)))
-        mouth_pts.append(pos + Vector2(_scaled_radius(6.0 * ratio), _scaled_radius(3.0 * ratio)))
-        mouth_pts.append(pos + Vector2(_scaled_radius(9.0 * ratio), _scaled_radius(6.0 * ratio)))
+        mouth_pts.append(pos + Vector2(-_scaled_radius(6.0 * ratio), _scaled_radius(4.0 * ratio)))
+        mouth_pts.append(pos + Vector2(-_scaled_radius(4.0 * ratio), _scaled_radius(2.0 * ratio)))
+        mouth_pts.append(pos + Vector2(-_scaled_radius(2.0 * ratio), _scaled_radius(4.0 * ratio)))
+        mouth_pts.append(pos + Vector2(0.0, _scaled_radius(2.0 * ratio)))
+        mouth_pts.append(pos + Vector2(_scaled_radius(2.0 * ratio), _scaled_radius(4.0 * ratio)))
+        mouth_pts.append(pos + Vector2(_scaled_radius(4.0 * ratio), _scaled_radius(2.0 * ratio)))
+        mouth_pts.append(pos + Vector2(_scaled_radius(6.0 * ratio), _scaled_radius(4.0 * ratio)))
         
-        draw_polyline(mouth_pts, face_color, _scaled_width(2.0 * ratio), true)
+        draw_polyline(mouth_pts, face_color, _scaled_width(1.5 * ratio), true)
 
 func _draw_particles():
     for p in active_particles:
@@ -1223,7 +1223,7 @@ func _process_player(delta):
         if game_time > 0.5:
             for j in range(pickups.size() - 1, -1, -1):
                 var pickup = pickups[j]
-                if pos.distance_to(Vector2(pickup["x"], pickup["y"])) < max(20.0, grid_cell_size * 0.65):
+                if pos.distance_to(Vector2(pickup["x"], pickup["y"])) < max(12.0, grid_cell_size * 0.35):
                     var pickup_pos = Vector2(pickup["x"], pickup["y"])
                     pickups.remove_at(j)
                     var is_power = pickup.get("power", false)
@@ -1316,7 +1316,7 @@ func _process_enemies(delta):
         e["y"] = pos.y
         
         # Check collision with players
-        var catch_dist = max(24.0, grid_cell_size * 0.65)
+        var catch_dist = max(16.0, grid_cell_size * 0.5)
         for j in range(players.size()):
             var p = players[j]
             if p.get("alive", true):
