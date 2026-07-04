@@ -8,8 +8,8 @@ lane: shared
 lock_held: shared-start-menu-mouse
 status: pending_kons_verify
 pre_edit_commit: not_created_dirty_tree
-close_commit: pending
-backup_status: pending_git_backup
+close_commit: 5de443e
+backup_status: pushed_to_origin_master
 backup_remote: origin
 escalations:
   - Godot headless smoke required unsandboxed access because Godot writes logs/config outside the workspace.
