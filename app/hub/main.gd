@@ -919,12 +919,27 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 		var img = Image.load_from_file(thumb_path)
 		if img: tex_rect.texture = ImageTexture.create_from_image(img)
 
-	var index_lbl = Label.new()
-	index_lbl.text = str(display_index) + "." if display_index > 0 else ""
-	index_lbl.add_theme_font_size_override("font_size", 16)
-	index_lbl.add_theme_color_override("font_color", color_cyan)
-	index_lbl.position = Vector2(8, 8)
-	img_control.add_child(index_lbl)
+	if display_index > 0:
+		var num_bg = Panel.new()
+		var num_style = StyleBoxFlat.new()
+		num_style.bg_color = Color(0.15, 0.15, 0.15, 0.9)
+		num_style.corner_radius_top_left = 6
+		num_style.corner_radius_top_right = 6
+		num_style.corner_radius_bottom_left = 6
+		num_style.corner_radius_bottom_right = 6
+		num_bg.add_theme_stylebox_override("panel", num_style)
+		num_bg.custom_minimum_size = Vector2(32, 32)
+		num_bg.position = Vector2(8, 8)
+		
+		var index_lbl = Label.new()
+		index_lbl.text = str(display_index) + "."
+		index_lbl.add_theme_font_size_override("font_size", 16)
+		index_lbl.add_theme_color_override("font_color", color_cyan)
+		index_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		index_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		index_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		num_bg.add_child(index_lbl)
+		img_control.add_child(num_bg)
 
 	var fav_btn = Button.new()
 	fav_btn.focus_mode = Control.FOCUS_NONE
@@ -1117,8 +1132,14 @@ func _create_level_card(level_name: String, levels_dir: String, container: Contr
 		tex_rect.add_child(placeholder)
 		
 	if display_index >= 0:
-		var num_bg = ColorRect.new()
-		num_bg.color = Color(0.15, 0.15, 0.15, 0.9)
+		var num_bg = Panel.new()
+		var num_style = StyleBoxFlat.new()
+		num_style.bg_color = Color(0.15, 0.15, 0.15, 0.9)
+		num_style.corner_radius_top_left = 6
+		num_style.corner_radius_top_right = 6
+		num_style.corner_radius_bottom_left = 6
+		num_style.corner_radius_bottom_right = 6
+		num_bg.add_theme_stylebox_override("panel", num_style)
 		num_bg.custom_minimum_size = Vector2(32, 32)
 		num_bg.position = Vector2(8, 8)
 		var number_lbl = Label.new()
