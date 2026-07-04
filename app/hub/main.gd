@@ -54,7 +54,7 @@ var scale_slider: HSlider = null
 func _ready():
 	set_process_input(true)
 	_ensure_hub_input_actions()
-	if scenes_grid is GridContainer: scenes_grid.columns = 4
+	if scenes_grid is GridContainer: scenes_grid.columns = _calculate_grid_columns()
 	
 	var top_bar = get_node_or_null("UI/TopBar")
 	if top_bar and not scale_slider:
@@ -221,6 +221,9 @@ func _prefer_menu_focus(control: Control):
 	_pending_menu_focus = control
 
 func _chain_horizontal_focus(buttons: Array, columns: int = 4):
+	var fallback_nav = get_node_or_null("UI/Content/SideNav/ScenesBtn")
+	var target_nav = _last_nav_focus if (_last_nav_focus and is_instance_valid(_last_nav_focus)) else fallback_nav
+
 	for i in range(buttons.size()):
 		var button = buttons[i] as Control
 		if button == null or not is_instance_valid(button):
@@ -230,7 +233,10 @@ func _chain_horizontal_focus(buttons: Array, columns: int = 4):
 			if previous != null and is_instance_valid(previous):
 				button.focus_neighbor_left = button.get_path_to(previous)
 		else:
-			button.focus_neighbor_left = NodePath()
+			if target_nav and is_instance_valid(target_nav):
+				button.focus_neighbor_left = button.get_path_to(target_nav)
+			else:
+				button.focus_neighbor_left = NodePath()
 			
 		if i < buttons.size() - 1 and ((i + 1) % columns) != 0:
 			var next = buttons[i + 1] as Control
@@ -365,18 +371,6 @@ func _input(event: InputEvent):
 		get_viewport().set_input_as_handled()
 		return
 
-	if event.is_action_pressed("ui_left") and not in_sidenav and owner != null and games_overlay == null:
-		var nav = get_node_or_null("UI/Content/SideNav")
-		var should_go_left = owner.focus_neighbor_left.is_empty()
-		
-		if should_go_left:
-			if _last_nav_focus and is_instance_valid(_last_nav_focus) and _last_nav_focus.is_inside_tree() and _last_nav_focus.is_visible_in_tree():
-				_last_nav_focus.grab_focus()
-			elif nav:
-				_grab_first_focusable(nav)
-			get_viewport().set_input_as_handled()
-			return
-
 	if not _is_focus_recovery_event(event):
 		return
 	if owner == null or not is_instance_valid(owner) or not owner.is_visible_in_tree():
@@ -406,6 +400,12 @@ func _handle_hub_cancel():
 		return
 	_focus_current_menu()
 
+func _calculate_grid_columns() -> int:
+	var vp_width = get_viewport_rect().size.x
+	var available_width = vp_width - 320
+	var card_width = (232 * hub_card_scale) + 16
+	return int(max(1, floor(available_width / card_width)))
+
 func display_scenes():
 	current_tab = "scenes"
 	viewing_levels = false
@@ -432,12 +432,13 @@ func display_scenes():
 			return false
 		return a < b
 	)
-	
+	if scenes_grid: scenes_grid.columns = _calculate_grid_columns()
 	var focus_buttons = []
 	for i in range(scenes.size()):
 		focus_buttons.append(_create_level_card(scenes[i], base_dir, scenes_grid, i, true))
-	_chain_horizontal_focus(focus_buttons)
-	_wire_vertical_focus_neighbors(focus_buttons, 4)
+	var cols = scenes_grid.columns if scenes_grid else 4
+	_chain_horizontal_focus(focus_buttons, cols)
+	_wire_vertical_focus_neighbors(focus_buttons, cols)
 	_wire_auto_scroll(focus_buttons, $UI/Content/MainPanel/ScrollContainer)
 	_focus_current_menu()
 func style_grid_button(btn: Button):
@@ -489,8 +490,10 @@ func display_levels():
 				focus_buttons.append(_create_level_card(file_name, base_dir, scenes_grid, index, false, prefer_focus))
 				index += 1
 			file_name = dir.get_next()
-		_chain_horizontal_focus(focus_buttons)
-		_wire_vertical_focus_neighbors(focus_buttons, 4)
+		if scenes_grid: scenes_grid.columns = _calculate_grid_columns()
+		var cols = scenes_grid.columns if scenes_grid else 4
+		_chain_horizontal_focus(focus_buttons, cols)
+		_wire_vertical_focus_neighbors(focus_buttons, cols)
 		_wire_auto_scroll(focus_buttons, $UI/Content/MainPanel/ScrollContainer)
 	_focus_current_menu()
 func _on_level_selected(level_name: String):
@@ -563,7 +566,7 @@ func display_games_lightbox():
 	vbox.add_child(scroll)
 	
 	var grid = GridContainer.new()
-	grid.columns = 4
+	grid.columns = _calculate_grid_columns()
 	grid.add_theme_constant_override("h_separation", 16)
 	grid.add_theme_constant_override("v_separation", 16)
 	scroll_margin.add_child(grid)
@@ -585,8 +588,8 @@ func display_games_lightbox():
 	for g in games:
 		focus_buttons.append(_create_game_card(g, grid, idx))
 		idx += 1
-	_chain_horizontal_focus(focus_buttons)
-	_wire_vertical_focus_neighbors(focus_buttons, 4)
+	_chain_horizontal_focus(focus_buttons, grid.columns)
+	_wire_vertical_focus_neighbors(focus_buttons, grid.columns)
 	_wire_auto_scroll(focus_buttons, scroll)
 	if _pending_menu_focus == null:
 		_remember_menu_focus(close_btn)
@@ -620,7 +623,7 @@ func display_games():
 			fav_lbl.add_theme_font_size_override("font_size", 24)
 			scroll_vbox.add_child(fav_lbl)
 			var fav_grid = GridContainer.new()
-			fav_grid.columns = 4
+			fav_grid.columns = _calculate_grid_columns()
 			fav_grid.add_theme_constant_override("h_separation", 16)
 			fav_grid.add_theme_constant_override("v_separation", 16)
 			scroll_vbox.add_child(fav_grid)
@@ -629,7 +632,7 @@ func display_games():
 				var card_btn = _create_game_card(game, fav_grid, game.absolute_index)
 				fav_buttons.append(card_btn)
 				_game_title_focus_buttons.append(card_btn)
-			_wire_vertical_focus_neighbors(fav_buttons, 4)
+			_wire_vertical_focus_neighbors(fav_buttons, fav_grid.columns)
 
 		if others.size() > 0:
 			var other_lbl = Label.new()
@@ -640,7 +643,7 @@ func display_games():
 			margin.add_child(other_lbl)
 			scroll_vbox.add_child(margin)
 			var other_grid = GridContainer.new()
-			other_grid.columns = 4
+			other_grid.columns = _calculate_grid_columns()
 			other_grid.add_theme_constant_override("h_separation", 16)
 			other_grid.add_theme_constant_override("v_separation", 16)
 			scroll_vbox.add_child(other_grid)
@@ -649,18 +652,29 @@ func display_games():
 				var card_btn = _create_game_card(game, other_grid, game.absolute_index)
 				other_buttons.append(card_btn)
 				_game_title_focus_buttons.append(card_btn)
-			_wire_vertical_focus_neighbors(other_buttons, 4)
+			_wire_vertical_focus_neighbors(other_buttons, other_grid.columns)
 
 	else:
 		var grid = GridContainer.new()
-		grid.columns = 4
+		grid.columns = _calculate_grid_columns()
 		grid.add_theme_constant_override("h_separation", 16)
 		grid.add_theme_constant_override("v_separation", 16)
 		scroll_vbox.add_child(grid)
 		for game in games:
 			_game_title_focus_buttons.append(_create_game_card(game, grid, game.absolute_index))
-		_wire_vertical_focus_neighbors(_game_title_focus_buttons, 4)
-	_chain_horizontal_focus(_game_title_focus_buttons)
+		_wire_vertical_focus_neighbors(_game_title_focus_buttons, grid.columns)
+	
+	if sort_favorites_first:
+		# If separated into favs and others, we just do them independently or together?
+		# Actually, _chain_horizontal_focus expects a single linear array. 
+		# `_game_title_focus_buttons` has them all. 
+		# To avoid wrapping focus incorrectly from favorites to all games,
+		# we should just let Godot natively navigate horizontally between rows!
+		# But since we use _chain_horizontal_focus to point left to SideNav, we apply it.
+		var all_cols = _calculate_grid_columns()
+		_chain_horizontal_focus(_game_title_focus_buttons, all_cols)
+	else:
+		_chain_horizontal_focus(_game_title_focus_buttons, _calculate_grid_columns())
 	_wire_auto_scroll(_game_title_focus_buttons, $UI/Content/MainPanel/ScrollContainer)
 	_focus_current_menu()
 
