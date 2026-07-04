@@ -52,12 +52,20 @@ var target_columns: int = 4
 var hub_card_scale: float = 1.0
 var scale_slider: HSlider = null
 
+var _resize_timer: Timer
+
 func _ready():
 	set_process_input(true)
 	_ensure_hub_input_actions()
 	if scenes_grid is GridContainer: scenes_grid.columns = _calculate_grid_columns()
 	
-	get_viewport().size_changed.connect(_update_scale_from_columns)
+	_resize_timer = Timer.new()
+	_resize_timer.one_shot = true
+	_resize_timer.wait_time = 0.1
+	_resize_timer.timeout.connect(_update_scale_from_columns)
+	add_child(_resize_timer)
+	
+	get_viewport().size_changed.connect(func(): _resize_timer.start())
 	# Initialize scroll_vbox to wrap ScenesGrid
 	var scroll_container = $UI/Content/MainPanel/ScrollContainer
 	if scroll_container and scenes_grid:
@@ -108,6 +116,7 @@ func _ready():
 		nav_buttons[0].focus_neighbor_top = nav_buttons[0].get_path_to(nav_buttons[-1])
 		nav_buttons[-1].focus_neighbor_bottom = nav_buttons[-1].get_path_to(nav_buttons[0])
 	
+	_update_scale_from_columns()
 	display_scenes()
 
 func _ensure_hub_input_actions():
