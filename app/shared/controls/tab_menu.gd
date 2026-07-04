@@ -180,6 +180,7 @@ func _build_ui():
 	box.add_child(divider)
 
 	settings_scroll = ScrollContainer.new()
+	settings_scroll.focus_mode = Control.FOCUS_NONE
 	settings_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	settings_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	settings_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
@@ -274,6 +275,41 @@ func _input(event):
 
 func _process(delta):
 	menu_axis_cooldown = max(0.0, menu_axis_cooldown - delta)
+
+	if overlay_mode == "settings":
+		var joy_id = 0
+		var parent = get_parent()
+		if parent and "SharedLoader" in parent and parent.SharedLoader:
+			joy_id = parent.SharedLoader.get_joy_id(0)
+		var y_val = Input.get_joy_axis(joy_id, JOY_AXIS_LEFT_Y)
+		var dir = 0
+		if y_val < -0.6:
+			dir = -1
+		elif y_val > 0.6:
+			dir = 1
+
+		if dir != 0:
+			if _joy_scroll_state != dir:
+				_joy_scroll_state = dir
+				_joy_scroll_timer = 0.4
+				_joy_scroll_is_repeating = false
+			else:
+				_joy_scroll_timer -= delta
+				if _joy_scroll_timer <= 0.0:
+					_joy_scroll_is_repeating = true
+					_joy_scroll_timer = 0.12
+
+					var ev = InputEventAction.new()
+					ev.action = "ui_down" if dir == 1 else "ui_up"
+					ev.pressed = true
+					Input.parse_input_event(ev)
+					var ev_rel = InputEventAction.new()
+					ev_rel.action = ev.action
+					ev_rel.pressed = false
+					Input.parse_input_event(ev_rel)
+		else:
+			_joy_scroll_state = 0
+			_joy_scroll_is_repeating = false
 
 func _handle_menu_input(event) -> bool:
 	if overlay_mode == "settings":
