@@ -1107,13 +1107,24 @@ func _tick_fire_guy(delta):
             fg["vel"].x *= -1
             fg["pos"].x += fg["vel"].x * delta
             
+        var fg_removed = false
         for p in dk_players:
             if p.get("dead", false): continue
             var d = fg["pos"].distance_to(p["pos"])
-            if d < 22 and abs(p["vel"].y) < 60:
+            if p.get("hammer_time", 0.0) > 0 and d < 35:
+                fire_guys.remove_at(i)
+                score += 300
+                _emit_score()
+                fg_removed = true
+                _burst(fg["pos"], Color.RED, 15)
+                break
+            elif d < 22 and abs(p["vel"].y) < 60:
                 p["dead"] = true
                 _lose_life()
                 break
+                
+        if fg_removed:
+            continue
 
 func _draw_barrel(b: Dictionary, color: Color):
     var pos = b["pos"]
@@ -1242,29 +1253,6 @@ func _tick_barrel(delta):
         if b_removed:
             continue
 
-    for i in range(fire_guys.size() - 1, -1, -1):
-        var fg = fire_guys[i]
-        fg["cool"] = max(0.0, fg["cool"] - delta)
-        
-        var fg_removed = false
-        for p in dk_players:
-            if p.get("dead", false): continue
-            var d = fg["pos"].distance_to(p["pos"])
-            if p.get("hammer_time", 0.0) > 0 and d < 35:
-                fire_guys.remove_at(i)
-                score += 300
-                _emit_score()
-                fg_removed = true
-                _burst(fg["pos"], Color.RED, 15)
-                break
-            elif d < 18:
-                p["dead"] = true
-                _lose_life()
-                
-        if fg_removed:
-            continue
-            
-        if fg["cool"] <= 0:
 
 
 func _barrel_ladder_x(pos: Vector2) -> float:
