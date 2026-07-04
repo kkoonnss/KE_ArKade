@@ -2,14 +2,14 @@
 run_id: codex_hub_levels_scene_propagation_2026-07-04
 agent: codex
 session_start: 2026-07-04T00:20:00-07:00
-session_end: pending
+session_end: 2026-07-04T00:21:58-07:00
 task_id: ad-hoc hub Levels tab scene propagation
 lane: hub
 lock_held: hub-levels
 status: pending_kons_verify
 pre_edit_commit: 3608bc7
-close_commit: pending
-backup_status: pending_check
+close_commit: 93e4a51
+backup_status: pushed
 backup_remote: https://github.com/kkoonnss/KE_ArKade.git
 escalations: []
 tags:
@@ -43,7 +43,10 @@ Kons reported that new `content/scenes/*` folders appeared in the Scenes tab but
 
 ## Backup Status
 
-- Pending final commit and post-commit push check.
+- Remote: `origin -> https://github.com/kkoonnss/KE_ArKade.git`.
+- Post-commit hook pushed `3608bc7..93e4a51 master -> master`.
+- Tag pushed: `pre-edit/hub/levels-scene-propagation-3608bc7`.
+- Result: `SUCCESS: pushed master and tags.`
 
 ## Open Questions
 
@@ -51,4 +54,4 @@ None new.
 
 ## Next Holder Briefing
 
-Visual check still needed in the live hub: open Levels and confirm `Wallart` plus `Wallart Empty` appear under the accordion list. Selecting `Wallart` should show a playable level card sourced from the scene root; selecting `Wallart Empty` should show `No levels yet`.
+Visual check still needed in the live hub: open Levels and confirm `Wallart` plus `Wallart Empty` appear under the accordion list. Selecting `Wallart` should show a playable level card sourced from the scene root; selecting `Wallart Empty` should show `No levels yet`. `hub-levels` lock released after close.
