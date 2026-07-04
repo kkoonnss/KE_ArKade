@@ -1136,7 +1136,7 @@ func _tick_barrel(delta):
         var new_x = b["pos"].x + b["vel"].x * delta
         var hit_wall = false
         for w in walls:
-            if w.has_point(Vector2(new_x + sign(b["vel"].x)*12, b["pos"].y - 10)):
+            if w.has_point(Vector2(new_x + sign(b["vel"].x)*12, b["pos"].y - 10)) and not w.has_point(Vector2(b["pos"].x + sign(b["vel"].x)*12, b["pos"].y - 10)):
                 hit_wall = true
                 break
         if hit_wall:
@@ -1526,7 +1526,7 @@ func _platform_move(delta, can_jump: bool):
     var new_x = pos.x + vel.x * delta
     var hit_wall = false
     for w in walls:
-        if w.has_point(Vector2(new_x + sign(vel.x)*12, pos.y - 12)):
+        if w.has_point(Vector2(new_x + sign(vel.x)*12, pos.y - 12)) and not w.has_point(Vector2(pos.x + sign(vel.x)*12, pos.y - 12)):
             hit_wall = true
             break
     if not hit_wall:
@@ -1565,7 +1565,7 @@ func _dk_platform_move(p: Dictionary, idx: int, delta: float, can_jump: bool):
     var new_x = pos.x + vel.x * delta
     var hit_wall = false
     for w in walls:
-        if w.has_point(Vector2(new_x + sign(vel.x)*12, pos.y - 12)):
+        if w.has_point(Vector2(new_x + sign(vel.x)*12, pos.y - 12)) and not w.has_point(Vector2(pos.x + sign(vel.x)*12, pos.y - 12)):
             hit_wall = true
             break
     if not hit_wall:
