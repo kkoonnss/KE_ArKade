@@ -627,20 +627,21 @@ func _build_tunnel_fill_keep(node_map: Dictionary, target_cols: int, target_rows
         if not candidate_blocks.is_empty():
             candidate_blocks.shuffle()
             for block in candidate_blocks:
-                block.shuffle()
-                var removed_one = false
+                var still_valid = true
                 for cell in block:
-                    keep.erase(cell)
-                    if _is_graph_connected(keep):
-                        extra_cells.append(cell)
-                        removed_one = true
-                        blocks_found = true
+                    if not keep.has(cell):
+                        still_valid = false
                         break
-                    else:
-                        keep[cell] = true
-                if removed_one:
-                    break
-                    
+                
+                if still_valid:
+                    block.shuffle()
+                    for cell in block:
+                        if _can_remove_cell(keep, cell):
+                            keep.erase(cell)
+                            extra_cells.append(cell)
+                            blocks_found = true
+                            break
+                            
     extra_cells.shuffle()
     
     # tunnel_fill represents percentage of double lanes to close.
@@ -652,42 +653,55 @@ func _build_tunnel_fill_keep(node_map: Dictionary, target_cols: int, target_rows
         
     return keep
 
-func _is_graph_connected(keep: Dictionary) -> bool:
-    if keep.is_empty(): return true
-    var start = keep.keys()[0]
+func _can_remove_cell(keep: Dictionary, cell_to_remove: String) -> bool:
+    keep.erase(cell_to_remove)
     
+    var parts = cell_to_remove.split(":")
+    var cx = int(parts[0])
+    var cy = int(parts[1])
+    
+    var neighbors = []
+    for dir in [Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1), Vector2i(0,-1)]:
+        var nk = "%d:%d" % [cx + dir.x, cy + dir.y]
+        if keep.has(nk):
+            neighbors.append(nk)
+            
+    if neighbors.size() <= 1:
+        keep[cell_to_remove] = true
+        return true
+        
+    var target_neighbors = {}
+    for i in range(1, neighbors.size()):
+        target_neighbors[neighbors[i]] = true
+        
+    var start = neighbors[0]
     var visited = {start: true}
     var queue = [start]
     var q_idx = 0
+    var targets_found = 0
+    var targets_needed = target_neighbors.size()
     
     while q_idx < queue.size():
         var curr = queue[q_idx]
         q_idx += 1
-        var parts = curr.split(":")
-        var cx = int(parts[0])
-        var cy = int(parts[1])
         
-        var n1 = "%d:%d" % [cx + 1, cy]
-        if keep.has(n1) and not visited.has(n1):
-            visited[n1] = true
-            queue.append(n1)
-            
-        var n2 = "%d:%d" % [cx - 1, cy]
-        if keep.has(n2) and not visited.has(n2):
-            visited[n2] = true
-            queue.append(n2)
-            
-        var n3 = "%d:%d" % [cx, cy + 1]
-        if keep.has(n3) and not visited.has(n3):
-            visited[n3] = true
-            queue.append(n3)
-            
-        var n4 = "%d:%d" % [cx, cy - 1]
-        if keep.has(n4) and not visited.has(n4):
-            visited[n4] = true
-            queue.append(n4)
+        if target_neighbors.has(curr):
+            targets_found += 1
+            if targets_found == targets_needed:
+                break
                 
-    return visited.size() == keep.size()
+        var c_parts = curr.split(":")
+        var ccx = int(c_parts[0])
+        var ccy = int(c_parts[1])
+        
+        for dir in [Vector2i(1,0), Vector2i(-1,0), Vector2i(0,1), Vector2i(0,-1)]:
+            var nk = "%d:%d" % [ccx + dir.x, ccy + dir.y]
+            if keep.has(nk) and not visited.has(nk):
+                visited[nk] = true
+                queue.append(nk)
+                
+    keep[cell_to_remove] = true
+    return targets_found == targets_needed
 
 func _nearest_layout_key(px: float, py: float, node_map: Dictionary) -> String:
     var best_key = ""
