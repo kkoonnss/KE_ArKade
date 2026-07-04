@@ -1530,9 +1530,18 @@ func _platform_move(delta, can_jump: bool):
     var vel = player["vel"]
     vel.x = v.x * 190
     var on_ladder = _on_ladder(pos)
-    if on_ladder and abs(v.y) > 0.1:
-        vel.y = v.y * 145
+    if on_ladder:
+        if abs(v.y) > 0.1:
+            vel.y = v.y * 145
+            player["climbing"] = true
+        elif player.get("climbing", false):
+            vel.y = 0
+        else:
+            vel.y += 520 * current_gravity * delta
+            if can_jump and _action() and player["on_ground"]:
+                vel.y = -310 * current_jump_height
     else:
+        player["climbing"] = false
         vel.y += 520 * current_gravity * delta
         if can_jump and _action() and player["on_ground"]:
             vel.y = -310 * current_jump_height
@@ -1556,6 +1565,7 @@ func _platform_move(delta, can_jump: bool):
                 pos.y = py - 20
                 vel.y = 0
                 player["on_ground"] = true
+                player["climbing"] = false
     if not player["on_ground"] and pos.y > kill_zone_y and game_id in ["donkey_kong", "bubble_bobble", "joust"]:
         _lose_life()
         return
@@ -1569,9 +1579,18 @@ func _dk_platform_move(p: Dictionary, idx: int, delta: float, can_jump: bool):
     var vel = p["vel"]
     vel.x = v.x * 190
     var on_ladder = _on_ladder(pos)
-    if on_ladder and abs(v.y) > 0.1:
-        vel.y = v.y * 145
+    if on_ladder:
+        if abs(v.y) > 0.1:
+            vel.y = v.y * 145
+            p["climbing"] = true
+        elif p.get("climbing", false):
+            vel.y = 0
+        else:
+            vel.y += 520 * current_gravity * delta
+            if can_jump and _action(idx) and p["on_ground"]:
+                vel.y = -310 * current_jump_height
     else:
+        p["climbing"] = false
         vel.y += 520 * current_gravity * delta
         if can_jump and _action(idx) and p["on_ground"]:
             vel.y = -310 * current_jump_height
@@ -1595,6 +1614,7 @@ func _dk_platform_move(p: Dictionary, idx: int, delta: float, can_jump: bool):
                 pos.y = py - 20
                 vel.y = 0
                 p["on_ground"] = true
+                p["climbing"] = false
     if not p["on_ground"] and pos.y >= kill_zone_y:
         p["dead"] = true
         _lose_life()
