@@ -6,11 +6,15 @@ var SharedLoader
 @onready var bg_rect = $Layout/Workspace/CanvasMargin/CanvasContainer/BgRect
 @onready var semantic_rect = $Layout/Workspace/CanvasMargin/CanvasContainer/SemanticRect
 @onready var virtual_cursor = $Layout/Workspace/CanvasMargin/CanvasContainer/VirtualCursor
-@onready var sidebar_vbox = $Layout/Sidebar/Scroll/VBox
+@onready var sidebar_vbox = $Layout/Sidebar/Margin/Scroll/VBox
 @onready var file_dialog = $FileDialog
 @onready var canvas_container = $Layout/Workspace/CanvasMargin/CanvasContainer
+@onready var loading_overlay = $Layout/Workspace/LoadingOverlay
 
 var current_image_path: String = ""
+var original_image_path: String = ""
+var original_image_width: int = 0
+var original_image_height: int = 0
 var semantic_image: Image
 var semantic_texture: ImageTexture
 var is_painting: bool = false
@@ -18,7 +22,15 @@ var brush_size: int = 10
 var current_class_id: int = 1
 var opacity: float = 0.5
 var show_bg: bool = true
+var semantic_opacity: float = 0.8
+var resolution_presets = ["Original", "1024", "512", "256", "128", "64"]
+var current_resolution_preset_idx: int = 0
+var lbl_res_info: Label = null
+var btn_derive: Button = null
+var chk_auto_derive: CheckBox = null
 var cursor_pos: Vector2 = Vector2()
+var brush_mode_active: bool = false
+var btn_brush: Button = null
 
 var cv_params = {
     "preset": "Balanced Semantic",
@@ -172,33 +184,116 @@ func _ready():
 func _create_section(title: String, parent: Control, default_open: bool = true) -> VBoxContainer:
     var header = Button.new()
     header.text = ("▼ " if default_open else "▶ ") + title
-    header.add_theme_font_size_override("font_size", 18)
-    header.add_theme_color_override("font_color", Color(1, 1, 1))
-    header.flat = true
+    header.add_theme_font_size_override("font_size", 14)
+    header.add_theme_color_override("font_color", Color(0, 0.9, 1.0))
     header.alignment = HORIZONTAL_ALIGNMENT_LEFT
+    
+    var sb = StyleBoxFlat.new()
+    sb.bg_color = Color(0.12, 0.13, 0.16)
+    sb.content_margin_left = 12
+    sb.content_margin_right = 12
+    sb.content_margin_top = 8
+    sb.content_margin_bottom = 8
+    sb.corner_radius_top_left = 4
+    sb.corner_radius_top_right = 4
+    sb.corner_radius_bottom_left = 4
+    sb.corner_radius_bottom_right = 4
+    header.add_theme_stylebox_override("normal", sb)
+    
+    var sb_hover = sb.duplicate()
+    sb_hover.bg_color = Color(0.16, 0.18, 0.22)
+    header.add_theme_stylebox_override("hover", sb_hover)
+    header.add_theme_stylebox_override("focus", sb_hover)
+    
     parent.add_child(header)
     
     var content = VBoxContainer.new()
-    content.visible = default_open
-    parent.add_child(content)
+    content.add_theme_constant_override("separation", 12)
+    
+    var margin = MarginContainer.new()
+    margin.visible = default_open
+    margin.add_theme_constant_override("margin_left", 8)
+    margin.add_theme_constant_override("margin_top", 8)
+    margin.add_theme_constant_override("margin_right", 8)
+    margin.add_theme_constant_override("margin_bottom", 8)
+    margin.add_child(content)
+    
+    parent.add_child(margin)
     
     var toggle_func = func():
-        content.visible = not content.visible
-        header.text = ("▼ " if content.visible else "▶ ") + title
-        # Defer focus rebuild to ensure visibility is fully applied
+        margin.visible = not margin.visible
+        header.text = ("▼ " if margin.visible else "▶ ") + title
         call_deferred("_rebuild_focus")
         
     header.pressed.connect(toggle_func)
     header.gui_input.connect(func(event: InputEvent):
-        if event.is_action_pressed("ui_right") and not content.visible:
+        if event.is_action_pressed("ui_right") and not margin.visible:
             toggle_func.call()
             header.accept_event()
-        elif event.is_action_pressed("ui_left") and content.visible:
+        elif event.is_action_pressed("ui_left") and margin.visible:
             toggle_func.call()
             header.accept_event()
     )
     
     return content
+
+func _style_button(btn: Button):
+    var sb = StyleBoxFlat.new()
+    sb.bg_color = Color(0.16, 0.17, 0.2)
+    sb.content_margin_left = 12
+    sb.content_margin_right = 12
+    sb.content_margin_top = 8
+    sb.content_margin_bottom = 8
+    sb.corner_radius_top_left = 4
+    sb.corner_radius_top_right = 4
+    sb.corner_radius_bottom_left = 4
+    sb.corner_radius_bottom_right = 4
+    btn.add_theme_stylebox_override("normal", sb)
+    
+    var sb_hover = sb.duplicate()
+    sb_hover.bg_color = Color(0.22, 0.24, 0.28)
+    sb_hover.border_width_bottom = 2
+    sb_hover.border_color = Color(0, 0.9, 1.0) # cyan accent
+    btn.add_theme_stylebox_override("hover", sb_hover)
+    btn.add_theme_stylebox_override("focus", sb_hover)
+    btn.add_theme_font_size_override("font_size", 13)
+
+func _style_option_button(opt: OptionButton):
+    var sb = StyleBoxFlat.new()
+    sb.bg_color = Color(0.16, 0.17, 0.2)
+    sb.content_margin_left = 12
+    sb.content_margin_right = 12
+    sb.content_margin_top = 8
+    sb.content_margin_bottom = 8
+    sb.corner_radius_top_left = 4
+    sb.corner_radius_top_right = 4
+    sb.corner_radius_bottom_left = 4
+    sb.corner_radius_bottom_right = 4
+    opt.add_theme_stylebox_override("normal", sb)
+    
+    var sb_hover = sb.duplicate()
+    sb_hover.bg_color = Color(0.22, 0.24, 0.28)
+    opt.add_theme_stylebox_override("hover", sb_hover)
+    opt.add_theme_stylebox_override("focus", sb_hover)
+    opt.add_theme_font_size_override("font_size", 13)
+
+func _add_slider_group(label_text: String, sld: HSlider, parent: Control):
+    var container = VBoxContainer.new()
+    container.add_theme_constant_override("separation", 4)
+    
+    var lbl = Label.new()
+    lbl.text = label_text
+    lbl.add_theme_font_size_override("font_size", 12)
+    lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+    container.add_child(lbl)
+    
+    container.add_child(sld)
+    
+    var spacer = Control.new()
+    spacer.custom_minimum_size = Vector2(0, 4)
+    container.add_child(spacer)
+    
+    parent.add_child(container)
 
 func _build_ui():
     var sec_file = _create_section("File", sidebar_vbox, true)
@@ -206,89 +301,138 @@ func _build_ui():
     var btn_load = Button.new()
     btn_load.text = "Load Background Image"
     btn_load.pressed.connect(_on_btn_load_pressed)
+    _style_button(btn_load)
     sec_file.add_child(btn_load)
     
     var btn_save = Button.new()
     btn_save.text = "Save Level"
     btn_save.pressed.connect(_on_btn_save_pressed)
+    _style_button(btn_save)
     sec_file.add_child(btn_save)
     
-    var sep1 = HSeparator.new()
-    sidebar_vbox.add_child(sep1)
-    
-    var sec_brush = _create_section("Brush & Palette", sidebar_vbox, true)
-    
-    var lbl_opacity = Label.new()
-    lbl_opacity.text = "Reference Opacity"
-    sec_brush.add_child(lbl_opacity)
     var sld_opacity = HSlider.new()
     sld_opacity.min_value = 0.0
     sld_opacity.max_value = 1.0
     sld_opacity.step = 0.05
     sld_opacity.value = opacity
     sld_opacity.value_changed.connect(func(v): opacity = v; _update_opacity())
-    sec_brush.add_child(sld_opacity)
+    _add_slider_group("Reference Image Opacity", sld_opacity, sec_file)
     
-    var lbl_brush = Label.new()
-    lbl_brush.text = "Brush Size"
-    sec_brush.add_child(lbl_brush)
+    var sld_res = HSlider.new()
+    sld_res.min_value = 0
+    sld_res.max_value = resolution_presets.size() - 1
+    sld_res.step = 1
+    sld_res.value = current_resolution_preset_idx
+    sld_res.value_changed.connect(func(v): 
+        current_resolution_preset_idx = int(v)
+        _apply_resolution_setting()
+    )
+    _add_slider_group("Output Resolution Downsample", sld_res, sec_file)
+    
+    lbl_res_info = Label.new()
+    lbl_res_info.add_theme_font_size_override("font_size", 11)
+    lbl_res_info.add_theme_color_override("font_color", Color(0.62, 0.7, 0.8))
+    lbl_res_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    sec_file.add_child(lbl_res_info)
+    _update_resolution_label()
+    
+    var sec_brush = _create_section("Brush & Palette", sidebar_vbox, true)
+    
+    btn_brush = Button.new()
+    btn_brush.text = "Activate Brush"
+    btn_brush.pressed.connect(func():
+        _set_brush_mode(true)
+    )
+    _style_button(btn_brush)
+    sec_brush.add_child(btn_brush)
+    
+    var sld_sem_opacity = HSlider.new()
+    sld_sem_opacity.min_value = 0.0
+    sld_sem_opacity.max_value = 1.0
+    sld_sem_opacity.step = 0.05
+    sld_sem_opacity.value = semantic_opacity
+    sld_sem_opacity.value_changed.connect(func(v): semantic_opacity = v; _update_opacity())
+    _add_slider_group("Semantic Overlay Opacity", sld_sem_opacity, sec_brush)
+    
     var sld_brush = HSlider.new()
     sld_brush.min_value = 1
     sld_brush.max_value = 100
     sld_brush.value = brush_size
     sld_brush.value_changed.connect(func(v): brush_size = int(v); virtual_cursor.size = Vector2(brush_size*2, brush_size*2))
-    sec_brush.add_child(sld_brush)
+    _add_slider_group("Brush Size", sld_brush, sec_brush)
     
     var lbl_palette = Label.new()
-    lbl_palette.text = "Palette"
+    lbl_palette.text = "Palette Colors"
+    lbl_palette.add_theme_font_size_override("font_size", 12)
+    lbl_palette.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
     sec_brush.add_child(lbl_palette)
     
     var grid_palette = GridContainer.new()
     grid_palette.columns = 2
+    grid_palette.add_theme_constant_override("h_separation", 6)
+    grid_palette.add_theme_constant_override("v_separation", 6)
     sec_brush.add_child(grid_palette)
     
     for cid in Palette.CLASSES.keys():
         var info = Palette.CLASSES[cid]
         var btn = Button.new()
         btn.text = info["name"]
-        btn.add_theme_color_override("font_color", Color(info["ui_color"]))
         btn.pressed.connect(func(): _select_class(cid))
         grid_palette.add_child(btn)
         class_buttons.append(btn)
         
-    var sep2 = HSeparator.new()
-    sidebar_vbox.add_child(sep2)
-    
     var sec_derive = _create_section("Auto-Derive", sidebar_vbox, false)
     
-    var btn_derive = Button.new()
-    btn_derive.text = "Run Auto-Derive"
+    var row_derive = HBoxContainer.new()
+    row_derive.add_theme_constant_override("separation", 8)
+    sec_derive.add_child(row_derive)
+    
+    btn_derive = Button.new()
+    btn_derive.text = "Run Derive"
     btn_derive.pressed.connect(_trigger_derive)
-    sec_derive.add_child(btn_derive)
+    btn_derive.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    _style_button(btn_derive)
+    row_derive.add_child(btn_derive)
+    
+    chk_auto_derive = CheckBox.new()
+    chk_auto_derive.text = "Auto"
+    chk_auto_derive.button_pressed = false
+    chk_auto_derive.toggled.connect(func(pressed):
+        if pressed:
+            _trigger_derive()
+    )
+    row_derive.add_child(chk_auto_derive)
 
     var lbl_preset = Label.new()
-    lbl_preset.text = "Preset"
-    sec_derive.add_child(lbl_preset)
+    lbl_preset.text = "Algorithm Preset"
+    lbl_preset.add_theme_font_size_override("font_size", 12)
+    lbl_preset.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
     
     var opt_preset = OptionButton.new()
     var presets = _get_backend_presets()
     for p in presets:
         opt_preset.add_item(_preset_display_label(p))
-    # Default to "Balanced Semantic" if present, else item 0
     var default_idx = presets.find("Balanced Semantic")
     if default_idx == -1: default_idx = 0
     opt_preset.select(default_idx)
     _apply_preset_profile(presets[default_idx], false)
     
     opt_preset.item_selected.connect(func(idx): 
-        _apply_preset_profile(presets[idx], true)
+        _apply_preset_profile(presets[idx], chk_auto_derive.button_pressed if chk_auto_derive else true)
     )
-    sec_derive.add_child(opt_preset)
+    _style_option_button(opt_preset)
+    
+    var preset_vbox = VBoxContainer.new()
+    preset_vbox.add_theme_constant_override("separation", 4)
+    preset_vbox.add_child(lbl_preset)
+    preset_vbox.add_child(opt_preset)
+    sec_derive.add_child(preset_vbox)
 
     var lbl_preset_hint = Label.new()
-    lbl_preset_hint.text = "Balanced = mixed scenes | Open Flow = maze / tunnel-grid | Vertical Surfaces = climbing / platform-heavy"
+    lbl_preset_hint.text = "Balanced: mixed scenes | Open Flow: maze / tunnel grids | Vertical Surfaces: platforms / walls"
     lbl_preset_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    lbl_preset_hint.add_theme_color_override("font_color", Color(0.72, 0.74, 0.78))
+    lbl_preset_hint.add_theme_font_size_override("font_size", 11)
+    lbl_preset_hint.add_theme_color_override("font_color", Color(0.55, 0.58, 0.62))
     sec_derive.add_child(lbl_preset_hint)
 
     _add_slider("Blur", "blur", 0, 10, sec_derive)
@@ -299,70 +443,76 @@ func _build_ui():
     _add_slider("Feature Density", "feature_density", 0, 100, sec_derive)
     _add_slider("Hazard Density", "hazard_density", 0, 100, sec_derive)
 
-    var sep3 = HSeparator.new()
-    sidebar_vbox.add_child(sep3)
-
     var sec_preview = _create_section("Preview", sidebar_vbox, true)
 
     var lbl_preview_hint = Label.new()
-    lbl_preview_hint.text = "See how a reference game reads this map. Controller: Y toggles, D-Pad Up/Down cycles games. Keyboard: P toggles, [ / ] cycles."
+    lbl_preview_hint.text = "Controller: Y toggles, D-Pad Up/Down cycles.\nKeyboard: P toggles, [ / ] cycles."
     lbl_preview_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    lbl_preview_hint.add_theme_color_override("font_color", Color(0.72, 0.74, 0.78))
+    lbl_preview_hint.add_theme_font_size_override("font_size", 11)
+    lbl_preview_hint.add_theme_color_override("font_color", Color(0.55, 0.58, 0.62))
     sec_preview.add_child(lbl_preview_hint)
 
     var btn_preview_toggle = Button.new()
     btn_preview_toggle.name = "PreviewToggleBtn"
     btn_preview_toggle.text = "Enable Preview"
     btn_preview_toggle.pressed.connect(_toggle_preview)
+    _style_button(btn_preview_toggle)
     sec_preview.add_child(btn_preview_toggle)
 
     var game_row = HBoxContainer.new()
+    game_row.add_theme_constant_override("separation", 8)
     sec_preview.add_child(game_row)
 
     var btn_prev_game = Button.new()
     btn_prev_game.text = "< Game"
     btn_prev_game.pressed.connect(func(): _cycle_preview_game(-1))
+    _style_button(btn_prev_game)
     game_row.add_child(btn_prev_game)
 
     var lbl_current_game = Label.new()
     lbl_current_game.name = "PreviewGameLabel"
     lbl_current_game.text = PREVIEW_GAMES[preview_game_idx]["title"]
     lbl_current_game.add_theme_color_override("font_color", Color(0, 0.9, 1, 1))
+    lbl_current_game.add_theme_font_size_override("font_size", 15)
     lbl_current_game.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     lbl_current_game.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    lbl_current_game.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     game_row.add_child(lbl_current_game)
 
     var btn_next_game = Button.new()
     btn_next_game.text = "Game >"
     btn_next_game.pressed.connect(func(): _cycle_preview_game(1))
+    _style_button(btn_next_game)
     game_row.add_child(btn_next_game)
 
     var btn_preview_controls = Button.new()
     btn_preview_controls.text = "Game Controls (Start)"
     btn_preview_controls.pressed.connect(_open_preview_controls)
+    _style_button(btn_preview_controls)
     sec_preview.add_child(btn_preview_controls)
 
     preview_status_label = Label.new()
     preview_status_label.text = "Preview off"
     preview_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    preview_status_label.add_theme_font_size_override("font_size", 12)
+    preview_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     preview_status_label.add_theme_color_override("font_color", Color(0.62, 0.7, 0.8))
     sec_preview.add_child(preview_status_label)
 
     _select_class(1)
 
 func _add_slider(label_text: String, param_name: String, min_val: float, max_val: float, parent: Control):
-    var lbl = Label.new()
-    lbl.text = label_text
-    parent.add_child(lbl)
     var sld = HSlider.new()
     sld.min_value = min_val
     sld.max_value = max_val
     sld.value = cv_params[param_name]
-    sld.value_changed.connect(func(v): cv_params[param_name] = int(v))
-    parent.add_child(sld)
+    sld.value_changed.connect(func(v): 
+        cv_params[param_name] = int(v)
+        if chk_auto_derive and chk_auto_derive.button_pressed:
+            _trigger_derive()
+    )
+    _add_slider_group(label_text, sld, parent)
     derive_slider_controls[param_name] = sld
-    
-    # We will clamp focus recursively at the very end of _build_ui to handle all new containers
     _rebuild_focus()
 
 func _apply_preset_profile(preset: String, rerun_derive: bool = true) -> void:
@@ -374,6 +524,16 @@ func _apply_preset_profile(preset: String, rerun_derive: bool = true) -> void:
             derive_slider_controls[key].set_value_no_signal(profile[key])
     if rerun_derive:
         _trigger_derive()
+
+func _set_brush_mode(active: bool):
+    brush_mode_active = active
+    if btn_brush:
+        if active:
+            btn_brush.text = "Brush Active [B to exit]"
+            btn_brush.release_focus()
+        else:
+            btn_brush.text = "Activate Brush"
+            btn_brush.grab_focus()
 
 func _rebuild_focus():
     var focusable = []
@@ -455,11 +615,35 @@ func _gather_focusable(node: Node, arr: Array):
 func _select_class(cid: int):
     current_class_id = cid
     for i in range(class_buttons.size()):
+        var btn = class_buttons[i]
+        var info = Palette.CLASSES[i]
+        var color = Color(info["ui_color"])
+        
+        var sb = StyleBoxFlat.new()
+        sb.content_margin_left = 10
+        sb.content_margin_top = 8
+        sb.content_margin_bottom = 8
+        sb.corner_radius_top_left = 4
+        sb.corner_radius_top_right = 4
+        sb.corner_radius_bottom_left = 4
+        sb.corner_radius_bottom_right = 4
+        sb.border_width_left = 6
+        sb.border_color = color
+        
         if i == cid:
-            class_buttons[i].add_theme_color_override("font_color", Color(1, 1, 1))
+            sb.bg_color = Color(color.r, color.g, color.b, 0.25)
+            btn.add_theme_color_override("font_color", Color(1, 1, 1))
         else:
-            var c = Color(Palette.CLASSES[i]["ui_color"])
-            class_buttons[i].add_theme_color_override("font_color", c)
+            sb.bg_color = Color(0.14, 0.15, 0.18)
+            btn.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+            
+        btn.add_theme_stylebox_override("normal", sb)
+        
+        var sb_hover = sb.duplicate()
+        sb_hover.bg_color = Color(color.r, color.g, color.b, 0.35)
+        btn.add_theme_stylebox_override("hover", sb_hover)
+        btn.add_theme_stylebox_override("focus", sb_hover)
+        btn.add_theme_font_size_override("font_size", 12)
 
 func _on_btn_load_pressed():
     file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
@@ -467,32 +651,106 @@ func _on_btn_load_pressed():
     file_dialog.popup_centered()
 
 func _on_file_selected(path: String):
-    current_image_path = path
+    original_image_path = path
     var img = Image.load_from_file(path)
     if img:
-        bg_rect.texture = ImageTexture.create_from_image(img)
-        semantic_image = Image.create(img.get_width(), img.get_height(), false, Image.FORMAT_RGBA8)
-        semantic_image.fill(Color(0,0,0,0))
-        semantic_texture = ImageTexture.create_from_image(semantic_image)
-        semantic_rect.texture = semantic_texture
-        _update_opacity()
-        # New background image invalidates any previously-known level dir and
-        # any prior preview derive.
-        current_level_dir = ""
-        preview_dirty_since_derive = true
-        if preview_active:
-            _refresh_preview()
+        original_image_width = img.get_width()
+        original_image_height = img.get_height()
+        semantic_image = null
+        _apply_resolution_setting()
 
 func _update_opacity():
     if show_bg:
         bg_rect.modulate.a = opacity
     else:
         bg_rect.modulate.a = 0.0
+    semantic_rect.modulate.a = semantic_opacity
+
+func _get_downsampled_resolution() -> Vector2i:
+    if original_image_width == 0 or original_image_height == 0:
+        return Vector2i(0, 0)
+    var w = original_image_width
+    var h = original_image_height
+    var preset = resolution_presets[current_resolution_preset_idx]
+    if preset == "Original":
+        return Vector2i(w, h)
+        
+    var target_max = float(preset)
+    var scale = 1.0
+    if w > h:
+        if w > target_max:
+            scale = target_max / w
+    else:
+        if h > target_max:
+            scale = target_max / h
+            
+    return Vector2i(int(w * scale), int(h * scale))
+
+func _update_resolution_label():
+    if lbl_res_info == null:
+        return
+    if original_image_width == 0 or original_image_height == 0:
+        lbl_res_info.text = "No image loaded"
+        return
+    var orig_w = original_image_width
+    var orig_h = original_image_height
+    var target = _get_downsampled_resolution()
+    var preset_name = resolution_presets[current_resolution_preset_idx]
+    lbl_res_info.text = "Original: %dx%d\nPreset: %s\nOutput: %dx%d" % [orig_w, orig_h, preset_name, target.x, target.y]
+
+func _save_semantic_map(path: String):
+    if not semantic_image:
+        return
+    semantic_image.save_png(path)
+
+func _apply_resolution_setting():
+    if original_image_path == "":
+        return
+    var img = Image.load_from_file(original_image_path)
+    if not img:
+        return
+        
+    var target_res = _get_downsampled_resolution()
+    if target_res.x == 0 or target_res.y == 0:
+        return
+        
+    if target_res != Vector2i(img.get_width(), img.get_height()):
+        img.resize(target_res.x, target_res.y, Image.INTERPOLATE_BILINEAR)
+        var temp_bg_path = ProjectSettings.globalize_path("user://temp_downsampled_bg.png")
+        img.save_png(temp_bg_path)
+        current_image_path = temp_bg_path
+    else:
+        current_image_path = original_image_path
+        
+    bg_rect.texture = ImageTexture.create_from_image(img)
+    
+    if not semantic_image:
+        semantic_image = Image.create(target_res.x, target_res.y, false, Image.FORMAT_RGBA8)
+        semantic_image.fill(Color(0,0,0,0))
+        semantic_texture = ImageTexture.create_from_image(semantic_image)
+        semantic_rect.texture = semantic_texture
+    elif Vector2i(semantic_image.get_width(), semantic_image.get_height()) != target_res:
+        semantic_image.resize(target_res.x, target_res.y, Image.INTERPOLATE_NEAREST)
+        semantic_texture = ImageTexture.create_from_image(semantic_image)
+        semantic_rect.texture = semantic_texture
+        
+    _update_opacity()
+    _update_resolution_label()
+    
+    current_level_dir = ""
+    preview_dirty_since_derive = true
+    if preview_active:
+        _refresh_preview()
 
 func _trigger_derive():
     if current_image_path == "" or is_deriving:
         return
     is_deriving = true
+    if btn_derive:
+        btn_derive.text = "Deriving..."
+        btn_derive.disabled = true
+    if loading_overlay:
+        loading_overlay.visible = true
     
     cv_params["source_img_path"] = current_image_path
     cv_params["output_map_path"] = ProjectSettings.globalize_path(temp_map_path)
@@ -515,12 +773,18 @@ func _run_derive_process():
 
 func _on_derive_finished(output: Array):
     is_deriving = false
+    if btn_derive:
+        btn_derive.text = "Run Derive"
+        btn_derive.disabled = false
+    if loading_overlay:
+        loading_overlay.visible = false
     if FileAccess.file_exists(temp_map_path):
         var img = Image.load_from_file(temp_map_path)
         if img:
             semantic_image = img
             semantic_image.convert(Image.FORMAT_RGBA8)
             semantic_texture.update(semantic_image)
+            _update_resolution_label()
 
 func _input(event):
     # Preview toggle / game-cycle is always reachable, controller + keyboard,
@@ -552,9 +816,21 @@ func _input(event):
                 _open_preview_controls()
                 return
 
-    # While preview's secondary-controls overlay owns input, don't paint.
-    if preview_tab_menu != null:
+    # While preview's secondary-controls overlay owns input, or while deriving in background, don't paint.
+    if preview_tab_menu != null or is_deriving:
         return
+
+    # Handle escaping brush mode
+    if brush_mode_active:
+        if (event is InputEventJoypadButton and event.button_index == JOY_BUTTON_B and event.pressed) or (event is InputEventKey and event.keycode == KEY_ESCAPE and event.pressed):
+            _set_brush_mode(false)
+            get_viewport().set_input_as_handled()
+            return
+            
+        # Block menu navigation when brush is active
+        if event.is_action("ui_up") or event.is_action("ui_down") or event.is_action("ui_left") or event.is_action("ui_right") or event.is_action("ui_focus_next") or event.is_action("ui_focus_prev"):
+            if event is InputEventJoypadButton or event is InputEventJoypadMotion or event is InputEventKey:
+                get_viewport().set_input_as_handled()
 
     if event is InputEventMouseMotion:
         cursor_pos = semantic_rect.get_local_mouse_position()
@@ -571,14 +847,14 @@ func _input(event):
             else:
                 is_painting = false
 
-    elif event is InputEventJoypadMotion:
+    elif brush_mode_active and event is InputEventJoypadMotion:
         if event.axis == JOY_AXIS_LEFT_X:
             if abs(event.axis_value) > 0.2:
                 cursor_pos.x += event.axis_value * 15.0
         elif event.axis == JOY_AXIS_LEFT_Y:
             if abs(event.axis_value) > 0.2:
                 cursor_pos.y += event.axis_value * 15.0
-    elif event is InputEventJoypadButton:
+    elif brush_mode_active and event is InputEventJoypadButton:
         if event.button_index == JOY_BUTTON_A:
             is_painting = event.pressed
             if is_painting:
@@ -611,12 +887,12 @@ func _process(delta):
         return
 
     if virtual_cursor:
-        virtual_cursor.visible = not preview_active
+        virtual_cursor.visible = not preview_active and brush_mode_active
         virtual_cursor.position = cursor_pos - Vector2(brush_size, brush_size)
         virtual_cursor.color = Color(Palette.CLASSES[current_class_id]["authoring_color"])
         virtual_cursor.color.a = 0.5
 
-    if not preview_active and (Input.is_joy_button_pressed(0, JOY_BUTTON_A) or is_painting):
+    if not preview_active and ((brush_mode_active and Input.is_joy_button_pressed(0, JOY_BUTTON_A)) or is_painting):
         _paint_at_cursor()
 
     # Clamp cursor
@@ -680,7 +956,7 @@ func _on_btn_save_pressed():
 
 func _on_dir_selected(dir_path: String):
     var map_path = dir_path + "/semantic_map.png"
-    semantic_image.save_png(map_path)
+    _save_semantic_map(map_path)
     
     var scene_id = "scene_demo_wall"
     var parts = dir_path.split("/")
@@ -912,7 +1188,7 @@ func _derive_preview_scratch_dir() -> String:
     var scratch_abs = ProjectSettings.globalize_path(preview_scratch_dir)
     DirAccess.make_dir_recursive_absolute(scratch_abs)
     var map_path = scratch_abs.path_join("semantic_map.png")
-    semantic_image.save_png(map_path)
+    _save_semantic_map(map_path)
 
     var level_yaml_path = scratch_abs.path_join("level.yaml")
     var yml_str = "schema: level\nversion: 1.0.0\nlevel_id: preview_scratch\nscene_id: scene_preview_scratch\nname: Preview Scratch\nsemantic_map: semantic_map.png\nstatus: draft\n"
