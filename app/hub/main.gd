@@ -1105,7 +1105,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	)
 	
 	var _update_title = func():
-		if skins.size() > 1 and (title_btn.has_focus() or title_btn.is_hovered()):
+		if skins.size() > 1 and (title_btn.has_focus() or title_btn.is_hovered() or cover_btn.is_hovered()):
 			var curr = current_skin if current_skin != "" else default_skin
 			title_btn.text = "< (X)  " + curr + "  (Y) >"
 		else:
@@ -1116,6 +1116,8 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 		title_btn.focus_exited.connect(_update_title)
 		title_btn.mouse_entered.connect(_update_title)
 		title_btn.mouse_exited.connect(_update_title)
+		cover_btn.mouse_entered.connect(_update_title)
+		cover_btn.mouse_exited.connect(_update_title)
 		
 		title_btn.gui_input.connect(func(event):
 			var step = 0
