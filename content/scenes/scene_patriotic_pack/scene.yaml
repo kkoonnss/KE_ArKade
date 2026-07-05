@@ -1,0 +1,12 @@
+controller_profile: null
+max_players: 4
+native_resolution:
+- 1920
+- 1080
+orientation: wall
+output_profile: null
+scene_id: scene_patriotic_pack
+schema: scene
+status: verified
+venue_name: Patriotic Pack
+version: 1.0.0
