@@ -133,7 +133,7 @@ func _ready():
     tab_menu = SL.load_tab_menu_script().new()
     add_child(tab_menu)
     tab_menu.register_knob_int("players", "Players", 1, 1, 4, 1, "Gameplay")
-    tab_menu.register_knob_enum("skin", "Skin", "classic", ["classic", "neon", "pac_triot"], "Gameplay")
+    tab_menu.register_knob_enum("skin", "Skin", current_skin, ["classic", "neon", "pac_triot"], "Gameplay")
     tab_menu.register_knob_enum("background_view", "Background View", "final", ["final", "photo", "semantic", "secondary", "tunnel_fill"], "Preview")
     tab_menu.register_knob_bool("reference", "Background Layer", false, "Preview")
     tab_menu.register_knob_float("reference_opacity", "Background Opacity", 0.15, 0.0, 1.0, 0.05, "Preview")

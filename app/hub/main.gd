@@ -1007,6 +1007,9 @@ func _launch_game(cart_id: String):
 	
 	var launch_cmd = base_dir.path_join("Godot_v4.3-stable_win64.exe")
 	var args_template = "--path \"" + cart_dir + "\" -- --scene \"" + scene_dir + "\" --level \"" + level_dir + "\" --ipc <socket>"
+	var launch_skin = _get_launch_skin_name(cart_id)
+	if launch_skin != "":
+		args_template += " --skin \"" + launch_skin.replace("\"", "") + "\""
 	
 	if launcher:
 		launcher.launch(launch_cmd, args_template, scene_dir, level_dir)
@@ -1225,9 +1228,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 			display_title = current_skin
 
 	if current_skin != "":
-		var skin_suffix = current_skin.to_lower().replace(" ", "_")
-		var base_dir = ProjectSettings.globalize_path("res://").path_join("../../")
-		var skin_thumb_path = base_dir.path_join("content/cartridges").path_join(cart_id).path_join("thumbnail_" + skin_suffix + ".png")
+		var skin_thumb_path = _find_skin_thumbnail(cart_id, current_skin)
 		if FileAccess.file_exists(skin_thumb_path):
 			thumb_path = skin_thumb_path
 
@@ -1291,6 +1292,7 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	bottom_margin.add_child(bottom_vbox)
 
 	var title_btn = Button.new()
+	title_btn.set_meta("cart_id", cart_id)
 	title_btn.custom_minimum_size = Vector2(0, 36 * hub_card_scale)
 	title_btn.add_theme_font_size_override("font_size", int(16 * hub_card_scale))
 	title_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1757,11 +1759,6 @@ func _cycle_skin(cart_id: String, skin_names: Array, step: int):
 	if skin_names.is_empty():
 		return
 
-	var focus_owner = get_viewport().gui_get_focus_owner()
-	var focus_index = -1
-	if focus_owner and focus_owner in _game_title_focus_buttons:
-		focus_index = _game_title_focus_buttons.find(focus_owner)
-
 	var current = str(selected_skins.get(cart_id, skin_names[0]))
 	var idx = skin_names.find(current)
 	if idx < 0:
@@ -1771,11 +1768,58 @@ func _cycle_skin(cart_id: String, skin_names: Array, step: int):
 	save_favorites()
 	_refresh_card_views()
 
-	if focus_index >= 0 and focus_index < _game_title_focus_buttons.size():
-		var btn = _game_title_focus_buttons[focus_index]
-		if is_instance_valid(btn):
-			_remember_menu_focus(btn)
-			btn.grab_focus()
+	var btn = _find_game_title_button(cart_id)
+	if btn != null:
+		_prefer_menu_focus(btn)
+		btn.call_deferred("grab_focus")
+
+
+func _find_game_title_button(cart_id: String) -> Button:
+	for item in _game_title_focus_buttons:
+		var btn = item as Button
+		if btn != null and is_instance_valid(btn) and btn.has_meta("cart_id") and str(btn.get_meta("cart_id")) == cart_id:
+			return btn
+	return null
+
+
+func _get_launch_skin_name(cart_id: String) -> String:
+	if cart_id == "":
+		return ""
+	var base_dir = ProjectSettings.globalize_path("res://").path_join("../../").simplify_path()
+	var manifest_path = base_dir.path_join("content/cartridges").path_join(cart_id).path_join("manifest.yaml")
+	if not FileAccess.file_exists(manifest_path):
+		return ""
+	var manifest = parse_simple_yaml(manifest_path)
+	var game_name = str(manifest.get("game_name", cart_id)).replace("Classic ", "")
+	return _get_selected_skin_name(cart_id, game_name, manifest)
+
+
+func _find_skin_thumbnail(cart_id: String, skin_name: String) -> String:
+	if cart_id == "" or skin_name == "":
+		return ""
+	var base_dir = ProjectSettings.globalize_path("res://").path_join("../../").simplify_path()
+	var cart_dir = base_dir.path_join("content/cartridges").path_join(cart_id)
+	var suffix = _skin_asset_suffix(skin_name)
+	var suffixes = [suffix]
+	var underscore_suffix = suffix.replace("-", "_")
+	if underscore_suffix != suffix:
+		suffixes.append(underscore_suffix)
+	var dash_suffix = suffix.replace("_", "-")
+	if dash_suffix != suffix and not suffixes.has(dash_suffix):
+		suffixes.append(dash_suffix)
+	for candidate_suffix in suffixes:
+		for ext in ["png", "jpg", "jpeg"]:
+			var candidate = cart_dir.path_join("thumbnail_" + candidate_suffix + "." + ext)
+			if FileAccess.file_exists(candidate):
+				return candidate
+	return ""
+
+
+func _skin_asset_suffix(skin_name: String) -> String:
+	var suffix = skin_name.strip_edges().to_lower().replace(" ", "_")
+	for ch in [":", "/", "\\", "\"", "'", "(", ")", "[", "]"]:
+		suffix = suffix.replace(ch, "")
+	return suffix
 
 
 
