@@ -20,4 +20,4 @@ operator_flags:
   supports_keyboard: true
   supports_controllers: true
   supports_touch_ui: false
-skins: [Classic Pac-Man, Neon Grid, Chiptune Retro]
+skins: [Classic Pac-Man, Neon Grid, PAC-TRIOT]

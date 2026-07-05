@@ -43,6 +43,7 @@ var _updating_dialog_checkbox = false
 var scroll_vbox: VBoxContainer
 var active_nav_btn: Button = null
 var dialog_scroll_vbox: VBoxContainer
+var _in_refresh_card_views: bool = false
 var games_overlay: ColorRect = null
 var _pending_menu_focus: Control = null
 var _game_title_focus_buttons: Array = []
@@ -275,6 +276,8 @@ func _wire_auto_scroll(buttons: Array, scroll_container: ScrollContainer):
 			continue
 		button.focus_entered.connect(func():
 			_last_content_focus = button
+			if _in_refresh_card_views:
+				return
 			if is_instance_valid(button) and is_instance_valid(scroll_container):
 				var offset = (button.global_position.y + button.size.y / 2.0) - (scroll_container.global_position.y + scroll_container.size.y / 2.0)
 				var target_scroll = scroll_container.scroll_vertical + offset
@@ -1213,6 +1216,13 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	var default_skin = _get_default_skin_name(cart.manifest, game_name)
 	var skins = _get_skin_list(cart.manifest, game_name)
 	var thumb_path = cart.thumb_path
+	
+	var display_title = game_name
+	if current_skin != "":
+		if current_skin.begins_with("Classic "):
+			display_title = current_skin.trim_prefix("Classic ")
+		else:
+			display_title = current_skin
 
 	if current_skin != "":
 		var skin_suffix = current_skin.to_lower().replace(" ", "_")
@@ -1304,9 +1314,9 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	
 	var _update_title = func():
 		if skins.size() > 1 and (title_btn.has_focus() or title_btn.is_hovered() or cover_btn.is_hovered()):
-			title_btn.text = "< (X)  " + game_name + "  (Y) >"
+			title_btn.text = "< (X)  " + display_title + "  (Y) >"
 		else:
-			title_btn.text = game_name
+			title_btn.text = display_title
 			
 	if skins.size() > 1:
 		title_btn.focus_entered.connect(_update_title)
@@ -1930,18 +1940,28 @@ func _get_default_skin_name(manifest: Dictionary, game_name: String) -> String:
 
 
 func _refresh_card_views():
+	var scroll_container = get_node_or_null("UI/Content/MainPanel/ScrollContainer")
+	var saved_scroll = 0
+	if scroll_container:
+		saved_scroll = scroll_container.scroll_vertical
+	_in_refresh_card_views = true
 
 	if current_tab == "games":
 		display_games()
 	elif current_tab == "scenes":
 		display_scenes()
 	elif current_tab == "levels" and launch_dialog and launch_dialog.visible and selected_level_name != "":
-
 		_on_level_selected(selected_level_name)
-
 	elif viewing_levels and current_scene != "":
-
 		_on_scene_selected(current_scene)
+
+	if scroll_container:
+		var tree = get_tree()
+		if tree:
+			await tree.process_frame
+		if is_instance_valid(scroll_container):
+			scroll_container.scroll_vertical = saved_scroll
+	_in_refresh_card_views = false
 
 
 

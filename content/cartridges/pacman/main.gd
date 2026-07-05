@@ -115,6 +115,8 @@ func _ready():
             var skin_arg = args[i+1]
             if skin_arg == "Classic Pac-Man":
                 current_skin = "classic"
+            elif skin_arg.to_lower() == "pac-triot" or skin_arg.to_lower() == "pac_triot":
+                current_skin = "pac_triot"
             else:
                 current_skin = "neon"
             i += 1
