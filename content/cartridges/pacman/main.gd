@@ -131,7 +131,7 @@ func _ready():
     tab_menu = SL.load_tab_menu_script().new()
     add_child(tab_menu)
     tab_menu.register_knob_int("players", "Players", 1, 1, 4, 1, "Gameplay")
-    tab_menu.register_knob_enum("skin", "Skin", "classic", ["classic", "neon"], "Gameplay")
+    tab_menu.register_knob_enum("skin", "Skin", "classic", ["classic", "neon", "pac_triot"], "Gameplay")
     tab_menu.register_knob_enum("background_view", "Background View", "final", ["final", "photo", "semantic", "secondary", "tunnel_fill"], "Preview")
     tab_menu.register_knob_bool("reference", "Background Layer", false, "Preview")
     tab_menu.register_knob_float("reference_opacity", "Background Opacity", 0.15, 0.0, 1.0, 0.05, "Preview")
@@ -1058,22 +1058,54 @@ func _add_unit_segment(bucket: Dictionary, axis: int, start_val: int, end_val: i
     bucket[axis].append([start_val, end_val])
 
 func _draw_wall_segment(a: Vector2, b: Vector2, wall_color: Color, edge_color: Color, outer_width: float, inner_width: float):
-    draw_line(_world_to_screen(a), _world_to_screen(b), wall_color, _scaled_width(outer_width), true)
-    draw_line(_world_to_screen(a), _world_to_screen(b), edge_color, _scaled_width(inner_width), true)
+    if current_skin == "pac_triot":
+        draw_line(_world_to_screen(a), _world_to_screen(b), Color(0.85, 0.12, 0.12), _scaled_width(outer_width), true)
+        draw_line(_world_to_screen(a), _world_to_screen(b), Color(1.0, 1.0, 1.0), _scaled_width(outer_width * 0.6), true)
+        draw_line(_world_to_screen(a), _world_to_screen(b), Color(0.12, 0.25, 0.85), _scaled_width(outer_width * 0.22), true)
+    else:
+        draw_line(_world_to_screen(a), _world_to_screen(b), wall_color, _scaled_width(outer_width), true)
+        draw_line(_world_to_screen(a), _world_to_screen(b), edge_color, _scaled_width(inner_width), true)
 
 func _draw_wall_corner(pos: Vector2, radius: float, wall_color: Color, edge_color: Color):
     var screen_pos = _world_to_screen(pos)
-    draw_circle(screen_pos, _scaled_radius(radius), wall_color)
-    draw_circle(screen_pos, _scaled_radius(max(1.0, radius * 0.34)), edge_color)
+    if current_skin == "pac_triot":
+        draw_circle(screen_pos, _scaled_radius(radius), Color(0.85, 0.12, 0.12))
+        draw_circle(screen_pos, _scaled_radius(radius * 0.6), Color(1.0, 1.0, 1.0))
+        draw_circle(screen_pos, _scaled_radius(radius * 0.22), Color(0.12, 0.25, 0.85))
+    else:
+        draw_circle(screen_pos, _scaled_radius(radius), wall_color)
+        draw_circle(screen_pos, _scaled_radius(max(1.0, radius * 0.34)), edge_color)
+
+func _draw_star(center: Vector2, r: float, color: Color):
+    var points = PackedVector2Array()
+    for i in range(10):
+        var angle = i * PI / 5.0 - PI / 2.0
+        var dist = r if i % 2 == 0 else r * 0.4
+        points.append(center + Vector2(cos(angle), sin(angle)) * dist)
+    draw_colored_polygon(points, color)
+
+func _draw_tea_crate(center: Vector2, size: float):
+    var rect = Rect2(center - Vector2(size, size) * 0.5, Vector2(size, size))
+    draw_rect(rect, Color(0.55, 0.35, 0.15), true)
+    draw_rect(rect, Color(0.3, 0.18, 0.08), false, _scaled_width(2.0))
+    draw_line(rect.position, rect.position + rect.size, Color(0.3, 0.18, 0.08), _scaled_width(1.5))
+    draw_line(rect.position + Vector2(rect.size.x, 0), rect.position + Vector2(0, rect.size.y), Color(0.3, 0.18, 0.08), _scaled_width(1.5))
 
 func _draw_pickups():
     var resolution_ratio = _resolution_ratio()
     for pk in pickups:
         var pos = _world_to_screen(Vector2(pk["x"], pk["y"]))
-        if pk.get("power", false):
-            draw_circle(pos, _scaled_radius(8.0 * resolution_ratio), Color.WHITE)
+        var is_power = pk.get("power", false)
+        if current_skin == "pac_triot":
+            if is_power:
+                _draw_tea_crate(pos, _scaled_radius(14.0 * resolution_ratio))
+            else:
+                _draw_star(pos, _scaled_radius(4.5 * resolution_ratio), Color(1.0, 0.85, 0.1))
         else:
-            draw_circle(pos, _scaled_radius(2.4 * resolution_ratio), Color.WHITE)
+            if is_power:
+                draw_circle(pos, _scaled_radius(8.0 * resolution_ratio), Color.WHITE)
+            else:
+                draw_circle(pos, _scaled_radius(2.4 * resolution_ratio), Color.WHITE)
 
 func _draw_enemies():
     for i in range(enemies.size()):
@@ -1086,18 +1118,56 @@ func _draw_players():
             _draw_pacman(_world_to_screen(Vector2(p["x"], p["y"])), player_last_dir)
 
 func _draw_pacman(pos: Vector2, dir: Vector2):
-    var angle = dir.angle() if dir.length_squared() > 0.0 else 0.0
-    var mouth = 0.26 + 0.14 * abs(sin(Time.get_ticks_msec() / 120.0))
-    var points = PackedVector2Array()
-    points.append(pos)
-    var start_angle = angle + mouth
-    var end_angle = angle + TAU - mouth
-    var radius = _scaled_radius(14.0 * _resolution_ratio())
-    var steps = 22
-    for i in range(steps + 1):
-        var t = lerpf(start_angle, end_angle, float(i) / float(steps))
-        points.append(pos + Vector2.RIGHT.rotated(t) * radius)
-    draw_colored_polygon(points, Color(1.0, 0.92, 0.08))
+    if current_skin == "pac_triot":
+        var angle = dir.angle() if dir.length_squared() > 0.0 else 0.0
+        var ratio = _resolution_ratio()
+        var r = _scaled_radius(14.0 * ratio)
+        var back_dir = -dir if dir.length_squared() > 0.1 else Vector2.LEFT
+        
+        # Cape
+        var cape_pts = PackedVector2Array()
+        cape_pts.append(pos)
+        cape_pts.append(pos + back_dir.rotated(0.35) * r * 1.5)
+        cape_pts.append(pos + back_dir.rotated(-0.35) * r * 1.5)
+        draw_colored_polygon(cape_pts, Color(0.12, 0.25, 0.85))
+        draw_line(pos, pos + back_dir * r * 1.4, Color(0.85, 0.12, 0.12), _scaled_width(4.0 * ratio))
+        
+        # Barrel
+        var barrel_dir = dir if dir.length_squared() > 0.1 else Vector2.RIGHT
+        var barrel_end = pos + barrel_dir * r * 1.35
+        draw_line(pos, barrel_end, Color(0.2, 0.22, 0.25), _scaled_width(8.0 * ratio))
+        draw_circle(barrel_end, _scaled_radius(4.5 * ratio), Color(0.1, 0.11, 0.12))
+        
+        # Body
+        draw_circle(pos, r * 0.85, Color(0.28, 0.3, 0.33))
+        
+        # Wheel
+        var wheel_pos = pos + Vector2.DOWN * r * 0.25
+        draw_circle(wheel_pos, r * 0.5, Color(0.45, 0.24, 0.08))
+        draw_circle(wheel_pos, r * 0.42, Color(0.15, 0.16, 0.18))
+        
+        # Hat
+        var top_pos = pos + Vector2.UP * r * 0.65
+        draw_rect(Rect2(top_pos - Vector2(4.0 * ratio, 6.0 * ratio), Vector2(8.0 * ratio, 8.0 * ratio)), Color(0.85, 0.12, 0.12), true)
+        draw_rect(Rect2(top_pos - Vector2(6.0 * ratio, 0.0), Vector2(12.0 * ratio, 2.0 * ratio)), Color(0.12, 0.25, 0.85), true)
+        
+        # Fuse
+        var fuse_end = pos + Vector2(-r * 0.55, -r * 0.55)
+        draw_line(pos, fuse_end, Color.WHITE, 1.5)
+        draw_circle(fuse_end, _scaled_radius(2.2 * ratio), Color(1.0, 0.9, 0.1))
+    else:
+        var angle = dir.angle() if dir.length_squared() > 0.0 else 0.0
+        var mouth = 0.26 + 0.14 * abs(sin(Time.get_ticks_msec() / 120.0))
+        var points = PackedVector2Array()
+        points.append(pos)
+        var start_angle = angle + mouth
+        var end_angle = angle + TAU - mouth
+        var radius = _scaled_radius(14.0 * _resolution_ratio())
+        var steps = 22
+        for i in range(steps + 1):
+            var t = lerpf(start_angle, end_angle, float(i) / float(steps))
+            points.append(pos + Vector2.RIGHT.rotated(t) * radius)
+        draw_colored_polygon(points, Color(1.0, 0.92, 0.08))
 
 func _draw_ghost(pos: Vector2, color: Color, frightened: bool):
     # Flash white when frightened time is running out
@@ -1105,7 +1175,7 @@ func _draw_ghost(pos: Vector2, color: Color, frightened: bool):
     var flash_on = flashing and fmod(frightened_timer, 0.4) < 0.2
     var body: Color
     if not frightened:
-        body = color
+        body = Color(0.85, 0.12, 0.12) if current_skin == "pac_triot" else color
     elif flash_on:
         body = Color(1.0, 1.0, 1.0)
     else:
@@ -1117,31 +1187,72 @@ func _draw_ghost(pos: Vector2, color: Color, frightened: bool):
     var foot_y = pos.y + _scaled_radius(13.5 * ratio)
     for i in range(4):
         draw_circle(Vector2(pos.x - _scaled_radius(9.0 * ratio) + i * _scaled_radius(6.0 * ratio), foot_y), _scaled_radius(3.0 * ratio), body)
-    if not frightened:
-        var eye_white = Color.WHITE
-        var pupil = Color(0.0, 0.16, 0.62)
-        draw_circle(pos + Vector2(-_scaled_radius(4.5 * ratio), -_scaled_radius(2.2 * ratio)), _scaled_radius(3.5 * ratio), eye_white)
-        draw_circle(pos + Vector2(_scaled_radius(4.5 * ratio), -_scaled_radius(2.2 * ratio)), _scaled_radius(3.5 * ratio), eye_white)
-        draw_circle(pos + Vector2(-_scaled_radius(3.5 * ratio), -_scaled_radius(1.1 * ratio)), _scaled_radius(1.4 * ratio), pupil)
-        draw_circle(pos + Vector2(_scaled_radius(5.5 * ratio), -_scaled_radius(1.1 * ratio)), _scaled_radius(1.4 * ratio), pupil)
+        
+    if current_skin == "pac_triot":
+        if not frightened:
+            # White Crossbelts
+            var belt_w = _scaled_width(2.0 * ratio)
+            draw_line(pos + Vector2(-8 * ratio, 2 * ratio), pos + Vector2(8 * ratio, 12 * ratio), Color.WHITE, belt_w)
+            draw_line(pos + Vector2(8 * ratio, 2 * ratio), pos + Vector2(-8 * ratio, 12 * ratio), Color.WHITE, belt_w)
+            
+            # Bearskin Hat
+            var hat_w = _scaled_radius(11 * ratio)
+            var hat_h = _scaled_radius(14 * ratio)
+            draw_rect(Rect2(pos.x - hat_w, pos.y - _scaled_radius(22 * ratio), hat_w * 2.0, hat_h), Color(0.1, 0.1, 0.1), true)
+            draw_line(pos + Vector2(-hat_w, -_scaled_radius(10 * ratio)), pos + Vector2(hat_w, -_scaled_radius(10 * ratio)), Color(1.0, 0.85, 0.1), 1.5)
+            
+            # Gentleman Mustache
+            draw_circle(pos + Vector2(-2 * ratio, 3 * ratio), _scaled_radius(1.5 * ratio), Color(0.1, 0.1, 0.1))
+            draw_circle(pos + Vector2(2 * ratio, 3 * ratio), _scaled_radius(1.5 * ratio), Color(0.1, 0.1, 0.1))
+            draw_line(pos + Vector2(-4 * ratio, 3 * ratio), pos + Vector2(4 * ratio, 3 * ratio), Color(0.1, 0.1, 0.1), 2.0)
+            
+            # Eyes
+            var eye_white = Color.WHITE
+            var pupil = Color(0.0, 0.16, 0.62)
+            draw_circle(pos + Vector2(-_scaled_radius(4.5 * ratio), -_scaled_radius(2.2 * ratio)), _scaled_radius(3.5 * ratio), eye_white)
+            draw_circle(pos + Vector2(_scaled_radius(4.5 * ratio), -_scaled_radius(2.2 * ratio)), _scaled_radius(3.5 * ratio), eye_white)
+            draw_circle(pos + Vector2(-_scaled_radius(3.5 * ratio), -_scaled_radius(1.1 * ratio)), _scaled_radius(1.4 * ratio), pupil)
+            draw_circle(pos + Vector2(_scaled_radius(5.5 * ratio), -_scaled_radius(1.1 * ratio)), _scaled_radius(1.4 * ratio), pupil)
+        else:
+            # Scared Eyes
+            var face_color = Color(1.0, 0.16, 0.2) if flash_on else Color(1.0, 0.72, 0.08)
+            draw_circle(pos + Vector2(-_scaled_radius(4.0 * ratio), -_scaled_radius(2.0 * ratio)), _scaled_radius(1.5 * ratio), face_color)
+            draw_circle(pos + Vector2(_scaled_radius(4.0 * ratio), -_scaled_radius(2.0 * ratio)), _scaled_radius(1.5 * ratio), face_color)
+            
+            # Surrender Flag
+            var flag_pos = pos + Vector2(10 * ratio, -10 * ratio)
+            draw_line(pos + Vector2(6 * ratio, 6 * ratio), flag_pos, Color.WHITE, 1.5)
+            var flag_pts = PackedVector2Array()
+            flag_pts.append(flag_pos)
+            flag_pts.append(flag_pos + Vector2(8 * ratio, -2 * ratio))
+            flag_pts.append(flag_pos + Vector2(6 * ratio, 4 * ratio))
+            draw_colored_polygon(flag_pts, Color.WHITE)
     else:
-        var face_color = Color(1.0, 0.16, 0.2) if flash_on else Color(1.0, 0.72, 0.08)
-        
-        # Eyes
-        draw_circle(pos + Vector2(-_scaled_radius(4.0 * ratio), -_scaled_radius(2.0 * ratio)), _scaled_radius(1.5 * ratio), face_color)
-        draw_circle(pos + Vector2(_scaled_radius(4.0 * ratio), -_scaled_radius(2.0 * ratio)), _scaled_radius(1.5 * ratio), face_color)
-        
-        # Wiggly zig-zag mouth
-        var mouth_pts = PackedVector2Array()
-        mouth_pts.append(pos + Vector2(-_scaled_radius(6.0 * ratio), _scaled_radius(4.0 * ratio)))
-        mouth_pts.append(pos + Vector2(-_scaled_radius(4.0 * ratio), _scaled_radius(2.0 * ratio)))
-        mouth_pts.append(pos + Vector2(-_scaled_radius(2.0 * ratio), _scaled_radius(4.0 * ratio)))
-        mouth_pts.append(pos + Vector2(0.0, _scaled_radius(2.0 * ratio)))
-        mouth_pts.append(pos + Vector2(_scaled_radius(2.0 * ratio), _scaled_radius(4.0 * ratio)))
-        mouth_pts.append(pos + Vector2(_scaled_radius(4.0 * ratio), _scaled_radius(2.0 * ratio)))
-        mouth_pts.append(pos + Vector2(_scaled_radius(6.0 * ratio), _scaled_radius(4.0 * ratio)))
-        
-        draw_polyline(mouth_pts, face_color, _scaled_width(1.5 * ratio), true)
+        if not frightened:
+            var eye_white = Color.WHITE
+            var pupil = Color(0.0, 0.16, 0.62)
+            draw_circle(pos + Vector2(-_scaled_radius(4.5 * ratio), -_scaled_radius(2.2 * ratio)), _scaled_radius(3.5 * ratio), eye_white)
+            draw_circle(pos + Vector2(_scaled_radius(4.5 * ratio), -_scaled_radius(2.2 * ratio)), _scaled_radius(3.5 * ratio), eye_white)
+            draw_circle(pos + Vector2(-_scaled_radius(3.5 * ratio), -_scaled_radius(1.1 * ratio)), _scaled_radius(1.4 * ratio), pupil)
+            draw_circle(pos + Vector2(_scaled_radius(5.5 * ratio), -_scaled_radius(1.1 * ratio)), _scaled_radius(1.4 * ratio), pupil)
+        else:
+            var face_color = Color(1.0, 0.16, 0.2) if flash_on else Color(1.0, 0.72, 0.08)
+            
+            # Eyes
+            draw_circle(pos + Vector2(-_scaled_radius(4.0 * ratio), -_scaled_radius(2.0 * ratio)), _scaled_radius(1.5 * ratio), face_color)
+            draw_circle(pos + Vector2(_scaled_radius(4.0 * ratio), -_scaled_radius(2.0 * ratio)), _scaled_radius(1.5 * ratio), face_color)
+            
+            # Wiggly zig-zag mouth
+            var mouth_pts = PackedVector2Array()
+            mouth_pts.append(pos + Vector2(-_scaled_radius(6.0 * ratio), _scaled_radius(4.0 * ratio)))
+            mouth_pts.append(pos + Vector2(-_scaled_radius(4.0 * ratio), _scaled_radius(2.0 * ratio)))
+            mouth_pts.append(pos + Vector2(-_scaled_radius(2.0 * ratio), _scaled_radius(4.0 * ratio)))
+            mouth_pts.append(pos + Vector2(0.0, _scaled_radius(2.0 * ratio)))
+            mouth_pts.append(pos + Vector2(_scaled_radius(2.0 * ratio), _scaled_radius(4.0 * ratio)))
+            mouth_pts.append(pos + Vector2(_scaled_radius(4.0 * ratio), _scaled_radius(2.0 * ratio)))
+            mouth_pts.append(pos + Vector2(_scaled_radius(6.0 * ratio), _scaled_radius(4.0 * ratio)))
+            
+            draw_polyline(mouth_pts, face_color, _scaled_width(1.5 * ratio), true)
 
 func _draw_particles():
     for p in active_particles:
@@ -1150,14 +1261,18 @@ func _draw_particles():
         draw_circle(_world_to_screen(p["pos"]), _scaled_radius(float(p["radius"]) * a), Color(c.r, c.g, c.b, a))
 
 func _draw_hud():
-    draw_string(ThemeDB.fallback_font, Vector2(20, 40), "SCORE: " + str(score), HORIZONTAL_ALIGNMENT_LEFT, -1, 32, Color.WHITE)
-    draw_string(ThemeDB.fallback_font, Vector2(20, 80), "LIVES: " + str(lives), HORIZONTAL_ALIGNMENT_LEFT, -1, 32, Color.WHITE)
+    var score_txt = "LIBERTY SCORE: " if current_skin == "pac_triot" else "SCORE: "
+    var lives_txt = "CONSTITUTIONS: " if current_skin == "pac_triot" else "LIVES: "
+    draw_string(ThemeDB.fallback_font, Vector2(20, 40), score_txt + str(score), HORIZONTAL_ALIGNMENT_LEFT, -1, 32, Color.WHITE)
+    draw_string(ThemeDB.fallback_font, Vector2(20, 80), lives_txt + str(lives), HORIZONTAL_ALIGNMENT_LEFT, -1, 32, Color.WHITE)
     if game_state == "game_over":
         var center = _world_to_screen(maze_bounds.position + maze_bounds.size * 0.5)
-        draw_string(ThemeDB.fallback_font, center, "GAME OVER", HORIZONTAL_ALIGNMENT_CENTER, -1, 48, Color.RED)
+        var msg = "TEA PARTY CRASHED!\n(TAXATION WITHOUT REPRESENTATION)" if current_skin == "pac_triot" else "GAME OVER"
+        draw_string(ThemeDB.fallback_font, center, msg, HORIZONTAL_ALIGNMENT_CENTER, -1, 32 if current_skin == "pac_triot" else 48, Color.RED)
     elif game_state == "win":
         var center_win = _world_to_screen(maze_bounds.position + maze_bounds.size * 0.5)
-        draw_string(ThemeDB.fallback_font, center_win, "YOU WIN!", HORIZONTAL_ALIGNMENT_CENTER, -1, 48, Color.GREEN)
+        var msg = "INDEPENDENCE DECLARED!" if current_skin == "pac_triot" else "YOU WIN!"
+        draw_string(ThemeDB.fallback_font, center_win, msg, HORIZONTAL_ALIGNMENT_CENTER, -1, 40 if current_skin == "pac_triot" else 48, Color.GREEN)
 
 
 func _process_player(delta):
