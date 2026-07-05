@@ -49,6 +49,7 @@ var show_debug_grid: bool = false
 
 # Visual Skin
 var current_skin: String = "classic" # "classic" or "neon"
+var launch_skin_override: String = ""
 var has_sent_ready: bool = false
 var screenshot_path: String = ""
 var map_w: float = 800.0
@@ -119,6 +120,7 @@ func _ready():
                 current_skin = "pac_triot"
             else:
                 current_skin = "neon"
+            launch_skin_override = current_skin
             i += 1
         i += 1
 
@@ -147,6 +149,8 @@ func _ready():
     tab_menu.connect("menu_closed", Callable(self, "_on_menu_closed"))
     
     tab_menu.setup("pacman", level_dir, level_name)
+    if launch_skin_override != "":
+        tab_menu.set_knob_value("skin", launch_skin_override, true, false)
     _apply_settings_from_menu()
     
     _load_grid_metadata()
