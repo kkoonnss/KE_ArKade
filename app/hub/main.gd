@@ -1,5 +1,8 @@
 extends Control
 
+const WINDOW_STATE_PATH = "user://hub_window_state.json"
+const WINDOW_STATE_SAVE_INTERVAL = 0.75
+
 @onready var launcher = $Launcher
 @onready var scenes_grid = $UI/Content/MainPanel/ScrollContainer/ScenesGrid
 @onready var restore_btn = $UI/Content/SideNav/RestoreBtn
@@ -52,6 +55,10 @@ var _last_content_focus: Control = null
 var target_columns: int = 4
 var hub_card_scale: float = 1.0
 var scale_slider: HSlider = null
+var _window_state_timer: float = 0.0
+var _windowed_position: Vector2i = Vector2i(80, 80)
+var _windowed_size: Vector2i = Vector2i(1280, 720)
+var _window_fullscreen: bool = false
 
 var _resize_timer: Timer
 
@@ -59,6 +66,7 @@ func _ready():
 	set_process_input(true)
 	set_process(true)
 	_ensure_hub_input_actions()
+	_load_window_state()
 	if scenes_grid is GridContainer: scenes_grid.columns = _calculate_grid_columns()
 	
 	_resize_timer = Timer.new()
@@ -72,11 +80,21 @@ func _ready():
 	var scroll_container = $UI/Content/MainPanel/ScrollContainer
 	if scroll_container and scenes_grid:
 		scroll_container.remove_child(scenes_grid)
+		var content_margin = MarginContainer.new()
+		content_margin.add_theme_constant_override("margin_left", 32)
+		content_margin.add_theme_constant_override("margin_right", 32)
+		content_margin.add_theme_constant_override("margin_top", 32)
+		content_margin.add_theme_constant_override("margin_bottom", 32)
+		content_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		content_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		scroll_container.add_child(content_margin)
+
 		scroll_vbox = VBoxContainer.new()
 		scroll_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		scroll_vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		scroll_vbox.add_theme_constant_override("separation", 24)
-		scroll_container.add_child(scroll_vbox)
+		content_margin.add_child(scroll_vbox)
+
 		scroll_vbox.add_child(scenes_grid)
 		scenes_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		scenes_grid.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -143,6 +161,10 @@ func _ensure_hub_input_actions():
 	_ensure_action_joy_axis("ui_right", JOY_AXIS_LEFT_X, 1.0)
 	_ensure_action_joy_axis("ui_up", JOY_AXIS_LEFT_Y, -1.0)
 	_ensure_action_joy_axis("ui_down", JOY_AXIS_LEFT_Y, 1.0)
+
+func _notification(what):
+	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_PREDELETE:
+		_save_window_state()
 
 func _ensure_action(action_name: String):
 	if not InputMap.has_action(action_name):
@@ -347,6 +369,7 @@ func _grab_first_focusable_control(node: Node) -> bool:
 	return false
 
 func _process(delta):
+	_poll_window_state(delta)
 	if launcher and launcher.running:
 		return
 	var scroll_container = get_node_or_null("UI/Content/MainPanel/ScrollContainer")
@@ -358,7 +381,17 @@ func _process(delta):
 func _is_focus_recovery_event(event: InputEvent) -> bool:
 	return event.is_action_pressed("ui_up") or event.is_action_pressed("ui_down") or event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right") or event.is_action_pressed("ui_accept") or event.is_action_pressed("ui_cancel")
 
+func _is_fullscreen_toggle_event(event: InputEvent) -> bool:
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return false
+	return event.keycode == KEY_F11 or (event.keycode == KEY_ENTER and event.alt_pressed)
+
 func _input(event: InputEvent):
+	if _is_fullscreen_toggle_event(event):
+		_toggle_fullscreen()
+		get_viewport().set_input_as_handled()
+		return
+
 	if launcher and launcher.running:
 		return
 	
@@ -398,6 +431,91 @@ func _input(event: InputEvent):
 		return
 	if owner == null or not is_instance_valid(owner) or not owner.is_visible_in_tree():
 		_focus_current_menu()
+
+func _is_fullscreen_mode() -> bool:
+	var mode = DisplayServer.window_get_mode()
+	return mode == DisplayServer.WINDOW_MODE_FULLSCREEN or mode == DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN
+
+func _load_window_state():
+	if not FileAccess.file_exists(WINDOW_STATE_PATH):
+		_capture_window_state()
+		return
+	var file = FileAccess.open(WINDOW_STATE_PATH, FileAccess.READ)
+	if not file:
+		_capture_window_state()
+		return
+	var parsed = JSON.parse_string(file.get_as_text())
+	if typeof(parsed) != TYPE_DICTIONARY:
+		_capture_window_state()
+		return
+	_windowed_position = Vector2i(int(parsed.get("x", _windowed_position.x)), int(parsed.get("y", _windowed_position.y)))
+	_windowed_size = Vector2i(max(320, int(parsed.get("w", _windowed_size.x))), max(240, int(parsed.get("h", _windowed_size.y))))
+	_window_fullscreen = bool(parsed.get("fullscreen", false))
+	_apply_window_state()
+
+func _apply_window_state():
+	if _window_fullscreen:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		return
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	DisplayServer.window_set_size(_windowed_size)
+	DisplayServer.window_set_position(_windowed_position)
+
+func _capture_window_state():
+	_window_fullscreen = _is_fullscreen_mode()
+	if _window_fullscreen:
+		return
+	var size = DisplayServer.window_get_size()
+	var pos = DisplayServer.window_get_position()
+	if size.x >= 320 and size.y >= 240:
+		_windowed_size = size
+		_windowed_position = pos
+
+func _poll_window_state(delta: float):
+	_window_state_timer += delta
+	if _window_state_timer < WINDOW_STATE_SAVE_INTERVAL:
+		return
+	_window_state_timer = 0.0
+	var old_pos = _windowed_position
+	var old_size = _windowed_size
+	var old_fullscreen = _window_fullscreen
+	_capture_window_state()
+	if old_pos != _windowed_position or old_size != _windowed_size or old_fullscreen != _window_fullscreen:
+		_save_window_state()
+
+func _save_window_state():
+	_capture_window_state()
+	var data = {
+		"version": 1,
+		"fullscreen": _window_fullscreen,
+		"x": _windowed_position.x,
+		"y": _windowed_position.y,
+		"w": _windowed_size.x,
+		"h": _windowed_size.y
+	}
+	var file = FileAccess.open(WINDOW_STATE_PATH, FileAccess.WRITE)
+	if file:
+		file.store_string(JSON.stringify(data, "  "))
+
+func _toggle_fullscreen():
+	if _is_fullscreen_mode():
+		_window_fullscreen = false
+		_apply_window_state()
+	else:
+		_capture_window_state()
+		_window_fullscreen = true
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	_save_window_state()
+
+func _fullscreen_button_text() -> String:
+	return "Exit Full Screen (F11)" if _is_fullscreen_mode() else "Full Screen (F11)"
+
+func _game_window_launch_args() -> String:
+	_capture_window_state()
+	_save_window_state()
+	if _window_fullscreen:
+		return "--fullscreen"
+	return "--windowed --position %d,%d --resolution %dx%d" % [_windowed_position.x, _windowed_position.y, _windowed_size.x, _windowed_size.y]
 
 func _handle_hub_cancel():
 	if games_overlay != null and is_instance_valid(games_overlay):
@@ -498,6 +616,18 @@ func display_settings():
 	vbox.add_child(cols_btn)
 	focus_buttons.append(cols_btn)
 	
+	var fullscreen_btn = Button.new()
+	fullscreen_btn.text = _fullscreen_button_text()
+	fullscreen_btn.custom_minimum_size = Vector2(400, 64)
+	fullscreen_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	style_grid_button(fullscreen_btn)
+	fullscreen_btn.pressed.connect(func():
+		_toggle_fullscreen()
+		fullscreen_btn.text = _fullscreen_button_text()
+	)
+	vbox.add_child(fullscreen_btn)
+	focus_buttons.append(fullscreen_btn)
+
 	var log_btn = Button.new()
 	log_btn.text = "View Log"
 	log_btn.custom_minimum_size = Vector2(400, 64)
@@ -852,13 +982,14 @@ func display_games_lightbox():
 	scroll.add_child(scroll_margin)
 	vbox.add_child(scroll)
 	
-	var grid = GridContainer.new()
-	grid.columns = _calculate_grid_columns()
-	grid.add_theme_constant_override("h_separation", 16)
-	grid.add_theme_constant_override("v_separation", 16)
-	scroll_margin.add_child(grid)
+	var scroll_vbox = VBoxContainer.new()
+	scroll_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_vbox.add_theme_constant_override("separation", 14)
+	scroll_margin.add_child(scroll_vbox)
 	
 	var games = get_sorted_cartridges()
+	var focus_buttons = []
+	var columns = _calculate_grid_columns()
 	
 	if sort_favorites_first:
 		var favs = []
@@ -868,15 +999,61 @@ func display_games_lightbox():
 			else: others.append(g)
 		favs.sort_custom(func(a,b): return _get_cartridge_sort_name(a.game_name) < _get_cartridge_sort_name(b.game_name))
 		others.sort_custom(func(a,b): return _get_cartridge_sort_name(a.game_name) < _get_cartridge_sort_name(b.game_name))
-		games = favs + others
 		
-	var idx = 0
-	var focus_buttons = []
-	for g in games:
-		focus_buttons.append(_create_game_card(g, grid, idx))
-		idx += 1
-	_chain_horizontal_focus(focus_buttons, grid.columns)
-	_wire_vertical_focus_neighbors(focus_buttons, grid.columns)
+		if favs.size() > 0:
+			var fav_lbl = Label.new()
+			fav_lbl.text = "Favorites"
+			fav_lbl.add_theme_font_size_override("font_size", 24)
+			scroll_vbox.add_child(fav_lbl)
+
+			var fav_grid = GridContainer.new()
+			fav_grid.columns = columns
+			fav_grid.add_theme_constant_override("h_separation", 16)
+			fav_grid.add_theme_constant_override("v_separation", 16)
+			scroll_vbox.add_child(fav_grid)
+
+			var fav_buttons = []
+			for g in favs:
+				var card_btn = _create_game_card(g, fav_grid, g.absolute_index)
+				fav_buttons.append(card_btn)
+				focus_buttons.append(card_btn)
+			_wire_vertical_focus_neighbors(fav_buttons, fav_grid.columns)
+
+		if others.size() > 0:
+			var other_lbl = Label.new()
+			other_lbl.text = "All Games"
+			other_lbl.add_theme_font_size_override("font_size", 24)
+
+			var other_margin = MarginContainer.new()
+			other_margin.add_theme_constant_override("margin_top", 24)
+			other_margin.add_child(other_lbl)
+			scroll_vbox.add_child(other_margin)
+
+			var other_grid = GridContainer.new()
+			other_grid.columns = columns
+			other_grid.add_theme_constant_override("h_separation", 16)
+			other_grid.add_theme_constant_override("v_separation", 16)
+			scroll_vbox.add_child(other_grid)
+
+			var other_buttons = []
+			for g in others:
+				var card_btn = _create_game_card(g, other_grid, g.absolute_index)
+				other_buttons.append(card_btn)
+				focus_buttons.append(card_btn)
+			_wire_vertical_focus_neighbors(other_buttons, other_grid.columns)
+	else:
+		var grid = GridContainer.new()
+		grid.columns = columns
+		grid.add_theme_constant_override("h_separation", 16)
+		grid.add_theme_constant_override("v_separation", 16)
+		scroll_vbox.add_child(grid)
+
+		for g in games:
+			var card_btn = _create_game_card(g, grid, g.absolute_index)
+			focus_buttons.append(card_btn)
+		_wire_vertical_focus_neighbors(focus_buttons, grid.columns)
+
+	_chain_horizontal_focus(focus_buttons, columns)
 	_wire_auto_scroll(focus_buttons, scroll)
 	if _pending_menu_focus == null:
 		_remember_menu_focus(close_btn)
@@ -1006,7 +1183,7 @@ func _launch_game(cart_id: String):
 	var cart_dir = base_dir.path_join("content/cartridges").path_join(cart_id)
 	
 	var launch_cmd = base_dir.path_join("Godot_v4.3-stable_win64.exe")
-	var args_template = "--path \"" + cart_dir + "\" -- --scene \"" + scene_dir + "\" --level \"" + level_dir + "\" --ipc <socket>"
+	var args_template = "--path \"" + cart_dir + "\" " + _game_window_launch_args() + " -- --scene \"" + scene_dir + "\" --level \"" + level_dir + "\" --ipc <socket>"
 	var launch_skin = _get_launch_skin_name(cart_id)
 	if launch_skin != "":
 		args_template += " --skin \"" + launch_skin.replace("\"", "") + "\""
