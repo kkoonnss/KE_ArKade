@@ -517,23 +517,23 @@ func _seed_barriers(count: int, classes: Array, hit_points: int):
 func _input(event):
     if overlay_mode != "" and _handle_menu_input(event):
         return
-	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A]:
-		if get("game_state") != null and get("game_state") != "playing":
-			if has_method("_reset_game"): call("_reset_game")
-			elif has_method("reset_game"): call("reset_game")
-		elif get("state") != null and get("state") != "playing":
-			if has_method("_reset_game"): call("_reset_game")
-			elif has_method("reset_game"): call("reset_game")
+    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A]:
+        if get("game_state") != null and get("game_state") != "playing":
+            if has_method("_reset_game"): call("_reset_game")
+            elif has_method("reset_game"): call("reset_game")
+        elif get("state") != null and get("state") != "playing":
+            if has_method("_reset_game"): call("_reset_game")
+            elif has_method("reset_game"): call("reset_game")
 
-	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A]:
-		if get("game_state") != null and get("game_state") != "playing":
-			if has_method("_reset_game"): call("_reset_game")
-			elif has_method("reset_game"): call("reset_game")
-		elif get("state") != null and get("state") != "playing":
-			if has_method("_reset_game"): call("_reset_game")
-			elif has_method("reset_game"): call("reset_game")
+    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A]:
+        if get("game_state") != null and get("game_state") != "playing":
+            if has_method("_reset_game"): call("_reset_game")
+            elif has_method("reset_game"): call("reset_game")
+        elif get("state") != null and get("state") != "playing":
+            if has_method("_reset_game"): call("_reset_game")
+            elif has_method("reset_game"): call("reset_game")
 
-	if event is InputEventKey and event.pressed and not event.echo:
+    if event is InputEventKey and event.pressed and not event.echo:
         if event.keycode == KEY_TAB:
             _set_overlay_mode("settings" if overlay_mode != "settings" else "start")
         elif event.keycode == KEY_F1:

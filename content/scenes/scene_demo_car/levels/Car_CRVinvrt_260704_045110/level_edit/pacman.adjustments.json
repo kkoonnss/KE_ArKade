@@ -5,13 +5,13 @@
   "settings": {
     "background_view": "photo",
     "grid_scale": 1.25,
-    "invert_main_solid": false,
+    "invert_main_solid": true,
     "players": 1,
     "reference": false,
     "reference_opacity": 0.65,
     "show_debug_grid": false,
     "skin": "classic",
-    "tunnel_fill": 0.95,
+    "tunnel_fill": 0.75,
     "wall_width": 0.85
   },
   "ui_state": {

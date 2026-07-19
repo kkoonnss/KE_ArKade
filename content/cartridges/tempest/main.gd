@@ -415,23 +415,23 @@ func _setup_tempest():
         tube_enemies.append({"lane": randi() % tube_lanes, "depth": randf_range(0.05, 0.55), "speed": randf_range(0.08, 0.16)})
 
 func _input(event):
-	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A]:
-		if get("game_state") != null and get("game_state") != "playing":
-			if has_method("_reset_game"): call("_reset_game")
-			elif has_method("reset_game"): call("reset_game")
-		elif get("state") != null and get("state") != "playing":
-			if has_method("_reset_game"): call("_reset_game")
-			elif has_method("reset_game"): call("reset_game")
+    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A]:
+        if get("game_state") != null and get("game_state") != "playing":
+            if has_method("_reset_game"): call("_reset_game")
+            elif has_method("reset_game"): call("reset_game")
+        elif get("state") != null and get("state") != "playing":
+            if has_method("_reset_game"): call("_reset_game")
+            elif has_method("reset_game"): call("reset_game")
 
-	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A]:
-		if get("game_state") != null and get("game_state") != "playing":
-			if has_method("_reset_game"): call("_reset_game")
-			elif has_method("reset_game"): call("reset_game")
-		elif get("state") != null and get("state") != "playing":
-			if has_method("_reset_game"): call("_reset_game")
-			elif has_method("reset_game"): call("reset_game")
+    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A]:
+        if get("game_state") != null and get("game_state") != "playing":
+            if has_method("_reset_game"): call("_reset_game")
+            elif has_method("reset_game"): call("reset_game")
+        elif get("state") != null and get("state") != "playing":
+            if has_method("_reset_game"): call("_reset_game")
+            elif has_method("reset_game"): call("reset_game")
 
-	if event is InputEventKey and event.pressed and not event.echo:
+    if event is InputEventKey and event.pressed and not event.echo:
         if state == "start":
             if event.keycode in [KEY_ENTER, KEY_SPACE]:
                 state = "playing"

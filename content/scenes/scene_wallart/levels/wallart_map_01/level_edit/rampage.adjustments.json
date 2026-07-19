@@ -1,0 +1,25 @@
+{
+  "cartridge_id": "rampage",
+  "scene_level": "scene_demo_wall/scene_wallart",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "background_view": "final",
+    "grid_resolution": 1,
+    "players": 1,
+    "reference_opacity": 0.16,
+    "show_grid": false,
+    "vertical_gaps": 0.35
+  },
+  "ui_state": {
+    "collapsed_groups": {
+      "Actions": true,
+      "Collision": true,
+      "Gameplay": true,
+      "General": true,
+      "Preview": true,
+      "Secondary": true
+    },
+    "version": "tab_menu_layout_v1"
+  },
+  "version": "1.0.0"
+}

@@ -129,4 +129,4 @@ Do not push blindly while another developer thread is active.
 | Date | Tester | Source commit | Result | Notes |
 |------|--------|---------------|--------|-------|
 | 2026-07-03 | Codex | `160a14c5a57b83d8bbea2881a1bfc49069c8d343` | not run | Backup visibility docs created; restore still needs a clean clone test after push state is resolved. |
-| 2026-07-19 | Codex | pending migration checkpoint | partial | Git/LFS integrity passed; Godot 4.3 headless hub import exited 0. Full Python suite awaits OpenCV dependencies. Clean-clone K Micro test pending push. |
+| 2026-07-19 | Codex | `8bfe5ff` + pending portability repair | partial | Git/LFS integrity passed; all 34 Godot projects pass fresh import/parse validation; K Main controller regression passed. Full Python suite awaits OpenCV dependencies. Clean-clone K Micro test pending. |

@@ -1,5 +1,4 @@
 extends Node
-const SharedLoader = preload("res://../../../app/shared/shared_loader.gd")
 
 var peer = StreamPeerTCP.new()
 var connected = false

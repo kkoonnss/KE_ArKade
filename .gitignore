@@ -1,5 +1,6 @@
 # Godot and Python build artifacts
 .godot/
+*.import
 __pycache__/
 *.pyc
 

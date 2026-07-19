@@ -1,5 +1,4 @@
 extends RefCounted
-const SharedLoader = preload("res://../../../app/shared/shared_loader.gd")
 
 const SCHEMA := "cartridge_level_adjustments"
 const VERSION := "1.0.0"

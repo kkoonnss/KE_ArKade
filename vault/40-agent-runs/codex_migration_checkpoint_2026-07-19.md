@@ -2,7 +2,7 @@
 agent: codex
 topic: migration-checkpoint
 date: 2026-07-19
-status: pending_commit_and_push
+status: pending_push
 backup_status: pending
 backup_remote: https://github.com/kkoonnss/KE_ArKade.git
 ---
@@ -53,10 +53,23 @@ No files were deleted or relocated during preparation.
   treating the tools gate as fully green.
 - Real controller/projector confirmation remains pending on K Micro.
 
+## Portability repair
+
+- Pre-edit checkpoint: `8bfe5ff` (`snap: preserve working state before K Micro portability repair`).
+- Normalized only the mixed indentation inside `_input(event)` for 17
+  cartridges; input logic and controller mappings were not changed.
+- Removed four unused `SharedLoader` preloads that attempted to reach outside
+  standalone cartridge `res://` roots.
+- Added `*.import` to `.gitignore`; Godot import sidecars remain local.
+- Full fresh import/parse sweep: **34 projects checked, 0 failures** (hub plus
+  all 33 cartridges).
+- K Main pre-repair visual baseline: Kons confirmed the current runtime works.
+- K Main post-repair regression confirmation: passed. Kons launched the normal
+  BAT/shortcut workflow and confirmed Burger Time, Bomberman, and Pac-Man work.
+
 ## Close conditions
 
-1. Review the exact staged file list and ignored/local split.
-2. Commit the checkpoint without rewriting history.
-3. Push only after Kons approves the private remote operation.
-4. Clone on K Micro, run `git lfs pull`, launch the hub, and record the physical
+1. Commit the portability repair without rewriting history.
+2. Push only after Kons approves the private remote operation.
+3. Clone on K Micro, run `git lfs pull`, launch the hub, and record the physical
    controller/projector restore test.
