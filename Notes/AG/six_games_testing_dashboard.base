@@ -1,0 +1,35 @@
+filters:
+  and:
+    - file.hasTag("arkade/game-test")
+properties:
+  game:
+    displayName: Game Name
+  archetype:
+    displayName: Archetype Archetype
+  solo_status:
+    displayName: Solo Playable
+  map_status:
+    displayName: Map Fit
+  overall_status:
+    displayName: Overall QA Pass
+  tested_maps:
+    displayName: Tested Maps
+  file.mtime:
+    displayName: Last Modified
+views:
+  - type: table
+    name: 🎮 Six Games QA Dashboard
+    order:
+      - file.name
+      - game
+      - archetype
+      - solo_status
+      - map_status
+      - overall_status
+      - tested_maps
+      - file.mtime
+    sort:
+      - property: file.name
+        direction: ASC
+      - property: solo_status
+        direction: DESC

@@ -1,0 +1,26 @@
+filters:
+  and:
+    - file.inFolder("35-locks")
+
+formulas:
+  age_display: 'if(claimed_at, (now() - date(claimed_at)).days.toString() + "d " + (now() - date(claimed_at)).hours.toString() + "h", "")'
+
+properties:
+  claimed_by:
+    displayName: "Agent"
+  task_id:
+    displayName: "Task"
+  claimed_at:
+    displayName: "Claimed At"
+  formula.age_display:
+    displayName: "Age"
+
+views:
+  - type: table
+    name: "Agent Locks"
+    order:
+      - file.name
+      - claimed_by
+      - task_id
+      - formula.age_display
+      - claimed_at

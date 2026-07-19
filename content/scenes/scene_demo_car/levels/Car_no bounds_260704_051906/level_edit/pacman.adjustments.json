@@ -1,0 +1,29 @@
+{
+  "cartridge_id": "pacman",
+  "scene_level": "scene_demo_car/Car_no bounds_260704_051906",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "background_view": "photo",
+    "grid_scale": 0.8,
+    "invert_main_solid": true,
+    "players": 1,
+    "reference": true,
+    "reference_opacity": 0.3,
+    "show_debug_grid": false,
+    "skin": "classic",
+    "tunnel_fill": 0,
+    "wall_width": 1
+  },
+  "ui_state": {
+    "collapsed_groups": {
+      "Actions": false,
+      "Collision": true,
+      "Gameplay": true,
+      "General": true,
+      "Preview": false,
+      "Secondary": false
+    },
+    "version": "tab_menu_layout_v1"
+  },
+  "version": "1.0.0"
+}

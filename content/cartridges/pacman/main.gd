@@ -821,7 +821,7 @@ func _world_to_screen(pos: Vector2) -> Vector2:
     return _map_to_screen(_world_to_map(pos))
 
 func _map_rect_to_screen(rect: Rect2) -> Rect2:
-    return Rect2(_map_to_screen(rect.position), rect.size * scale_factor)
+    return _rect_from_points(_map_to_screen(rect.position), _map_to_screen(rect.position + rect.size))
 
 func _world_rect_to_screen(rect: Rect2) -> Rect2:
     var mapped_pos = _world_to_map(rect.position)
@@ -831,7 +831,12 @@ func _world_rect_to_screen(rect: Rect2) -> Rect2:
         var total_h = float(grid_rows) * grid_cell_size
         if total_w > 0.0 and total_h > 0.0:
             mapped_size = Vector2((rect.size.x / total_w) * map_w, (rect.size.y / total_h) * map_h)
-    return Rect2(_map_to_screen(mapped_pos), mapped_size * scale_factor)
+    return _rect_from_points(_map_to_screen(mapped_pos), _map_to_screen(mapped_pos + mapped_size))
+
+func _rect_from_points(a: Vector2, b: Vector2) -> Rect2:
+    var pos = Vector2(min(a.x, b.x), min(a.y, b.y))
+    var end = Vector2(max(a.x, b.x), max(a.y, b.y))
+    return Rect2(pos, end - pos)
 
 func _scaled_radius(radius: float) -> float:
     return max(1.0, radius * scale_factor)

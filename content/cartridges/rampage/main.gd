@@ -3,6 +3,7 @@ var SharedLoader = (func(): var p = ProjectSettings.globalize_path("res://").pat
 
 const C_DIM = Color(0.6, 0.63, 0.65)
 const BUILDING_COLLAPSE_TIME := 1.15
+const MAX_PLAYER_HEALTH := 100
 
 const VIEW_SIZE := Vector2(1920, 1080)
 const FALLBACK_W := 40
@@ -25,7 +26,7 @@ var cell_px := 32.0
 var scale_factor := 1.0
 var offset := Vector2.ZERO
 var map_px := Vector2.ZERO
-var game_scale := 1.0
+var background_view := "final"
 var show_occupancy_grid := false
 
 var splash_rect: TextureRect = null
@@ -34,6 +35,7 @@ var paused := false
 var blanked := false
 var show_reference := false
 var reference_texture: Texture2D = null
+var semantic_texture: Texture2D = null
 var background_opacity := 0.16
 var ui_canvas: CanvasLayer = null
 var tab_menu = null
@@ -71,9 +73,13 @@ var enemies := []
 var vehicles := []
 var pickups := []
 var humans := []
+var projectiles := []
+var eat_fx := []
 var debris := []
 var particles := []
 var spawn_timer := 0.0
+var pedestrian_timer := 0.0
+var soldier_timer := 0.0
 var wave := 1
 var game_over := false
 var headless_validation := false
@@ -101,8 +107,6 @@ func _ready():
     print("Rampage boot: load_level start")
     load_level()
     print("Rampage boot: load_level done")
-    _setup_splash()
-    print("Rampage boot: splash setup done")
     if screenshot_path != "":
         for _i in range(8):
             await get_tree().process_frame
@@ -140,16 +144,11 @@ func _setup_shared_tab_menu():
     tab_menu = tab_script.new()
     add_child(tab_menu)
     tab_menu.register_knob_int("players", "Players", selected_players, 1, 4, 1, "Gameplay")
-    tab_menu.register_knob_float("game_scale", "Game Scale", 1.0, 0.75, 1.35, 0.05, "Gameplay")
     tab_menu.register_knob_float("vertical_gaps", "Vertical Gaps", 0.35, 0.0, 1.0, 0.05, "Gameplay")
     tab_menu.register_knob_float("grid_resolution", "Grid Resolution", 1.0, 0.5, 2.0, 0.1, "Map")
-    tab_menu.register_knob_float("density", "Density", 1.0, 0.1, 2.0, 0.1, "Map")
-    tab_menu.register_knob_bool("invert", "Invert", false, "Map")
-    tab_menu.register_knob_bool("bounds_clamp", "Bounds Clamp", true, "Map")
-    tab_menu.register_knob_bool("smooth", "Smooth", false, "Map")
+    tab_menu.register_knob_enum("background_view", "Background View", background_view, ["final", "photo", "semantic"], "Preview")
     tab_menu.register_knob_bool("show_grid", "Show Occupancy Grid", false, "Preview")
-    tab_menu.register_knob_bool("reference", "Reference Overlay", show_reference, "Preview")
-    tab_menu.register_knob_float("reference_opacity", "Reference Opacity", background_opacity, 0.0, 1.0, 0.05, "Preview")
+    tab_menu.register_knob_float("reference_opacity", "Background Opacity", background_opacity, 0.0, 1.0, 0.05, "Preview")
     tab_menu.connect("knob_changed", Callable(self, "_on_shared_knob_changed"))
     tab_menu.connect("action_triggered", Callable(self, "_on_shared_menu_action"))
     tab_menu.setup("rampage", level_dir, "RAMPAGE")
@@ -159,17 +158,15 @@ func _apply_shared_menu_settings():
     if tab_menu == null:
         return
     selected_players = int(tab_menu.get_knob_value("players"))
-    game_scale = float(tab_menu.get_knob_value("game_scale"))
+    background_view = str(tab_menu.get_knob_value("background_view"))
     show_occupancy_grid = bool(tab_menu.get_knob_value("show_grid"))
-    show_reference = bool(tab_menu.get_knob_value("reference"))
+    show_reference = background_view != "final"
     background_opacity = float(tab_menu.get_knob_value("reference_opacity"))
 
 func _on_shared_knob_changed(knob_id: String, value):
     _apply_shared_menu_settings()
-    if knob_id in ["grid_resolution", "invert", "density", "vertical_gaps", "bounds_clamp", "smooth"]:
+    if knob_id in ["grid_resolution", "vertical_gaps"]:
         load_level()
-    elif knob_id == "game_scale":
-        _configure_map()
     queue_redraw()
 
 func _on_shared_menu_action(action_id: String):
@@ -316,16 +313,20 @@ func load_level():
     _configure_map()
     _load_reference()
     _make_buildings()
-    _reset_player()
     enemies = []
     vehicles = []
     pickups = []
     humans = []
+    projectiles = []
+    eat_fx = []
     debris = []
     particles = []
     spawn_timer = 0.6
+    pedestrian_timer = 1.0
+    soldier_timer = 1.8
     game_over = false
     attack_was_pressed = false
+    _reset_player()
     queue_redraw()
     print("Rampage boot: load_level exit grid=", grid_w, "x", grid_h, " buildings=", buildings.size())
 
@@ -338,23 +339,17 @@ func _load_region_adapter_grid() -> bool:
         return false
     var adapter = region_adapter_script.new()
     var knobs = {
-        "block_size": 1.0,
-        "invert": false,
-        "density": 1.0,
-        "bounds_clamp": true,
-        "smooth": false
+        "block_size": 1.0
     }
+    var grid_resolution = 1.0
     if tab_menu != null:
-        knobs["block_size"] = tab_menu.get_knob_value("grid_resolution")
-        knobs["invert"] = tab_menu.get_knob_value("invert")
-        knobs["density"] = tab_menu.get_knob_value("density")
-        knobs["bounds_clamp"] = tab_menu.get_knob_value("bounds_clamp")
-        knobs["smooth"] = tab_menu.get_knob_value("smooth")
+        grid_resolution = max(0.1, float(tab_menu.get_knob_value("grid_resolution")))
+        knobs["block_size"] = 1.0 / grid_resolution
     var layout = adapter.interpret(level_dir, {}, knobs)
     var cells = layout.get("cells", [])
-    cell_px = float(layout.get("cell_size", 32.0)) * float(knobs.get("block_size", 1.0))
+    cell_px = float(layout.get("cell_size", 32.0)) / grid_resolution
     if typeof(cells) == TYPE_ARRAY and not cells.is_empty():
-        grid = cells
+        grid = _resample_grid(cells, grid_resolution)
         grid_h = grid.size()
         grid_w = grid[0].size() if grid_h > 0 else 0
     else:
@@ -393,21 +388,52 @@ func _load_grid_json() -> bool:
     var data = JSON.parse_string(text)
     if typeof(data) != TYPE_DICTIONARY or not data.has("cells"):
         return false
-    grid_w = int(data.get("width", 0))
-    grid_h = int(data.get("height", 0))
-    cell_px = float(data.get("cell_px", 32))
+    var base_w = int(data.get("width", 0))
+    var base_h = int(data.get("height", 0))
+    var base_cell_px = float(data.get("cell_px", 32))
     var cells = data["cells"]
-    if grid_w <= 0 or grid_h <= 0 or typeof(cells) != TYPE_ARRAY:
+    if base_w <= 0 or base_h <= 0 or typeof(cells) != TYPE_ARRAY:
         return false
-    for y in range(grid_h):
-        var row = []
-        for x in range(grid_w):
-            var v := 0
+    var base_grid = []
+    for y in range(base_h):
+        var base_row = []
+        for x in range(base_w):
+            var base_v := 0
             if y < cells.size() and typeof(cells[y]) == TYPE_ARRAY and x < cells[y].size():
-                v = int(cells[y][x])
-            row.append(v)
-        grid.append(row)
+                base_v = int(cells[y][x])
+            base_row.append(base_v)
+        base_grid.append(base_row)
+    var grid_resolution = _grid_resolution()
+    cell_px = base_cell_px / grid_resolution
+    grid = _resample_grid(base_grid, grid_resolution)
+    grid_h = grid.size()
+    grid_w = grid[0].size() if grid_h > 0 else 0
     return true
+
+func _grid_resolution() -> float:
+    if tab_menu == null:
+        return 1.0
+    return max(0.1, float(tab_menu.get_knob_value("grid_resolution")))
+
+func _resample_grid(source_grid: Array, resolution: float) -> Array:
+    if source_grid.is_empty():
+        return []
+    var source_h = source_grid.size()
+    var source_w = source_grid[0].size() if source_h > 0 and typeof(source_grid[0]) == TYPE_ARRAY else 0
+    if source_w <= 0:
+        return []
+    var target_w = max(1, int(round(float(source_w) * resolution)))
+    var target_h = max(1, int(round(float(source_h) * resolution)))
+    var result = []
+    for y in range(target_h):
+        var row = []
+        var src_y = clampi(int(floor(float(y) / resolution)), 0, source_h - 1)
+        var source_row: Array = source_grid[src_y]
+        for x in range(target_w):
+            var src_x = clampi(int(floor(float(x) / resolution)), 0, source_w - 1)
+            row.append(int(source_row[src_x]))
+        result.append(row)
+    return result
 
 func _load_occupancy_grid() -> bool:
     if level_dir == "":
@@ -418,19 +444,22 @@ func _load_occupancy_grid() -> bool:
     var img = Image.load_from_file(path)
     if img == null:
         return false
-    grid_w = FALLBACK_W
-    grid_h = FALLBACK_H
-    cell_px = max(24.0, float(img.get_width()) / float(grid_w))
+    var grid_resolution = _grid_resolution()
+    grid_w = max(8, int(round(float(FALLBACK_W) * grid_resolution)))
+    grid_h = max(8, int(round(float(FALLBACK_H) * grid_resolution)))
+    cell_px = max(8.0, float(img.get_width()) / float(grid_w))
     for y in range(grid_h):
         var row = []
         for x in range(grid_w):
+            var v := 0
             var px = int((float(x) + 0.5) / float(grid_w) * img.get_width())
             var py = int((float(y) + 0.5) / float(grid_h) * img.get_height())
             px = clampi(px, 0, img.get_width() - 1)
             py = clampi(py, 0, img.get_height() - 1)
             var c = img.get_pixel(px, py)
-            var solid = 1 if c.get_luminance() < 0.45 else 0
-            row.append(solid)
+            if c.get_luminance() < 0.45:
+                v = 1
+            row.append(v)
         grid.append(row)
     return true
 
@@ -447,15 +476,21 @@ func _make_fallback_grid():
 
 func _configure_map():
     map_px = Vector2(float(grid_w) * cell_px, float(grid_h) * cell_px)
-    scale_factor = min(VIEW_SIZE.x / map_px.x, VIEW_SIZE.y / map_px.y) * 0.92 * game_scale
+    scale_factor = min(VIEW_SIZE.x / map_px.x, VIEW_SIZE.y / map_px.y) * 0.92
     offset = (VIEW_SIZE - map_px * scale_factor) * 0.5
 
 func _load_reference():
     reference_texture = null
+    semantic_texture = null
     if DisplayServer.get_name() == "headless":
         return
     if level_dir == "":
         return
+    var semantic_path = level_dir.path_join("semantic_map.png")
+    if FileAccess.file_exists(semantic_path):
+        var semantic_img = Image.load_from_file(semantic_path)
+        if semantic_img:
+            semantic_texture = ImageTexture.create_from_image(semantic_img)
     var yaml = level_dir.path_join("level.yaml")
     if not FileAccess.file_exists(yaml):
         return
@@ -472,6 +507,24 @@ func _load_reference():
                 if img:
                     reference_texture = ImageTexture.create_from_image(img)
             return
+
+func _active_background_texture() -> Texture2D:
+    if background_view == "semantic" and semantic_texture != null:
+        return semantic_texture
+    if background_view == "photo" and reference_texture != null:
+        return reference_texture
+    return null
+
+func _cycle_background_view():
+    if background_view == "final":
+        background_view = "photo"
+    elif background_view == "photo":
+        background_view = "semantic"
+    else:
+        background_view = "final"
+    show_reference = background_view != "final"
+    if tab_menu != null:
+        tab_menu.set_knob_value("background_view", background_view, false, false)
 
 func _make_buildings():
     buildings = []
@@ -501,16 +554,14 @@ func _make_buildings():
                 for xx in range(x, max_x + 1):
                     visited[yy][xx] = true
             _add_building(Rect2(Vector2(x, y), Vector2(max_x - x + 1, max_y - y + 1)))
-    if buildings.size() < 6:
+    if buildings.is_empty():
         _make_procedural_city()
 
 func _add_building(cell_rect: Rect2):
-    if cell_rect.size.x * cell_rect.size.y < 4:
-        return
     var px_rect = Rect2(cell_rect.position * cell_px, cell_rect.size * cell_px)
     var color = [Color(0, 0.9, 1), Color(1, 0, 0.75), Color(1, 0.75, 0), Color(0.2, 1, 0.35)][buildings.size() % 4]
-    var window_cols = max(2, int(cell_rect.size.x))
-    var window_rows = max(2, int(cell_rect.size.y))
+    var window_cols = max(1, int(cell_rect.size.x))
+    var window_rows = max(1, int(cell_rect.size.y))
     var windows = []
     var total_windows = 0
     for wy in range(window_rows):
@@ -585,30 +636,69 @@ func _spawn_humans():
                 "vel": Vector2.ZERO,
                 "alive": true,
                 "anchored": true,
+                "shoot_timer": randf_range(1.0, 2.4),
+                "facing": 1,
                 "building_index": buildings.find(b),
                 "window_row": row_index,
                 "window_col": col_index
             })
-    for i in range(8):
-        humans.append({
-            "kind": "civilian" if randf() < 0.7 else "soldier",
-            "pos": Vector2(randf_range(cell_px * 2.0, map_px.x - cell_px * 2.0), float(grid_h - 2) * cell_px),
-            "anchor_pos": Vector2.ZERO,
-            "vel": Vector2.ZERO,
-            "alive": true,
-            "anchored": false,
-            "building_index": -1,
-            "window_row": -1,
-            "window_col": -1
-        })
-    vehicles = []
+    for i in range(12):
+        _spawn_ground_human("civilian", Vector2(randf_range(cell_px * 2.0, map_px.x - cell_px * 2.0), _ground_y()), true)
     for i in range(4):
+        _spawn_ground_human("soldier", Vector2(randf_range(cell_px * 2.0, map_px.x - cell_px * 2.0), _ground_y()), true)
+    vehicles = []
+    for i in range(3):
         vehicles.append({
             "pos": Vector2(randf_range(cell_px * 2.0, map_px.x - cell_px * 2.0), float(grid_h - 2) * cell_px),
             "vel": Vector2(randf_range(-1.0, 1.0) * cell_px * 2.0, 0),
             "alive": true,
             "kind": "car"
         })
+    for i in range(2):
+        vehicles.append({
+            "pos": Vector2(randf_range(cell_px * 2.0, map_px.x - cell_px * 2.0), _ground_y()),
+            "vel": Vector2((-1 if randf() < 0.5 else 1) * cell_px * 0.9, 0),
+            "alive": true,
+            "kind": "tank"
+        })
+
+func _spawn_ground_human(kind: String, pos: Vector2 = Vector2.ZERO, use_pos: bool = false):
+    var dir = -1 if randf() < 0.5 else 1
+    var spawn_pos = pos
+    if not use_pos:
+        spawn_pos = Vector2(-cell_px if dir > 0 else map_px.x + cell_px, _ground_y())
+    humans.append({
+        "kind": kind,
+        "pos": spawn_pos,
+        "anchor_pos": Vector2.ZERO,
+        "vel": Vector2(dir * cell_px * 0.35, 0),
+        "alive": true,
+        "anchored": false,
+        "falling": false,
+        "facing": dir,
+        "shoot_timer": randf_range(0.8, 2.2),
+        "wander_phase": randf() * TAU,
+        "building_index": -1,
+        "window_row": -1,
+        "window_col": -1
+    })
+
+func _spawn_paratrooper(pos: Vector2, drift_dir: float):
+    humans.append({
+        "kind": "paratrooper",
+        "pos": pos + Vector2(0, cell_px * 0.35),
+        "anchor_pos": Vector2.ZERO,
+        "vel": Vector2(drift_dir * cell_px * 0.35, cell_px * 1.0),
+        "alive": true,
+        "anchored": false,
+        "falling": true,
+        "facing": drift_dir,
+        "shoot_timer": randf_range(0.8, 1.6),
+        "wander_phase": randf() * TAU,
+        "building_index": -1,
+        "window_row": -1,
+        "window_col": -1
+    })
 
 func _cell_open(x: int, y: int) -> bool:
     if x < 0 or y < 0 or x >= grid_w or y >= grid_h:
@@ -701,10 +791,13 @@ func _process(delta):
         _update_player(delta)
         _update_pickups(delta)
         _check_player_pickups()
+        _update_ground_spawns(delta)
         _update_humans(delta)
         _update_vehicles(delta)
         _update_enemies(delta)
+        _update_projectiles(delta)
         _update_debris(delta)
+        _update_eat_fx(delta)
         _update_particles(delta)
     queue_redraw()
 
@@ -753,9 +846,9 @@ func _update_menu_overlay():
     var lines = []
     if overlay_mode == "help":
         title_text += " HELP"
-        subtitle = "Projection-ready controls, restart flow, and reference overlay live here."
+        subtitle = "Projection-ready controls, restart flow, and preview overlays live here."
         hint = "A / Start confirms. B / Escape goes back."
-        lines = ["Climb, punch, and smash the buildings.", "Press Tab for settings.", "F1 toggles the level reference overlay.", _menu_line(0), _menu_line(1)]
+        lines = ["Climb, punch, and smash the buildings.", "Press Tab for settings.", "F1 cycles the preview background.", _menu_line(0), _menu_line(1)]
     elif overlay_mode == "settings":
         title_text += " SETTINGS"
         subtitle = "Keep the game visible while you tune the run-up conditions."
@@ -774,11 +867,11 @@ func _update_menu_overlay():
 
 func _menu_items_for_mode(mode: String) -> Array:
     if mode == "settings":
-        return [{"label": "Players: %d" % selected_players, "action": "players"}, {"label": "Reference Overlay: " + ("On" if show_reference else "Off"), "action": "reference"}, {"label": "Back", "action": "back"}, {"label": "Start Game", "action": "start"}]
+        return [{"label": "Players: %d" % selected_players, "action": "players"}, {"label": "Preview: " + background_view.capitalize(), "action": "reference"}, {"label": "Back", "action": "back"}, {"label": "Start Game", "action": "start"}]
     if mode == "help":
         return [{"label": "Back", "action": "back"}, {"label": "Start Game", "action": "start"}]
     if mode == "start":
-        return [{"label": "Start Game", "action": "start"}, {"label": "Help", "action": "help"}, {"label": "Settings", "action": "settings"}, {"label": "Players: %d" % selected_players, "action": "players"}, {"label": "Reference", "action": "reference"}]
+        return [{"label": "Start Game", "action": "start"}, {"label": "Help", "action": "help"}, {"label": "Settings", "action": "settings"}, {"label": "Players: %d" % selected_players, "action": "players"}, {"label": "Preview", "action": "reference"}]
     return []
 
 func _menu_line(index: int) -> String:
@@ -836,6 +929,15 @@ func _handle_menu_input(event) -> bool:
         if event.button_index in [JOY_BUTTON_B, JOY_BUTTON_X]:
             _menu_back()
             return true
+    if event is InputEventJoypadMotion and menu_axis_cooldown <= 0.0:
+        if event.axis == JOY_AXIS_LEFT_Y and abs(event.axis_value) > 0.65:
+            _menu_move(1 if event.axis_value > 0.0 else -1)
+            menu_axis_cooldown = 0.18
+            return true
+        if event.axis == JOY_AXIS_LEFT_X and abs(event.axis_value) > 0.65:
+            _menu_adjust(1 if event.axis_value > 0.0 else -1)
+            menu_axis_cooldown = 0.18
+            return true
     return false
 
 func _menu_move(step: int):
@@ -855,7 +957,7 @@ func _menu_adjust(step: int):
         _update_menu_overlay()
         return
     if action == "reference":
-        show_reference = not show_reference
+        _cycle_background_view()
     _update_menu_overlay()
 
 func _menu_accept():
@@ -878,7 +980,7 @@ func _menu_accept():
     elif action == "back":
         _set_overlay_mode("start")
     elif action == "reference":
-        show_reference = not show_reference
+        _cycle_background_view()
         _update_menu_overlay()
 
 func _menu_back():
@@ -911,20 +1013,36 @@ func _menu_panel_style(border_color: Color, fill_color: Color) -> StyleBoxFlat:
     style.shadow_size = 16
     return style
 
+func _primary_joy_id() -> int:
+    return SharedLoader.get_joy_id(0)
+
+func _joy_axis(axis: int, deadzone: float = 0.35) -> float:
+    var value = Input.get_joy_axis(_primary_joy_id(), axis)
+    return value if abs(value) >= deadzone else 0.0
+
+func _joy_any_button_pressed(buttons: Array) -> bool:
+    var joy_id = _primary_joy_id()
+    for button in buttons:
+        if Input.is_joy_button_pressed(joy_id, int(button)):
+            return true
+    return false
+
 func _update_player(delta):
     var dir := 0.0
-    if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT):
+    var joy_x = _joy_axis(JOY_AXIS_LEFT_X)
+    var joy_y = _joy_axis(JOY_AXIS_LEFT_Y)
+    if Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_LEFT) or Input.is_action_pressed("ui_left") or Input.is_joy_button_pressed(_primary_joy_id(), JOY_BUTTON_DPAD_LEFT) or joy_x < 0.0:
         dir -= 1.0
-    if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT):
+    if Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_RIGHT) or Input.is_action_pressed("ui_right") or Input.is_joy_button_pressed(_primary_joy_id(), JOY_BUTTON_DPAD_RIGHT) or joy_x > 0.0:
         dir += 1.0
     if dir != 0:
         player["facing"] = 1 if dir > 0 else -1
     var vel: Vector2 = player["vel"]
-    var climb_up := Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP)
-    var climb_down := Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN)
-    var jump_pressed := Input.is_key_pressed(KEY_ALT)
+    var climb_up := Input.is_key_pressed(KEY_W) or Input.is_key_pressed(KEY_UP) or Input.is_action_pressed("ui_up") or Input.is_joy_button_pressed(_primary_joy_id(), JOY_BUTTON_DPAD_UP) or joy_y < 0.0
+    var climb_down := Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_DOWN) or Input.is_action_pressed("ui_down") or Input.is_joy_button_pressed(_primary_joy_id(), JOY_BUTTON_DPAD_DOWN) or joy_y > 0.0
+    var jump_pressed := Input.is_key_pressed(KEY_ALT) or _joy_any_button_pressed([JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_Y, JOY_BUTTON_LEFT_SHOULDER])
     var jumped := false
-    var attack_pressed := Input.is_key_pressed(KEY_SPACE)
+    var attack_pressed := Input.is_key_pressed(KEY_SPACE) or _joy_any_button_pressed([JOY_BUTTON_X, JOY_BUTTON_RIGHT_SHOULDER])
     var attack_triggered := attack_pressed and not attack_was_pressed
     attack_was_pressed = attack_pressed
     var attached := {}
@@ -998,8 +1116,18 @@ func _update_player(delta):
         player["on_ground"] = true
     else:
         player["on_ground"] = false
+    var roof_edge_climb = _resolve_roof_edge_climb(pos, dir, climb_down)
+    if not jumped and not roof_edge_climb.is_empty():
+        player["climb_building"] = int(roof_edge_climb["index"])
+        player["climb_side"] = str(roof_edge_climb["side"])
+        player["hang"] = false
+        player["climb"] = true
+        var edge_b = buildings[int(roof_edge_climb["index"])]
+        pos = _snap_to_building_side(pos, edge_b, str(roof_edge_climb["side"]))
+        vel = Vector2.ZERO
+        player["on_ground"] = false
     var roof_support = _resolve_roof_support(pos)
-    if not jumped and not roof_support.is_empty():
+    if not jumped and int(player["climb_building"]) < 0 and not roof_support.is_empty():
         pos = roof_support["pos"]
         vel.y = 0
         player["on_ground"] = true
@@ -1061,17 +1189,34 @@ func _is_at_building_roof(pos: Vector2, b: Dictionary) -> bool:
     var r: Rect2 = b["rect"]
     return pos.y <= r.position.y + cell_px * 0.24
 
+func _resolve_roof_edge_climb(pos: Vector2, dir: float, climb_down: bool) -> Dictionary:
+    if not climb_down or dir == 0:
+        return {}
+    for i in range(buildings.size()):
+        var b = buildings[i]
+        if bool(b.get("collapsed", false)):
+            continue
+        var r: Rect2 = b["rect"]
+        var roof_y = r.position.y - cell_px * 0.36
+        if abs(pos.y - roof_y) > cell_px * 0.75:
+            continue
+        if dir < 0.0 and pos.x <= r.position.x + cell_px * 0.18 and pos.x >= r.position.x - cell_px * 0.65:
+            return {"index": i, "side": "left"}
+        if dir > 0.0 and pos.x >= r.end.x - cell_px * 0.18 and pos.x <= r.end.x + cell_px * 0.65:
+            return {"index": i, "side": "right"}
+    return {}
+
 func _resolve_roof_support(pos: Vector2) -> Dictionary:
     for i in range(buildings.size()):
         var b = buildings[i]
         if bool(b.get("collapsed", false)):
             continue
         var r: Rect2 = b["rect"]
-        if pos.x < r.position.x - cell_px * 0.2 or pos.x > r.end.x + cell_px * 0.2:
+        if pos.x < r.position.x + cell_px * 0.08 or pos.x > r.end.x - cell_px * 0.08:
             continue
         var roof_y = r.position.y - cell_px * 0.36
         if abs(pos.y - roof_y) <= cell_px * 0.5:
-            return {"pos": Vector2(clamp(pos.x, r.position.x, r.end.x), roof_y), "building_index": i}
+            return {"pos": Vector2(pos.x, roof_y), "building_index": i}
     return {}
 
 func _attack():
@@ -1092,6 +1237,8 @@ func _attack():
         scored = true
     if _attack_near_vehicle(attack_box):
         scored = true
+    if _attack_near_enemy(attack_box, false):
+        scored = true
     if _attack_near_human(attack_box):
         scored = true
     if scored:
@@ -1109,6 +1256,8 @@ func _flying_kick(attack_box: Rect2):
         hit_any = true
     if _attack_near_vehicle(attack_box):
         hit_any = true
+    if _attack_near_enemy(attack_box, true):
+        hit_any = true
     if _attack_near_human(attack_box):
         hit_any = true
     if hit_any:
@@ -1117,11 +1266,48 @@ func _flying_kick(attack_box: Rect2):
 func _attack_near_vehicle(attack_box: Rect2) -> bool:
     for v in vehicles:
         if bool(v.get("alive", false)) and attack_box.intersects(Rect2(v["pos"] + Vector2(-cell_px * 0.45, -cell_px * 0.25), Vector2(cell_px * 0.9, cell_px * 0.5))):
+            if str(v.get("kind", "")) == "tank":
+                _destroy_vehicle(v)
+                return true
             v["vel"].x = -v["vel"].x * 1.4
             player["score"] = int(player["score"]) + 75
             _burst(v["pos"], Color(1.0, 0.8, 0.2))
             return true
     return false
+
+func _attack_near_enemy(attack_box: Rect2, airborne: bool) -> bool:
+    for e in enemies:
+        if not bool(e.get("alive", true)):
+            continue
+        var kind = str(e.get("kind", ""))
+        if kind == "heli" and airborne and attack_box.intersects(_enemy_hit_rect(e)):
+            _destroy_enemy(e, 350, Color(1.0, 0.15, 0.85))
+            return true
+        if kind == "tank" and not airborne and attack_box.intersects(_enemy_hit_rect(e)):
+            _destroy_enemy(e, 225, Color(1.0, 0.5, 0.05))
+            return true
+    return false
+
+func _enemy_hit_rect(e: Dictionary) -> Rect2:
+    var p: Vector2 = e["pos"]
+    if str(e.get("kind", "")) == "heli":
+        return Rect2(p + Vector2(-cell_px * 0.75, -cell_px * 0.35), Vector2(cell_px * 1.5, cell_px * 0.7))
+    return Rect2(p + Vector2(-cell_px * 0.55, -cell_px * 0.32), Vector2(cell_px * 1.1, cell_px * 0.64))
+
+func _destroy_enemy(e: Dictionary, score_value: int, color: Color):
+    e["alive"] = false
+    e["life"] = 0.0
+    player["score"] = int(player["score"]) + score_value
+    _burst(e["pos"], color)
+    for i in range(10):
+        debris.append({"pos": e["pos"], "vel": Vector2.from_angle(randf() * TAU) * randf_range(cell_px * 0.8, cell_px * 3.4), "life": randf_range(0.45, 1.1), "color": color})
+
+func _destroy_vehicle(v: Dictionary):
+    v["alive"] = false
+    player["score"] = int(player["score"]) + 175
+    _burst(v["pos"], Color(1.0, 0.45, 0.05))
+    for i in range(8):
+        debris.append({"pos": v["pos"], "vel": Vector2.from_angle(randf() * TAU) * randf_range(cell_px * 0.7, cell_px * 2.6), "life": randf_range(0.35, 0.9), "color": Color(1.0, 0.55, 0.05)})
 
 func _attack_near_human(attack_box: Rect2) -> bool:
     for h in humans:
@@ -1269,6 +1455,26 @@ func _update_pickups(delta):
         p["life"] = float(p["life"]) - delta
     pickups = pickups.filter(func(p): return float(p["life"]) > 0.0 and p["pos"].y < map_px.y + cell_px * 2)
 
+func _update_ground_spawns(delta):
+    pedestrian_timer -= delta
+    soldier_timer -= delta
+    var civilian_count := 0
+    var soldier_count := 0
+    for h in humans:
+        if not bool(h.get("alive", false)) or bool(h.get("anchored", false)):
+            continue
+        var kind = str(h.get("kind", "civilian"))
+        if kind == "civilian":
+            civilian_count += 1
+        elif kind in ["soldier", "paratrooper"]:
+            soldier_count += 1
+    if pedestrian_timer <= 0.0 and civilian_count < 18:
+        pedestrian_timer = randf_range(2.4, 4.6)
+        _spawn_ground_human("civilian")
+    if soldier_timer <= 0.0 and soldier_count < 10:
+        soldier_timer = randf_range(3.0, 5.8)
+        _spawn_ground_human("soldier")
+
 func _update_humans(delta):
     var pos: Vector2 = player["pos"]
     for h in humans:
@@ -1279,17 +1485,40 @@ func _update_humans(delta):
             h["pos"] = h.get("anchor_pos", h["pos"])
             continue
         var kind = str(h.get("kind", "civilian"))
-        var target_vel = Vector2.ZERO
+        var hp: Vector2 = h["pos"]
+        if kind == "paratrooper" and bool(h.get("falling", false)):
+            var vel: Vector2 = h["vel"]
+            vel.y = min(cell_px * 2.0, vel.y + cell_px * 1.1 * delta)
+            vel.x = float(h.get("facing", 1)) * cell_px * 0.32
+            hp += vel * delta
+            if hp.y >= _ground_y():
+                hp.y = _ground_y()
+                vel = Vector2.ZERO
+                h["kind"] = "soldier"
+                h["falling"] = false
+                h["shoot_timer"] = randf_range(0.4, 1.2)
+                _burst(hp, Color(0.65, 1.0, 0.35))
+            h["vel"] = vel
+            h["pos"] = hp
+            continue
         if kind == "soldier":
-            target_vel.x = sign(pos.x - h["pos"].x) * cell_px * 1.5
+            var dir_x = sign(pos.x - hp.x)
+            if dir_x == 0:
+                dir_x = float(h.get("facing", 1))
+            h["facing"] = dir_x
+            h["vel"] = Vector2(dir_x * cell_px * 1.75, 0)
+            h["shoot_timer"] = float(h.get("shoot_timer", randf_range(0.6, 1.8))) - delta
+            if float(h["shoot_timer"]) <= 0.0 and abs(pos.x - hp.x) <= cell_px * 13.0:
+                h["shoot_timer"] = randf_range(1.1, 2.2)
+                _spawn_projectile(hp + Vector2(dir_x * cell_px * 0.18, -cell_px * 0.24), Vector2(dir_x, -1).normalized() * cell_px * 7.2, 5, Color(1.0, 0.85, 0.18))
         else:
-            target_vel.x = sin(Time.get_ticks_msec() / 900.0 + h["pos"].x * 0.01) * cell_px * 0.5
-        h["vel"] = target_vel
-        h["pos"] = h["pos"] + h["vel"] * delta
-        if h["pos"].distance_to(pos) <= cell_px * 0.72:
-            _eat_human(h)
-        h["pos"].x = clamp(h["pos"].x, cell_px * 0.8, (grid_w - 0.8) * cell_px)
-        h["pos"].y = clamp(h["pos"].y, cell_px * 0.8, (grid_h - 1.3) * cell_px)
+            var phase = float(h.get("wander_phase", 0.0))
+            var dir = sin(Time.get_ticks_msec() / 760.0 + phase + hp.x * 0.017)
+            h["facing"] = 1 if dir >= 0.0 else -1
+            h["vel"] = Vector2(dir * cell_px * 0.48, 0)
+        h["pos"] = hp + Vector2(h["vel"].x, 0) * delta
+        h["pos"].x = clamp(h["pos"].x, cell_px * 0.35, map_px.x - cell_px * 0.35)
+        h["pos"].y = _ground_y()
     humans = humans.filter(func(h): return bool(h.get("alive", false)))
 
 func _update_vehicles(delta):
@@ -1300,7 +1529,7 @@ func _update_vehicles(delta):
         if v["pos"].x < cell_px or v["pos"].x > map_px.x - cell_px:
             v["vel"].x = -v["vel"].x
         v["pos"].x = clamp(v["pos"].x, cell_px * 1.0, map_px.x - cell_px * 1.0)
-        v["pos"].y = float(grid_h - 2) * cell_px
+        v["pos"].y = _ground_y()
     vehicles = vehicles.filter(func(v): return bool(v.get("alive", false)))
 
 func _check_player_pickups():
@@ -1314,61 +1543,129 @@ func _check_player_pickups():
 
 func _apply_pickup_effect(kind: String):
     if kind == "food":
-        player["health"] = min(100, int(player["health"]) + 20)
+        player["health"] = min(MAX_PLAYER_HEALTH, int(player["health"]) + 20)
         player["score"] = int(player["score"]) + 50
     elif kind == "money":
         player["score"] = int(player["score"]) + 250
     elif kind == "powerup":
-        player["health"] = min(100, int(player["health"]) + 35)
+        player["health"] = min(MAX_PLAYER_HEALTH, int(player["health"]) + 35)
         player["score"] = int(player["score"]) + 500
     elif kind == "bomb":
-        player["health"] = max(0, int(player["health"]) - 25)
-        if int(player["health"]) <= 0:
-            game_over = true
-            send_ipc_message({"type": "state", "data": {"state": "game_over"}})
+        _damage_player(25, player["pos"])
     send_ipc_message({"type": "score", "data": {"player": 1, "score": int(player["score"])}})
 
 func _eat_human(human: Dictionary):
     if not bool(human.get("alive", false)):
         return
     human["alive"] = false
-    if str(human.get("kind", "")) == "soldier":
-        player["health"] = max(0, int(player["health"]) - 15)
+    var kind = str(human.get("kind", "civilian"))
+    var health_gain = 8 if kind in ["soldier", "paratrooper"] else 14
+    player["health"] = min(MAX_PLAYER_HEALTH, int(player["health"]) + health_gain)
+    player["score"] = int(player["score"]) + (150 if kind in ["soldier", "paratrooper"] else 100)
+    if kind == "civilian" and randf() < 0.48:
+        _spawn_eat_fx(human["pos"])
     else:
-        player["health"] = min(100, int(player["health"]) + 10)
-    player["score"] = int(player["score"]) + 100
+        _burst(player["pos"] + Vector2(0, -cell_px * 0.82), Color(0.7, 1.0, 0.35))
     send_ipc_message({"type": "score", "data": {"player": 1, "score": int(player["score"])}})
 
 func _update_enemies(delta):
     spawn_timer -= delta
     if spawn_timer <= 0:
-        spawn_timer = max(0.75, 2.2 - wave * 0.12)
+        spawn_timer = randf_range(1.0, max(1.25, 2.8 - wave * 0.12))
         _spawn_enemy()
     var pos: Vector2 = player["pos"]
     for e in enemies:
+        if not bool(e.get("alive", true)):
+            continue
+        var kind = str(e.get("kind", "tank"))
         e["pos"] = e["pos"] + e["vel"] * delta
-        if e["kind"] == "heli":
-            e["vel"].x = sin(Time.get_ticks_msec() / 550.0 + e["phase"]) * cell_px * 2.0
-            if randf() < 0.006:
-                debris.append({"pos": e["pos"], "vel": Vector2(0, cell_px * 4.4), "life": 4.0, "color": Color(1, 0.2, 0.1)})
+        if kind == "heli":
+            e["pos"].y = float(e.get("lane_y", _heli_lane_y())) + sin(Time.get_ticks_msec() / 420.0 + float(e.get("phase", 0.0))) * cell_px * 0.16
+            e["shoot_timer"] = float(e.get("shoot_timer", randf_range(0.8, 1.8))) - delta
+            e["drop_timer"] = float(e.get("drop_timer", randf_range(1.6, 3.2))) - delta
+            if float(e["shoot_timer"]) <= 0.0:
+                e["shoot_timer"] = randf_range(1.0, 2.3)
+                var aim = (pos - e["pos"]).normalized()
+                if aim == Vector2.ZERO:
+                    aim = Vector2(0, 1)
+                _spawn_projectile(e["pos"] + Vector2(0, cell_px * 0.18), aim * cell_px * 6.8, 6, Color(1.0, 0.25, 0.1))
+            if float(e["drop_timer"]) <= 0.0:
+                e["drop_timer"] = randf_range(4.2, 7.5)
+                _spawn_paratrooper(e["pos"], float(e.get("dir", 1)))
         else:
-            e["vel"].x = sign(pos.x - e["pos"].x) * cell_px * 1.8
+            e["pos"].y = _ground_y()
+            if e["pos"].x < cell_px or e["pos"].x > map_px.x - cell_px:
+                e["vel"].x = -e["vel"].x
+            e["pos"].x = clamp(e["pos"].x, cell_px * 0.8, map_px.x - cell_px * 0.8)
         if e["pos"].distance_to(pos) < cell_px * 0.8:
-            player["health"] = max(0, int(player["health"]) - 8)
+            _damage_player(8, pos)
             e["life"] = 0.0
+            e["alive"] = false
             _burst(pos, Color(1, 0.1, 0.2))
-            if int(player["health"]) <= 0:
-                game_over = true
-                send_ipc_message({"type": "state", "data": {"state": "game_over"}})
         e["life"] = float(e["life"]) - delta
-    enemies = enemies.filter(func(e): return float(e["life"]) > 0.0 and e["pos"].x > -cell_px * 2 and e["pos"].x < map_px.x + cell_px * 2)
+    enemies = enemies.filter(func(e): return bool(e.get("alive", true)) and float(e["life"]) > 0.0 and e["pos"].x > -cell_px * 3 and e["pos"].x < map_px.x + cell_px * 3)
 
 func _spawn_enemy():
-    var side = -1 if randf() < 0.5 else 1
-    var kind = "heli" if randf() < 0.55 else "tank"
-    var y = cell_px * (3.0 + randf() * 5.0) if kind == "heli" else cell_px * float(grid_h - 2)
-    var x = -cell_px if side < 0 else map_px.x + cell_px
-    enemies.append({"kind": kind, "pos": Vector2(x, y), "vel": Vector2(side * cell_px * 2.0, 0), "life": 12.0, "phase": randf() * 10.0})
+    var dir = 1 if randf() < 0.5 else -1
+    var kind = "heli" if randf() < 0.58 else "tank"
+    var x = -cell_px if dir > 0 else map_px.x + cell_px
+    if kind == "heli":
+        var y = _heli_lane_y()
+        enemies.append({"kind": kind, "pos": Vector2(x, y), "vel": Vector2(dir * cell_px * randf_range(2.2, 3.2), 0), "life": randf_range(12.0, 18.0), "phase": randf() * 10.0, "alive": true, "dir": dir, "lane_y": y, "shoot_timer": randf_range(0.8, 2.0), "drop_timer": randf_range(1.8, 4.0)})
+    else:
+        enemies.append({"kind": kind, "pos": Vector2(x, _ground_y()), "vel": Vector2(dir * cell_px * randf_range(0.8, 1.25), 0), "life": randf_range(12.0, 18.0), "phase": randf() * 10.0, "alive": true, "dir": dir})
+
+func _ground_y() -> float:
+    return float(grid_h - 2) * cell_px
+
+func _heli_lane_y() -> float:
+    var top_y = cell_px * 5.0
+    for b in buildings:
+        if bool(b.get("collapsed", false)):
+            continue
+        var r: Rect2 = b["rect"]
+        top_y = min(top_y, r.position.y)
+    return clamp(top_y - cell_px * 0.75, cell_px * 0.85, cell_px * 3.0)
+
+func _spawn_projectile(pos: Vector2, vel: Vector2, damage: int, color: Color):
+    projectiles.append({
+        "pos": pos,
+        "vel": vel,
+        "damage": damage,
+        "life": 2.8,
+        "color": color
+    })
+
+func _update_projectiles(delta):
+    var player_pos: Vector2 = player["pos"]
+    for shot in projectiles:
+        shot["pos"] = shot["pos"] + shot["vel"] * delta
+        shot["life"] = float(shot["life"]) - delta
+        if shot["pos"].distance_to(player_pos) <= cell_px * 0.5:
+            _damage_player(int(shot.get("damage", 5)), shot["pos"])
+            shot["life"] = 0.0
+    projectiles = projectiles.filter(func(shot): return float(shot.get("life", 0.0)) > 0.0 and shot["pos"].x > -cell_px and shot["pos"].x < map_px.x + cell_px and shot["pos"].y > -cell_px and shot["pos"].y < map_px.y + cell_px)
+
+func _damage_player(amount: int, hit_pos: Vector2 = Vector2.ZERO):
+    player["health"] = max(0, int(player["health"]) - amount)
+    if hit_pos != Vector2.ZERO:
+        _burst(hit_pos, Color(1.0, 0.15, 0.1))
+    if int(player["health"]) <= 0:
+        game_over = true
+        send_ipc_message({"type": "state", "data": {"state": "game_over"}})
+
+func _spawn_eat_fx(start_pos: Vector2):
+    eat_fx.append({
+        "start": start_pos,
+        "life": 0.42,
+        "total": 0.42,
+        "color": Color(1.0, 0.95, 0.65)
+    })
+
+func _update_eat_fx(delta):
+    for fx in eat_fx:
+        fx["life"] = float(fx["life"]) - delta
+    eat_fx = eat_fx.filter(func(fx): return float(fx.get("life", 0.0)) > 0.0)
 
 func _spawn_debris(r: Rect2):
     for i in range(18):
@@ -1386,7 +1683,7 @@ func _update_debris(delta):
         d["pos"] = d["pos"] + d["vel"] * delta
         d["life"] = float(d["life"]) - delta
         if d["pos"].distance_to(pos) < cell_px * 0.55:
-            player["health"] = max(0, int(player["health"]) - 4)
+            _damage_player(4, d["pos"])
             d["life"] = 0.0
     debris = debris.filter(func(d): return float(d["life"]) > 0.0 and d["pos"].y < map_px.y + cell_px)
 
@@ -1400,30 +1697,24 @@ func _update_particles(delta):
         p["life"] = float(p["life"]) - delta
     particles = particles.filter(func(p): return float(p["life"]) > 0.0)
 
+func _try_restart_from_input() -> bool:
+    if not game_over:
+        return false
+    load_level()
+    return true
+
 func _input(event):
     if _shared_menu_open():
         return
     if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
-        if get("game_state") != null and get("game_state") != "playing":
-            if has_method("_reset_game"): call("_reset_game")
-            elif has_method("reset_game"): call("reset_game")
-        elif get("state") != null and get("state") != "playing":
-            if has_method("_reset_game"): call("_reset_game")
-            elif has_method("reset_game"): call("reset_game")
-
-    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
-        if get("game_state") != null and get("game_state") != "playing":
-            if has_method("_reset_game"): call("_reset_game")
-            elif has_method("reset_game"): call("reset_game")
-        elif get("state") != null and get("state") != "playing":
-            if has_method("_reset_game"): call("_reset_game")
-            elif has_method("reset_game"): call("reset_game")
+        if _try_restart_from_input():
+            return
 
     if event is InputEventKey and event.pressed and not event.echo:
+        if event.keycode in [KEY_ENTER, KEY_KP_ENTER] and _try_restart_from_input():
+            return
         if event.keycode == KEY_F1:
-            show_reference = not show_reference
-        elif event.keycode == KEY_ENTER:
-            load_level()
+            _cycle_background_view()
 
 func _draw():
     draw_rect(Rect2(Vector2.ZERO, VIEW_SIZE), Color.BLACK, true)
@@ -1431,15 +1722,19 @@ func _draw():
         return
     if blanked:
         return
-    if show_reference and reference_texture:
-        draw_texture_rect(reference_texture, Rect2(offset, map_px * scale_factor), false, Color(1, 1, 1, background_opacity))
+    var preview_texture = _active_background_texture()
+    if background_view != "final" and preview_texture != null:
+        draw_texture_rect(preview_texture, Rect2(offset, map_px * scale_factor), false, Color(1, 1, 1, background_opacity))
     draw_set_transform(offset, 0, Vector2(scale_factor, scale_factor))
     _draw_city()
     _draw_pickups()
+    _draw_vehicles()
     _draw_humans()
     _draw_enemies()
+    _draw_projectiles()
     _draw_debris()
     _draw_player()
+    _draw_eat_fx()
     _draw_particles()
     draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
     _draw_hud()
@@ -1530,6 +1825,25 @@ func _draw_pickups():
         draw_circle(p["pos"], cell_px * 0.18, Color(c.r, c.g, c.b, 0.75))
         draw_circle(p["pos"], cell_px * 0.09, Color(1, 1, 1, 0.9))
 
+func _draw_vehicles():
+    for v in vehicles:
+        if not bool(v.get("alive", false)):
+            continue
+        var p: Vector2 = v["pos"]
+        if str(v.get("kind", "")) == "tank":
+            draw_rect(Rect2(p + Vector2(-cell_px * 0.48, -cell_px * 0.22), Vector2(cell_px * 0.96, cell_px * 0.32)), Color(0.25, 0.55, 0.22, 0.88), true)
+            draw_rect(Rect2(p + Vector2(-cell_px * 0.28, -cell_px * 0.38), Vector2(cell_px * 0.46, cell_px * 0.22)), Color(0.18, 0.38, 0.16, 0.95), true)
+            var dir = sign(float(v["vel"].x))
+            if dir == 0:
+                dir = 1
+            draw_line(p + Vector2(cell_px * 0.08 * dir, -cell_px * 0.30), p + Vector2(cell_px * 0.68 * dir, -cell_px * 0.34), Color(0.7, 0.9, 0.42), 3.0)
+            draw_line(p + Vector2(-cell_px * 0.38, cell_px * 0.14), p + Vector2(cell_px * 0.38, cell_px * 0.14), Color(0.05, 0.08, 0.04), 4.0)
+        else:
+            draw_rect(Rect2(p + Vector2(-cell_px * 0.44, -cell_px * 0.20), Vector2(cell_px * 0.88, cell_px * 0.32)), Color(0.2, 0.8, 1.0, 0.55), true)
+            draw_rect(Rect2(p + Vector2(-cell_px * 0.26, -cell_px * 0.36), Vector2(cell_px * 0.52, cell_px * 0.20)), Color(1.0, 0.85, 0.2, 0.7), true)
+            draw_circle(p + Vector2(-cell_px * 0.28, cell_px * 0.14), cell_px * 0.08, Color(0.02, 0.02, 0.02))
+            draw_circle(p + Vector2(cell_px * 0.28, cell_px * 0.14), cell_px * 0.08, Color(0.02, 0.02, 0.02))
+
 func _draw_humans():
     for h in humans:
         if not bool(h.get("alive", false)):
@@ -1538,14 +1852,21 @@ func _draw_humans():
             continue
         var p: Vector2 = h["pos"]
         var kind = str(h.get("kind", "civilian"))
-        var body = Color(1.0, 0.95, 0.65) if kind == "civilian" else Color(1.0, 0.3, 0.35)
-        draw_circle(p + Vector2(0, -cell_px * 0.24), cell_px * 0.17, Color(1, 1, 1, 0.95))
-        draw_rect(Rect2(p + Vector2(-cell_px * 0.17, -cell_px * 0.10), Vector2(cell_px * 0.34, cell_px * 0.56)), body, true)
-        draw_rect(Rect2(p + Vector2(-cell_px * 0.17, -cell_px * 0.10), Vector2(cell_px * 0.34, cell_px * 0.56)), Color(0, 0, 0, 0.42), false, 1.5)
-        draw_line(p + Vector2(-cell_px * 0.11, cell_px * 0.12), p + Vector2(-cell_px * 0.18, cell_px * 0.32), Color(0.1, 0.1, 0.1), 3.0)
-        draw_line(p + Vector2(cell_px * 0.11, cell_px * 0.12), p + Vector2(cell_px * 0.18, cell_px * 0.32), Color(0.1, 0.1, 0.1), 3.0)
-        draw_line(p + Vector2(-cell_px * 0.10, cell_px * 0.02), p + Vector2(-cell_px * 0.22, cell_px * 0.14), Color(0.1, 0.1, 0.1), 2.0)
-        draw_line(p + Vector2(cell_px * 0.10, cell_px * 0.02), p + Vector2(cell_px * 0.22, cell_px * 0.14), Color(0.1, 0.1, 0.1), 2.0)
+        var body = Color(1.0, 0.95, 0.65) if kind == "civilian" else Color(0.45, 0.95, 0.35)
+        if kind == "soldier":
+            body = Color(0.25, 0.7, 0.22)
+        var s = max(3.0, cell_px * 0.16)
+        var foot = p + Vector2(0, -s * 0.1)
+        if kind == "paratrooper" and bool(h.get("falling", false)):
+            draw_arc(foot + Vector2(0, -s * 2.4), s * 1.4, PI, TAU, 10, Color(0.92, 0.96, 0.92), 1.5)
+            draw_line(foot + Vector2(-s, -s * 2.35), foot + Vector2(0, -s * 0.8), Color(0.92, 0.92, 0.92), 1.0)
+            draw_line(foot + Vector2(s, -s * 2.35), foot + Vector2(0, -s * 0.8), Color(0.92, 0.92, 0.92), 1.0)
+        draw_rect(Rect2(foot + Vector2(-s * 0.42, -s * 1.15), Vector2(s * 0.84, s * 1.15)), body, true)
+        draw_rect(Rect2(foot + Vector2(-s * 0.34, -s * 1.72), Vector2(s * 0.68, s * 0.52)), Color(1.0, 0.86, 0.66), true)
+        var dir = float(h.get("facing", 1))
+        draw_line(foot + Vector2(0, -s * 0.45), foot + Vector2(dir * s * 0.95, -s * 0.72), Color(0.05, 0.05, 0.04), 1.4)
+        draw_line(foot + Vector2(-s * 0.22, 0), foot + Vector2(-s * 0.46, s * 0.45), Color(0.05, 0.05, 0.04), 1.2)
+        draw_line(foot + Vector2(s * 0.22, 0), foot + Vector2(s * 0.46, s * 0.45), Color(0.05, 0.05, 0.04), 1.2)
 
 func _draw_player():
     var p: Vector2 = player["pos"]
@@ -1574,15 +1895,28 @@ func _draw_player():
 
 func _draw_enemies():
     for e in enemies:
+        if not bool(e.get("alive", true)):
+            continue
         var p: Vector2 = e["pos"]
-        if e["kind"] == "heli":
-            draw_line(p + Vector2(-cell_px * 0.6, -cell_px * 0.25), p + Vector2(cell_px * 0.6, -cell_px * 0.25), Color(1, 0, 0.8), 3.0)
-            draw_rect(Rect2(p + Vector2(-cell_px * 0.38, -cell_px * 0.12), Vector2(cell_px * 0.76, cell_px * 0.32)), Color(1, 0, 0.8, 0.25), true)
-            draw_rect(Rect2(p + Vector2(-cell_px * 0.38, -cell_px * 0.12), Vector2(cell_px * 0.76, cell_px * 0.32)), Color(1, 0, 0.8), false, 2.0)
+        if str(e.get("kind", "")) == "heli":
+            draw_line(p + Vector2(-cell_px * 0.78, -cell_px * 0.34), p + Vector2(cell_px * 0.78, -cell_px * 0.34), Color(1, 0, 0.8), 3.0)
+            draw_line(p + Vector2(-cell_px * 0.18, -cell_px * 0.46), p + Vector2(cell_px * 0.18, -cell_px * 0.22), Color(0.8, 1.0, 1.0), 1.5)
+            draw_rect(Rect2(p + Vector2(-cell_px * 0.44, -cell_px * 0.14), Vector2(cell_px * 0.88, cell_px * 0.34)), Color(1, 0, 0.8, 0.28), true)
+            draw_rect(Rect2(p + Vector2(-cell_px * 0.44, -cell_px * 0.14), Vector2(cell_px * 0.88, cell_px * 0.34)), Color(1, 0, 0.8), false, 2.0)
+            draw_line(p + Vector2(cell_px * 0.44 * float(e.get("dir", 1)), -cell_px * 0.02), p + Vector2(cell_px * 0.78 * float(e.get("dir", 1)), cell_px * 0.12), Color(1, 0, 0.8), 2.0)
         else:
             draw_rect(Rect2(p + Vector2(-cell_px * 0.42, -cell_px * 0.22), Vector2(cell_px * 0.84, cell_px * 0.38)), Color(1, 0.25, 0.05, 0.22), true)
             draw_rect(Rect2(p + Vector2(-cell_px * 0.42, -cell_px * 0.22), Vector2(cell_px * 0.84, cell_px * 0.38)), Color(1, 0.25, 0.05), false, 2.0)
             draw_line(p, p + Vector2(sign(player["pos"].x - p.x) * cell_px * 0.7, -cell_px * 0.08), Color(1, 0.8, 0.2), 3.0)
+
+func _draw_projectiles():
+    for shot in projectiles:
+        var p: Vector2 = shot["pos"]
+        var vel: Vector2 = shot["vel"]
+        var c: Color = shot["color"]
+        var tail = vel.normalized() * cell_px * 0.18 if vel.length() > 0.0 else Vector2.ZERO
+        draw_line(p - tail, p + tail * 0.35, Color(c.r, c.g, c.b, 0.9), 2.0)
+        draw_circle(p, max(1.5, cell_px * 0.035), Color(1, 1, 1, 0.85))
 
 func _draw_debris():
     for d in debris:
@@ -1593,12 +1927,24 @@ func _draw_particles():
         var c: Color = p["color"]
         draw_circle(p["pos"], cell_px * 0.08, Color(c.r, c.g, c.b, clamp(float(p["life"]), 0.0, 1.0)))
 
+func _draw_eat_fx():
+    for fx in eat_fx:
+        var total = max(0.01, float(fx.get("total", 0.42)))
+        var t = clamp(1.0 - float(fx.get("life", 0.0)) / total, 0.0, 1.0)
+        var start: Vector2 = fx["start"]
+        var mouth = Vector2(player["pos"].x, player["pos"].y - cell_px * 0.88)
+        var arc = start.lerp(mouth, t)
+        arc.y -= sin(t * PI) * cell_px * 1.8
+        var s = max(2.5, cell_px * 0.13) * (1.0 - t * 0.35)
+        draw_rect(Rect2(arc + Vector2(-s * 0.36, -s), Vector2(s * 0.72, s)), fx.get("color", Color(1, 1, 1)), true)
+        draw_rect(Rect2(arc + Vector2(-s * 0.25, -s * 1.42), Vector2(s * 0.5, s * 0.42)), Color(1.0, 0.86, 0.66), true)
+
 func _draw_hud():
     var font = ThemeDB.fallback_font
     draw_string(font, Vector2(24, 38), "RAMPAGE", HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(0.0, 1.0, 0.8))
     draw_string(font, Vector2(24, 72), "SCORE " + str(int(player["score"])) + "   HEALTH " + str(int(player["health"])) + "   SPACE ATTACK  ALT JUMP  F1 REF", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(1, 1, 1))
     if game_over:
-        draw_string(font, Vector2(VIEW_SIZE.x * 0.5 - 120, VIEW_SIZE.y * 0.5), "GAME OVER - ENTER RESTART", HORIZONTAL_ALIGNMENT_LEFT, -1, 28, Color(1, 0.2, 0.2))
+        draw_string(font, Vector2(VIEW_SIZE.x * 0.5 - 170, VIEW_SIZE.y * 0.5), "GAME OVER - A / START / ENTER RESTART", HORIZONTAL_ALIGNMENT_LEFT, -1, 28, Color(1, 0.2, 0.2))
 
 func _process_ipc(delta):
     heartbeat_timer += delta

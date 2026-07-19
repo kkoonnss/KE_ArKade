@@ -3,17 +3,21 @@
   "scene_level": "levels/classic_rampage",
   "schema": "cartridge_level_edit_adjustments",
   "settings": {
-    "bounds_clamp": true,
-    "density": 1,
-    "game_scale": 1,
-    "grid_resolution": 1,
-    "invert": false,
+    "background_view": "semantic",
+    "grid_resolution": 0.8,
     "players": 1,
-    "reference": false,
-    "reference_opacity": 0.16,
+    "reference_opacity": 0.4,
     "show_grid": false,
-    "smooth": false,
-    "vertical_gaps": 0.35
+    "vertical_gaps": 0
+  },
+  "ui_state": {
+    "collapsed_groups": {
+      "Actions": false,
+      "Gameplay": true,
+      "Preview": false,
+      "Secondary": true
+    },
+    "version": "tab_menu_layout_v1"
   },
   "version": "1.0.0"
 }

@@ -446,7 +446,7 @@ func _activate_menu_item():
 func _handle_overlay_input(event) -> bool:
     if overlay_mode == "":
         return false
-    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
+    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A]:
         if get("game_state") != null and get("game_state") != "playing":
             if has_method("_reset_game"): call("_reset_game")
             elif has_method("reset_game"): call("reset_game")

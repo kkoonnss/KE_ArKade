@@ -29,3 +29,19 @@ Run without arguments to open the GUI.
 Manual 4-point homography calibration.
 Usage:
 `python app/tools/calibration/calibrate.py <source_image> <scene_dir>`
+
+`app/tools/calibration/profile.py`
+Create and validate reusable output-mapping profiles. Profiles are the planned
+contract for final-frame projector warping: a neutral `2x2` mesh is global
+corner pinning, while `3x3` or denser meshes add local refinement pins.
+
+Recommended workflow:
+- Calibrate against the live wall and save as a named preset.
+- Assign the preset to the active scene by copying or exporting it to
+  `content/scenes/<scene_id>/calibration/current.yaml`.
+- Keep level/game tuning separate; calibration belongs to the output location,
+  not to an individual cartridge or level.
+
+Usage:
+`python app/tools/calibration/profile.py new content/scenes/scene_demo_wall/calibration/current.yaml --profile-id studio_wall --label "Studio Wall" --mesh 2x2 --scene-id scene_demo_wall`
+`python app/tools/calibration/profile.py validate content/scenes/scene_demo_wall/calibration/current.yaml`

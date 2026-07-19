@@ -136,6 +136,9 @@ static func shared_path(relative_path: String) -> String:
 static func load_tab_menu_script():
 	return _load_normalized_script("controls/tab_menu.gd", false)
 
+static func load_calibration_warp_script():
+	return _load_normalized_script("calibration/final_output_warp.gd", false)
+
 static func load_adapter_script(adapter_name: String):
 	var relative_path = adapter_name
 	if not relative_path.ends_with(".gd"):

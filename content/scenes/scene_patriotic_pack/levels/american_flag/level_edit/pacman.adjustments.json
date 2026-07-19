@@ -1,0 +1,29 @@
+{
+  "cartridge_id": "pacman",
+  "scene_level": "levels/american_flag",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "background_view": "final",
+    "grid_scale": 1.4,
+    "invert_main_solid": false,
+    "players": 1,
+    "reference": true,
+    "reference_opacity": 0.7,
+    "show_debug_grid": false,
+    "skin": "pac_triot",
+    "tunnel_fill": 0.3,
+    "wall_width": 1
+  },
+  "ui_state": {
+    "collapsed_groups": {
+      "Actions": true,
+      "Collision": true,
+      "Gameplay": true,
+      "General": true,
+      "Preview": true,
+      "Secondary": false
+    },
+    "version": "tab_menu_layout_v1"
+  },
+  "version": "1.0.0"
+}

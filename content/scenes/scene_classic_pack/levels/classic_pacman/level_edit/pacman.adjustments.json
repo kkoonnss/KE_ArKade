@@ -4,15 +4,24 @@
   "schema": "cartridge_level_edit_adjustments",
   "settings": {
     "background_view": "final",
-    "grid_scale": 1,
+    "grid_scale": 1.25,
     "invert_main_solid": false,
     "players": 1,
     "reference": false,
     "reference_opacity": 0.15,
     "show_debug_grid": false,
     "skin": "classic",
-    "tunnel_fill": 0,
+    "tunnel_fill": 1,
     "wall_width": 1
+  },
+  "ui_state": {
+    "collapsed_groups": {
+      "Actions": false,
+      "Gameplay": false,
+      "Preview": true,
+      "Secondary": true
+    },
+    "version": "tab_menu_layout_v1"
   },
   "version": "1.0.0"
 }

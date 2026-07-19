@@ -14,5 +14,16 @@
     "tunnel_fill": 1,
     "wall_width": 1
   },
+  "ui_state": {
+    "collapsed_groups": {
+      "Actions": true,
+      "Collision": true,
+      "Gameplay": true,
+      "General": true,
+      "Preview": true,
+      "Secondary": true
+    },
+    "version": "tab_menu_layout_v1"
+  },
   "version": "1.0.0"
 }

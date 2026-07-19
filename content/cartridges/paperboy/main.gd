@@ -61,9 +61,12 @@ var tab_menu_shell: BoxContainer
 var tab_cover_frame: PanelContainer
 var tab_cover_rect: TextureRect
 var splash_timer = 1.6
+var background_view = "final"
 var show_reference = false
 var reference_opacity = 0.18
 var show_debug_grid = true
+var photo_texture: Texture2D = null
+var semantic_texture: Texture2D = null
 var reference_texture: Texture2D = null
 var grid_scale = 1.0
 var traffic_density = 1.0
@@ -170,6 +173,7 @@ func _setup_shared_tab_menu():
         return
     tab_menu = tab_script.new()
     add_child(tab_menu)
+    tab_menu.register_knob_enum("background_view", "Background View", background_view, ["final", "photo", "semantic"], "Preview")
     tab_menu.register_knob_bool("reference", "Background Layer", show_reference, "Preview")
     tab_menu.register_knob_float("reference_opacity", "Background Opacity", reference_opacity, 0.0, 0.6, 0.05, "Preview")
     tab_menu.register_knob_bool("show_debug_grid", "Scale Grid Overlay", show_debug_grid, "Preview")
@@ -200,6 +204,7 @@ func _setup_shared_tab_menu():
 func _apply_shared_menu_settings():
     if tab_menu == null:
         return
+    background_view = str(tab_menu.get_knob_value("background_view"))
     show_reference = bool(tab_menu.get_knob_value("reference"))
     reference_opacity = float(tab_menu.get_knob_value("reference_opacity"))
     show_debug_grid = bool(tab_menu.get_knob_value("show_debug_grid"))
@@ -535,6 +540,13 @@ func _build_fallback_grid():
 
 func _load_reference():
     reference_texture = null
+    photo_texture = null
+    semantic_texture = null
+    var sem_path = level_dir.path_join("semantic_map.png")
+    if FileAccess.file_exists(sem_path):
+        var sem_img = Image.load_from_file(sem_path)
+        if sem_img:
+            semantic_texture = ImageTexture.create_from_image(sem_img)
     var yaml_path = level_dir.path_join("level.yaml")
     if not FileAccess.file_exists(yaml_path):
         return
@@ -549,7 +561,8 @@ func _load_reference():
             if FileAccess.file_exists(path):
                 var img = Image.load_from_file(path)
                 if img:
-                    reference_texture = ImageTexture.create_from_image(img)
+                    photo_texture = ImageTexture.create_from_image(img)
+    reference_texture = photo_texture
 
 func _update_scale():
     var vp = get_viewport_rect().size
@@ -740,23 +753,10 @@ func _seed_barriers(count: int, classes: Array, hit_points: int):
 func _input(event):
     if _shared_menu_open():
         return
-	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
-		if get("game_state") != null and get("game_state") != "playing":
-			if has_method("_reset_game"): call("_reset_game")
-			elif has_method("reset_game"): call("reset_game")
-		elif get("state") != null and get("state") != "playing":
-			if has_method("_reset_game"): call("_reset_game")
-			elif has_method("reset_game"): call("reset_game")
-
-	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
-		if get("game_state") != null and get("game_state") != "playing":
-			if has_method("_reset_game"): call("_reset_game")
-			elif has_method("reset_game"): call("reset_game")
-		elif get("state") != null and get("state") != "playing":
-			if has_method("_reset_game"): call("_reset_game")
-			elif has_method("reset_game"): call("reset_game")
-
-	if event is InputEventKey and event.pressed and not event.echo:
+    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
+        if game_state != "playing":
+            _reset_game()
+    if event is InputEventKey and event.pressed and not event.echo:
         if event.keycode == KEY_F1:
             show_reference = not show_reference
         elif event.keycode == KEY_ENTER and game_state != "playing":
@@ -1458,7 +1458,14 @@ func _draw():
     if blanked:
         return
     draw_set_transform(offset, 0.0, Vector2(scale_factor, scale_factor))
-    if show_reference and reference_texture:
+    var preview_texture: Texture2D = null
+    if background_view == "photo":
+        preview_texture = photo_texture
+    elif background_view == "semantic":
+        preview_texture = semantic_texture
+    if preview_texture:
+        draw_texture_rect(preview_texture, Rect2(0, 0, map_w, map_h), false)
+    if show_reference and reference_texture and background_view != "photo":
         draw_texture_rect(reference_texture, Rect2(0, 0, map_w, map_h), false, Color(1, 1, 1, reference_opacity))
     _draw_arena_frame()
     if game_id == "centipede":

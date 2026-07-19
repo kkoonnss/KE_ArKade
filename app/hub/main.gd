@@ -59,6 +59,7 @@ var _window_state_timer: float = 0.0
 var _windowed_position: Vector2i = Vector2i(80, 80)
 var _windowed_size: Vector2i = Vector2i(1280, 720)
 var _window_fullscreen: bool = false
+var _window_screen_index: int = -1
 
 var _resize_timer: Timer
 
@@ -451,9 +452,11 @@ func _load_window_state():
 	_windowed_position = Vector2i(int(parsed.get("x", _windowed_position.x)), int(parsed.get("y", _windowed_position.y)))
 	_windowed_size = Vector2i(max(320, int(parsed.get("w", _windowed_size.x))), max(240, int(parsed.get("h", _windowed_size.y))))
 	_window_fullscreen = bool(parsed.get("fullscreen", false))
+	_window_screen_index = int(parsed.get("screen", _window_screen_index))
 	_apply_window_state()
 
 func _apply_window_state():
+	_apply_window_screen()
 	if _window_fullscreen:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 		return
@@ -470,6 +473,7 @@ func _capture_window_state():
 	if size.x >= 320 and size.y >= 240:
 		_windowed_size = size
 		_windowed_position = pos
+	_window_screen_index = DisplayServer.window_get_current_screen()
 
 func _poll_window_state(delta: float):
 	_window_state_timer += delta
@@ -488,6 +492,7 @@ func _save_window_state():
 	var data = {
 		"version": 1,
 		"fullscreen": _window_fullscreen,
+		"screen": _window_screen_index,
 		"x": _windowed_position.x,
 		"y": _windowed_position.y,
 		"w": _windowed_size.x,
@@ -510,12 +515,43 @@ func _toggle_fullscreen():
 func _fullscreen_button_text() -> String:
 	return "Exit Full Screen (F11)" if _is_fullscreen_mode() else "Full Screen (F11)"
 
+func _screen_button_text() -> String:
+	var count = DisplayServer.get_screen_count()
+	if count <= 1:
+		return "Output Screen: 1"
+	var idx = _window_screen_index
+	if idx < 0 or idx >= count:
+		idx = DisplayServer.window_get_current_screen()
+	return "Output Screen: %d / %d" % [idx + 1, count]
+
+func _cycle_output_screen():
+	var count = DisplayServer.get_screen_count()
+	if count <= 1:
+		_window_screen_index = 0
+	else:
+		var idx = _window_screen_index
+		if idx < 0 or idx >= count:
+			idx = DisplayServer.window_get_current_screen()
+		_window_screen_index = (idx + 1) % count
+	_apply_window_screen()
+	_save_window_state()
+
 func _game_window_launch_args() -> String:
 	_capture_window_state()
 	_save_window_state()
 	if _window_fullscreen:
-		return "--fullscreen"
-	return "--windowed --position %d,%d --resolution %dx%d" % [_windowed_position.x, _windowed_position.y, _windowed_size.x, _windowed_size.y]
+		return _game_window_screen_arg() + "--fullscreen"
+	return _game_window_screen_arg() + "--windowed --position %d,%d --resolution %dx%d" % [_windowed_position.x, _windowed_position.y, _windowed_size.x, _windowed_size.y]
+
+func _apply_window_screen():
+	var count = DisplayServer.get_screen_count()
+	if _window_screen_index >= 0 and _window_screen_index < count:
+		DisplayServer.window_set_current_screen(_window_screen_index)
+
+func _game_window_screen_arg() -> String:
+	if _window_screen_index >= 0 and _window_screen_index < DisplayServer.get_screen_count():
+		return "--screen %d " % _window_screen_index
+	return ""
 
 func _handle_hub_cancel():
 	if games_overlay != null and is_instance_valid(games_overlay):
@@ -627,6 +663,18 @@ func display_settings():
 	)
 	vbox.add_child(fullscreen_btn)
 	focus_buttons.append(fullscreen_btn)
+
+	var screen_btn = Button.new()
+	screen_btn.text = _screen_button_text()
+	screen_btn.custom_minimum_size = Vector2(400, 64)
+	screen_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	style_grid_button(screen_btn)
+	screen_btn.pressed.connect(func():
+		_cycle_output_screen()
+		screen_btn.text = _screen_button_text()
+	)
+	vbox.add_child(screen_btn)
+	focus_buttons.append(screen_btn)
 
 	var log_btn = Button.new()
 	log_btn.text = "View Log"
@@ -919,6 +967,7 @@ func _on_level_selected(level_name: String):
 
 func display_games_lightbox():
 	_reset_menu_focus()
+	_game_title_focus_buttons.clear()
 	_clear_games_overlay()
 		
 	games_overlay = ColorRect.new()
@@ -1017,6 +1066,7 @@ func display_games_lightbox():
 				var card_btn = _create_game_card(g, fav_grid, g.absolute_index)
 				fav_buttons.append(card_btn)
 				focus_buttons.append(card_btn)
+				_game_title_focus_buttons.append(card_btn)
 			_wire_vertical_focus_neighbors(fav_buttons, fav_grid.columns)
 
 		if others.size() > 0:
@@ -1040,6 +1090,7 @@ func display_games_lightbox():
 				var card_btn = _create_game_card(g, other_grid, g.absolute_index)
 				other_buttons.append(card_btn)
 				focus_buttons.append(card_btn)
+				_game_title_focus_buttons.append(card_btn)
 			_wire_vertical_focus_neighbors(other_buttons, other_grid.columns)
 	else:
 		var grid = GridContainer.new()
@@ -1051,6 +1102,7 @@ func display_games_lightbox():
 		for g in games:
 			var card_btn = _create_game_card(g, grid, g.absolute_index)
 			focus_buttons.append(card_btn)
+			_game_title_focus_buttons.append(card_btn)
 		_wire_vertical_focus_neighbors(focus_buttons, grid.columns)
 
 	_chain_horizontal_focus(focus_buttons, columns)
@@ -1274,7 +1326,21 @@ func _show_placeholder_overlay(title_text: String, content_text: String = "Comin
 	_focus_current_menu()
 
 func _on_launch_calibration_tool():
-	_show_placeholder_overlay("Calibration", "Calibration tool coming soon.")
+	current_tab = "calibrate"
+	viewing_levels = false
+	_reset_menu_focus()
+	_clear_games_overlay()
+	var base_dir = ProjectSettings.globalize_path("res://").path_join("../..").simplify_path()
+	var calibrate = load("res://calibrate_screen.tscn").instantiate()
+	if calibrate.has_method("setup"):
+		calibrate.setup(base_dir, current_scene, selected_level_name)
+	if calibrate.has_signal("closed"):
+		calibrate.closed.connect(func():
+			display_scenes()
+		)
+	add_child(calibrate)
+	calibrate.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	calibrate.grab_focus()
 
 func _on_test_pattern_pressed():
 	_show_placeholder_overlay("Test Pattern", "Test patterns coming soon.")
@@ -1285,7 +1351,7 @@ func _on_log_pressed():
 	_show_placeholder_overlay("IPC Log", log_text)
 
 func _on_help_pressed():
-	var help_text = "Nav buttons:\n\n- Scenes: Pick a background scene.\n- Levels: Pick a level variation.\n- Games: Pick a game to launch.\n- Design: Edit palettes/thumbnails.\n- Calibrate: Coming soon.\n- Log: View IPC logs."
+	var help_text = "Nav buttons:\n\n- Scenes: Pick a background scene.\n- Levels: Pick a level variation.\n- Games: Pick a game to launch.\n- Design: Edit palettes/thumbnails.\n- Calibrate: Adjust output mapping.\n- Log: View IPC logs."
 	_show_placeholder_overlay("Help", help_text)
 
 func parse_simple_yaml(path: String) -> Dictionary:
@@ -1491,8 +1557,10 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 		_launch_game(cart_id)
 	)
 	
+	var title_hovered := false
+	var cover_hovered := false
 	var _update_title = func():
-		if skins.size() > 1 and (title_btn.has_focus() or title_btn.is_hovered() or cover_btn.is_hovered()):
+		if skins.size() > 1 and (title_btn.has_focus() or title_hovered or cover_hovered):
 			title_btn.text = "< (X)  " + display_title + "  (Y) >"
 		else:
 			title_btn.text = display_title
@@ -1500,10 +1568,22 @@ func _create_game_card(cart: Dictionary, parent_grid: Container, display_index: 
 	if skins.size() > 1:
 		title_btn.focus_entered.connect(_update_title)
 		title_btn.focus_exited.connect(_update_title)
-		title_btn.mouse_entered.connect(_update_title)
-		title_btn.mouse_exited.connect(_update_title)
-		cover_btn.mouse_entered.connect(_update_title)
-		cover_btn.mouse_exited.connect(_update_title)
+		title_btn.mouse_entered.connect(func():
+			title_hovered = true
+			_update_title.call()
+		)
+		title_btn.mouse_exited.connect(func():
+			title_hovered = false
+			_update_title.call()
+		)
+		cover_btn.mouse_entered.connect(func():
+			cover_hovered = true
+			_update_title.call()
+		)
+		cover_btn.mouse_exited.connect(func():
+			cover_hovered = false
+			_update_title.call()
+		)
 		
 		title_btn.gui_input.connect(func(event):
 			var step = 0
@@ -1943,7 +2023,10 @@ func _cycle_skin(cart_id: String, skin_names: Array, step: int):
 	idx = (idx + step + skin_names.size()) % skin_names.size()
 	selected_skins[cart_id] = str(skin_names[idx])
 	save_favorites()
-	_refresh_card_views()
+	if games_overlay != null and is_instance_valid(games_overlay):
+		display_games_lightbox()
+	else:
+		_refresh_card_views()
 
 	var btn = _find_game_title_button(cart_id)
 	if btn != null:

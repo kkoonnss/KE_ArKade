@@ -31,6 +31,7 @@ var _joy_scroll_is_repeating: bool = false
 var level_name: String = "GAME"
 var cartridge_id: String = "unknown"
 var level_dir: String = ""
+var current_skin: String = ""
 
 var registered_knobs = []
 var registered_actions = []
@@ -42,6 +43,26 @@ func setup(c_id: String, l_dir: String, title: String):
 	cartridge_id = c_id
 	level_dir = l_dir
 	level_name = title
+	
+	var settings_path = ProjectSettings.globalize_path("user://settings.json")
+	if FileAccess.file_exists(settings_path):
+		var file = FileAccess.open(settings_path, FileAccess.READ)
+		if file:
+			var text = file.get_as_text()
+			var json = JSON.new()
+			if json.parse(text) == OK:
+				var data = json.get_data()
+				if typeof(data) == TYPE_DICTIONARY and data.has("selected_skins"):
+					var skins = data["selected_skins"]
+					if typeof(skins) == TYPE_DICTIONARY and skins.has(cartridge_id):
+						current_skin = str(skins[cartridge_id])
+						
+	if current_skin != "":
+		var display_title = current_skin
+		if display_title.begins_with("Classic "):
+			display_title = display_title.trim_prefix("Classic ")
+		level_name = display_title
+
 	_build_ui()
 	_load_settings()
 	_save_settings()
@@ -126,6 +147,12 @@ func _build_ui():
 	splash_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	splash_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	var splash_path = ProjectSettings.globalize_path("res://").path_join("splash.png")
+	if current_skin != "":
+		var skin_suffix = current_skin.to_lower().replace(" ", "_")
+		var custom_splash = ProjectSettings.globalize_path("res://").path_join("content/cartridges").path_join(cartridge_id).path_join("thumbnail_" + skin_suffix + ".png")
+		if FileAccess.file_exists(custom_splash):
+			splash_path = custom_splash
+
 	if FileAccess.file_exists(splash_path):
 		var img = Image.load_from_file(splash_path)
 		if img:
@@ -384,6 +411,18 @@ func _handle_menu_input(event) -> bool:
 				_set_overlay_mode("")
 				emit_signal("action_triggered", "start")
 				return true
+			if event.button_index == JOY_BUTTON_A:
+				var focused = get_viewport().gui_get_focus_owner()
+				if focused != null and is_instance_valid(focused):
+					if focused is OptionButton:
+						focused.show_popup()
+						return true
+					elif focused is CheckBox:
+						focused.button_pressed = not focused.button_pressed
+						return true
+					elif focused is Button:
+						focused.emit_signal("pressed")
+						return true
 		return false
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode in [KEY_UP, KEY_W]:
@@ -517,16 +556,38 @@ func _menu_line(items: Array, index: int) -> String:
 	var prefix = "> " if index == selected_menu_index else "  "
 	return prefix + str(items[index].get("label", ""))
 
+func _get_canonical_group(group_name: String) -> String:
+	var g = group_name.strip_edges()
+	if g == "Map" or g == "Level":
+		return "Secondary"
+	return g
+
 func _rebuild_settings_controls():
 	if settings_box == null:
 		return
 	settings_controls.clear()
 	for child in settings_box.get_children():
 		child.queue_free()
+	
+	# Canonical sort of knobs by group
+	var sorted_knobs = registered_knobs.duplicate()
+	sorted_knobs.sort_custom(func(a, b):
+		var g_a = _get_canonical_group(str(a.get("group", "General")))
+		var g_b = _get_canonical_group(str(b.get("group", "General")))
+		var order = ["Preview", "Secondary", "Collision", "Gameplay", "Actions", "General"]
+		var idx_a = order.find(g_a)
+		if idx_a == -1: idx_a = order.size()
+		var idx_b = order.find(g_b)
+		if idx_b == -1: idx_b = order.size()
+		if idx_a != idx_b:
+			return idx_a < idx_b
+		return registered_knobs.find(a) < registered_knobs.find(b)
+	)
+	
 	var current_group = ""
 	var current_body: VBoxContainer = null
-	for knob in registered_knobs:
-		var group = str(knob.get("group", "General"))
+	for knob in sorted_knobs:
+		var group = _get_canonical_group(str(knob.get("group", "General")))
 		if group != current_group:
 			current_group = group
 			var section = _build_group_section(group)
@@ -534,9 +595,16 @@ func _rebuild_settings_controls():
 			current_body = section.get_meta("body")
 		if current_body != null:
 			current_body.add_child(_build_knob_row(knob))
-	settings_box.add_child(_action_button("Start Game", "start"))
-	settings_box.add_child(_action_button("Back to Hub", "exit_hub"))
-	settings_box.add_child(_action_button("Back", "back"))
+			
+	# Render built-in settings buttons inside the Actions group
+	var actions_section = _build_group_section("Actions")
+	settings_box.add_child(actions_section)
+	var actions_body = actions_section.get_meta("body")
+	if actions_body != null:
+		actions_body.add_child(_action_button("Start Game", "start"))
+		actions_body.add_child(_action_button("Back to Hub", "exit_hub"))
+		actions_body.add_child(_action_button("Back", "back"))
+		
 	_chain_settings_focus()
 
 func _build_group_section(text: String) -> Control:
@@ -564,6 +632,7 @@ func _build_group_section(text: String) -> Control:
 		collapsed_groups[text] = next_state
 		body.visible = not next_state
 		header.text = _group_header_text(text)
+		_save_settings()
 		_chain_settings_focus()
 	)
 	# Left = collapse, Right = expand via controller / keyboard
@@ -584,12 +653,14 @@ func _build_group_section(text: String) -> Control:
 			collapsed_groups[text] = true
 			body.visible = false
 			header.text = _group_header_text(text)
+			_save_settings()
 			_chain_settings_focus()
 			header.accept_event()
 		elif want_expand and bool(collapsed_groups.get(text, false)):
 			collapsed_groups[text] = false
 			body.visible = true
 			header.text = _group_header_text(text)
+			_save_settings()
 			_chain_settings_focus()
 			header.accept_event()
 	)
@@ -614,6 +685,10 @@ func _build_knob_row(knob: Dictionary) -> Control:
 	top.add_child(label)
 	
 	if knob.id == "tunnel_fill":
+		var ind_box = HBoxContainer.new()
+		ind_box.add_theme_constant_override("separation", 6)
+		ind_box.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		
 		var indicator = Control.new()
 		indicator.custom_minimum_size = Vector2(28, 28)
 		indicator.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -625,7 +700,30 @@ func _build_knob_row(knob: Dictionary) -> Control:
 			indicator.draw_line(center + Vector2(-offset, -offset), center + Vector2(offset, offset), Color.WHITE, 2.0)
 			indicator.draw_line(center + Vector2(offset, -offset), center + Vector2(-offset, offset), Color.WHITE, 2.0)
 		)
-		top.add_child(indicator)
+		ind_box.add_child(indicator)
+		
+		var ind_label = Label.new()
+		ind_label.text = "Display"
+		ind_label.add_theme_color_override("font_color", Color(0.16, 0.55, 1.0))
+		ind_label.add_theme_font_size_override("font_size", 18)
+		ind_box.add_child(ind_label)
+		
+		ind_box.gui_input.connect(func(event):
+			if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+				if settings_controls.has("tunnel_fill"):
+					var c = settings_controls["tunnel_fill"]["control"]
+					if c and is_instance_valid(c):
+						c.grab_focus()
+				var ev = InputEventKey.new()
+				ev.keycode = KEY_X
+				ev.pressed = true
+				Input.parse_input_event(ev)
+				var ev2 = InputEventKey.new()
+				ev2.keycode = KEY_X
+				ev2.pressed = false
+				Input.parse_input_event(ev2)
+		)
+		top.add_child(ind_box)
 		
 	var spacer = Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -821,22 +919,26 @@ func _scene_level_subtitle() -> String:
 	var res_str = _get_level_bg_res(level_dir)
 	var suffix = ""
 	if res_str != "":
-		suffix = "   RES: " + res_str
+		suffix = "\nRES: " + res_str
 	return "Scene: %s   Level: %s%s" % [scene_name, level_label, suffix]
 
 func _get_level_bg_res(dir: String) -> String:
 	if dir == "": return ""
+	var clean_dir = dir.simplify_path()
+	if clean_dir.is_relative_path():
+		clean_dir = ProjectSettings.globalize_path("res://").path_join(clean_dir).simplify_path()
+	
 	var img_names = ["background.png", "background.jpg", "background.jpeg", "thumbnail.png", "thumbnail.jpg", "thumbnail.jpeg", "reference.png", "reference.jpg", "reference.jpeg", "photo.png", "photo.jpg", "photo.jpeg"]
 	for n in img_names:
-		var p = dir.path_join(n)
+		var p = clean_dir.path_join(n).simplify_path()
 		if FileAccess.file_exists(p):
 			var img = Image.load_from_file(p)
 			if img: return str(img.get_width()) + "x" + str(img.get_height())
 
-	var parent = dir.get_base_dir()
+	var parent = clean_dir.get_base_dir()
 	var scene_dir = parent.get_base_dir() if parent.get_file().to_lower() == "levels" else parent
 	for n in img_names:
-		var p = scene_dir.path_join(n)
+		var p = scene_dir.path_join(n).simplify_path()
 		if FileAccess.file_exists(p):
 			var img = Image.load_from_file(p)
 			if img: return str(img.get_width()) + "x" + str(img.get_height())
@@ -907,6 +1009,9 @@ func _level_adjustments_path() -> String:
 func _load_settings():
 	var path = _level_adjustments_path()
 	if not FileAccess.file_exists(path):
+		# Default all groups to collapsed since we have no settings file at all!
+		for g in ["Preview", "Secondary", "Collision", "Gameplay", "Actions", "General"]:
+			collapsed_groups[g] = true
 		return
 	var file = FileAccess.open(path, FileAccess.READ)
 	if not file:
@@ -914,6 +1019,19 @@ func _load_settings():
 	var parsed = JSON.parse_string(file.get_as_text())
 	if typeof(parsed) != TYPE_DICTIONARY:
 		return
+	
+	# Load collapsed groups state from ui_state
+	if not parsed.has("ui_state"):
+		# Default all groups to collapsed on first open
+		for g in ["Preview", "Secondary", "Collision", "Gameplay", "Actions", "General"]:
+			collapsed_groups[g] = true
+	else:
+		var ui_state = parsed.get("ui_state", {})
+		if typeof(ui_state) == TYPE_DICTIONARY:
+			var col_grps = ui_state.get("collapsed_groups", null)
+			if typeof(col_grps) == TYPE_DICTIONARY:
+				collapsed_groups = col_grps
+				
 	var settings = parsed.get("settings", {})
 	if typeof(settings) != TYPE_DICTIONARY:
 		var levels = parsed.get("levels", {})
@@ -957,6 +1075,13 @@ func _save_settings():
 	for k in registered_knobs:
 		settings[k.id] = k.value
 	registry["settings"] = settings
+	
+	# Save collapsed groups state
+	registry["ui_state"] = {
+		"version": "tab_menu_layout_v1",
+		"collapsed_groups": collapsed_groups
+	}
+	
 	var file = FileAccess.open(path, FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(registry, "  "))

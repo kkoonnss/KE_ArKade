@@ -449,7 +449,7 @@ func _seed_barriers(count: int, classes: Array, hit_points: int):
         barriers.append({"cell": _pos_to_cell(p), "pos": p, "hp": hit_points})
 
 func _input(event):
-	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
+	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A]:
 		if get("game_state") != null and get("game_state") != "playing":
 			if has_method("_reset_game"): call("_reset_game")
 			elif has_method("reset_game"): call("reset_game")
@@ -457,7 +457,7 @@ func _input(event):
 			if has_method("_reset_game"): call("_reset_game")
 			elif has_method("reset_game"): call("reset_game")
 
-	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
+	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A]:
 		if get("game_state") != null and get("game_state") != "playing":
 			if has_method("_reset_game"): call("_reset_game")
 			elif has_method("reset_game"): call("reset_game")
@@ -468,6 +468,7 @@ func _input(event):
 	if event is InputEventKey and event.pressed and not event.echo:
         if event.keycode == KEY_TAB:
             tab_menu.visible = not tab_menu.visible
+            paused = tab_menu.visible
         elif event.keycode == KEY_F1:
             show_reference = not show_reference
         elif event.keycode == KEY_ENTER and game_state != "playing":

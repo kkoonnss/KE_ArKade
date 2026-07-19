@@ -3,17 +3,23 @@
   "scene_level": "scene_demo_wall/rock_wall_260629_173035",
   "schema": "cartridge_level_edit_adjustments",
   "settings": {
-    "bounds_clamp": true,
-    "density": 0.9,
-    "game_scale": 1,
+    "background_view": "photo",
     "grid_resolution": 1,
-    "invert": false,
     "players": 4,
-    "reference": true,
     "reference_opacity": 0.3,
     "show_grid": false,
-    "smooth": false,
     "vertical_gaps": 0.6
+  },
+  "ui_state": {
+    "collapsed_groups": {
+      "Actions": true,
+      "Collision": true,
+      "Gameplay": true,
+      "General": true,
+      "Preview": false,
+      "Secondary": false
+    },
+    "version": "tab_menu_layout_v1"
   },
   "version": "1.0.0"
 }

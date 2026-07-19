@@ -3,14 +3,23 @@
   "scene_level": "scene_demo_wall/gallery_260627_010703",
   "schema": "cartridge_level_edit_adjustments",
   "settings": {
-    "block_size": 0.9,
-    "bounds_clamp": false,
-    "density": 0.8,
-    "invert": false,
-    "reference": true,
-    "reference_opacity": 0.4,
-    "smooth": false,
-    "vertical_gaps": 0.35
+    "background_view": "semantic",
+    "grid_resolution": 1.1,
+    "players": 1,
+    "reference_opacity": 0.45,
+    "show_grid": true,
+    "vertical_gaps": 0.95
+  },
+  "ui_state": {
+    "collapsed_groups": {
+      "Actions": false,
+      "Collision": true,
+      "Gameplay": false,
+      "General": true,
+      "Preview": false,
+      "Secondary": false
+    },
+    "version": "tab_menu_layout_v1"
   },
   "version": "1.0.0"
 }

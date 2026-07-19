@@ -1,0 +1,42 @@
+{
+  "cartridge_id": "paperboy",
+  "scene_level": "scene_demo_wall/levels",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "background_view": "final",
+    "bounds_clamp": true,
+    "delivery_side_bias": 0,
+    "density": 1,
+    "grid_scale": 1,
+    "house_setback": 1,
+    "house_spacing": 1,
+    "invert": false,
+    "island_count": 5,
+    "island_depth": 1,
+    "island_width": 1,
+    "lane_spacing": 1,
+    "lane_width": 1,
+    "pb_global_scale": 1,
+    "reference": false,
+    "reference_opacity": 0.18,
+    "safe_zone_padding": 1,
+    "shoulder_width": 1,
+    "show_debug_grid": true,
+    "subscriber_ratio": 0.68,
+    "target_spread": 1,
+    "throw_distance": 1,
+    "yard_depth": 1
+  },
+  "ui_state": {
+    "collapsed_groups": {
+      "Actions": true,
+      "Collision": true,
+      "Gameplay": true,
+      "General": true,
+      "Preview": true,
+      "Secondary": true
+    },
+    "version": "tab_menu_layout_v1"
+  },
+  "version": "1.0.0"
+}

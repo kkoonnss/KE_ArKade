@@ -14,7 +14,7 @@
     "players": 2,
     "reference": true,
     "reference_opacity": 0.3,
-    "secondary_photo_mix": 0.18,
+    "secondary_photo_mix": 0.15,
     "show_debug_grid": true,
     "show_outline": true,
     "spawn_clearance": 0,

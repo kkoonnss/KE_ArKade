@@ -1,0 +1,33 @@
+{
+  "cartridge_id": "donkey_kong",
+  "scene_level": "scene_demo_wall/levels",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "add_platforms": true,
+    "allow_broken_ladders": true,
+    "background_view": "final",
+    "barrel_ladder_chance": 0.5,
+    "bounds_clamp": true,
+    "climb_tolerance": 1,
+    "extra_fill": 0.5,
+    "fire_enemy_count": 1,
+    "gravity": 1,
+    "hazard_leniency": 1,
+    "jump_height": 1,
+    "ladder_density": 1,
+    "level_scale": 1,
+    "level_seed": -1,
+    "map_bridge_type": "platforms",
+    "max_ladder_length": 300,
+    "platform_snap": 1,
+    "platform_spacing": 0.15,
+    "platform_trim": 0.08,
+    "reference": false,
+    "reference_opacity": 0.15,
+    "semantic_collisions": true,
+    "semantic_threshold": 0.5,
+    "show_debug_grid": false,
+    "slope_angle": 1
+  },
+  "version": "1.0.0"
+}

@@ -3,6 +3,7 @@
   "scene_level": "levels/classic_paperboy",
   "schema": "cartridge_level_edit_adjustments",
   "settings": {
+    "background_view": "final",
     "bounds_clamp": true,
     "delivery_side_bias": 0.1,
     "density": 1.7,
@@ -25,6 +26,17 @@
     "target_spread": 1.05,
     "throw_distance": 1.6,
     "yard_depth": 1.8
+  },
+  "ui_state": {
+    "collapsed_groups": {
+      "Actions": true,
+      "Collision": true,
+      "Gameplay": true,
+      "General": true,
+      "Preview": true,
+      "Secondary": true
+    },
+    "version": "tab_menu_layout_v1"
   },
   "version": "1.0.0"
 }

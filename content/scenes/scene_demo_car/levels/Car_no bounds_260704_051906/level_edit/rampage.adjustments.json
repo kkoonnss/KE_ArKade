@@ -1,0 +1,14 @@
+{
+  "cartridge_id": "rampage",
+  "scene_level": "scene_demo_car/Car_no bounds_260704_051906",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "background_view": "final",
+    "grid_resolution": 1,
+    "players": 1,
+    "reference_opacity": 0.16,
+    "show_grid": false,
+    "vertical_gaps": 0.35
+  },
+  "version": "1.0.0"
+}

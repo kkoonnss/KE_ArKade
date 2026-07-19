@@ -1,0 +1,28 @@
+{
+  "cartridge_id": "asteroids",
+  "scene_level": "levels/classic_gta",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "background_view": "final",
+    "block_region": false,
+    "bounds_clamp": true,
+    "collision_mode": "grid",
+    "grid_expand_px": 0,
+    "grid_resolution": 1,
+    "invert_grid": false,
+    "invert_lanes": false,
+    "lane_expand_px": 0,
+    "organic_boundary": false,
+    "organic_rounding_px": 18,
+    "reference": false,
+    "reference_opacity": 0,
+    "secondary_fill_alpha": 0,
+    "secondary_lane_alpha": 0,
+    "secondary_outline_px": 1,
+    "secondary_photo_mix": 0,
+    "secondary_strength": 0.2,
+    "ship_scale": 1,
+    "show_debug_grid": false
+  },
+  "version": "1.0.0"
+}

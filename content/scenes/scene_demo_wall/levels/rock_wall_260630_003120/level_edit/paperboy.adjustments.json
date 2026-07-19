@@ -1,0 +1,30 @@
+{
+  "cartridge_id": "paperboy",
+  "scene_level": "scene_demo_wall/rock_wall_260630_003120",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "bounds_clamp": true,
+    "delivery_side_bias": 0,
+    "density": 1,
+    "grid_scale": 1,
+    "house_setback": 1,
+    "house_spacing": 1,
+    "invert": false,
+    "island_count": 5,
+    "island_depth": 1,
+    "island_width": 1,
+    "lane_spacing": 1,
+    "lane_width": 1,
+    "pb_global_scale": 1,
+    "reference": true,
+    "reference_opacity": 0.18,
+    "safe_zone_padding": 1,
+    "shoulder_width": 1,
+    "show_debug_grid": true,
+    "subscriber_ratio": 0.68,
+    "target_spread": 1,
+    "throw_distance": 1,
+    "yard_depth": 1
+  },
+  "version": "1.0.0"
+}

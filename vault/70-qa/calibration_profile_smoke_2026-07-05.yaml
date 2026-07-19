@@ -1,0 +1,163 @@
+{
+  "schema": "ke_arkade.calibration_profile",
+  "version": "1.1.0",
+  "profile_id": "studio_wall",
+  "label": "Studio Wall",
+  "scope": "preset",
+  "scene_id": "scene_demo_wall",
+  "created_at": "2026-07-05T08:27:40Z",
+  "updated_at": "2026-07-05T08:27:40Z",
+  "source_space": {
+    "name": "canonical_frame",
+    "width": 1920,
+    "height": 1080
+  },
+  "output": {
+    "display_index": 0,
+    "native_resolution": [
+      1920,
+      1080
+    ]
+  },
+  "workflow": {
+    "apply_to": "final_output_frame",
+    "operator_view": "same_window",
+    "notes": "Use 2x2 for global corner pinning; increase mesh_size for local wall refinement."
+  },
+  "warp": {
+    "mode": "mesh",
+    "mesh_size": [
+      3,
+      3
+    ],
+    "interpolation": "piecewise_bilinear",
+    "pins": [
+      {
+        "id": "r0_c0",
+        "row": 0,
+        "col": 0,
+        "source": [
+          0.0,
+          0.0
+        ],
+        "target": [
+          0.0,
+          0.0
+        ],
+        "role": "corner"
+      },
+      {
+        "id": "r0_c1",
+        "row": 0,
+        "col": 1,
+        "source": [
+          959.5,
+          0.0
+        ],
+        "target": [
+          959.5,
+          0.0
+        ],
+        "role": "edge"
+      },
+      {
+        "id": "r0_c2",
+        "row": 0,
+        "col": 2,
+        "source": [
+          1919.0,
+          0.0
+        ],
+        "target": [
+          1919.0,
+          0.0
+        ],
+        "role": "corner"
+      },
+      {
+        "id": "r1_c0",
+        "row": 1,
+        "col": 0,
+        "source": [
+          0.0,
+          539.5
+        ],
+        "target": [
+          0.0,
+          539.5
+        ],
+        "role": "edge"
+      },
+      {
+        "id": "r1_c1",
+        "row": 1,
+        "col": 1,
+        "source": [
+          959.5,
+          539.5
+        ],
+        "target": [
+          959.5,
+          539.5
+        ],
+        "role": "interior"
+      },
+      {
+        "id": "r1_c2",
+        "row": 1,
+        "col": 2,
+        "source": [
+          1919.0,
+          539.5
+        ],
+        "target": [
+          1919.0,
+          539.5
+        ],
+        "role": "edge"
+      },
+      {
+        "id": "r2_c0",
+        "row": 2,
+        "col": 0,
+        "source": [
+          0.0,
+          1079.0
+        ],
+        "target": [
+          0.0,
+          1079.0
+        ],
+        "role": "corner"
+      },
+      {
+        "id": "r2_c1",
+        "row": 2,
+        "col": 1,
+        "source": [
+          959.5,
+          1079.0
+        ],
+        "target": [
+          959.5,
+          1079.0
+        ],
+        "role": "edge"
+      },
+      {
+        "id": "r2_c2",
+        "row": 2,
+        "col": 2,
+        "source": [
+          1919.0,
+          1079.0
+        ],
+        "target": [
+          1919.0,
+          1079.0
+        ],
+        "role": "corner"
+      }
+    ]
+  }
+}

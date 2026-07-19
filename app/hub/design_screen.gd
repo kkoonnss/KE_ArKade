@@ -6,6 +6,7 @@ var SharedLoader
 @onready var bg_rect = $Layout/Workspace/CanvasMargin/CanvasContainer/BgRect
 @onready var semantic_rect = $Layout/Workspace/CanvasMargin/CanvasContainer/SemanticRect
 @onready var virtual_cursor = $Layout/Workspace/CanvasMargin/CanvasContainer/VirtualCursor
+@onready var sidebar_scroll = $Layout/Sidebar/Margin/Scroll
 @onready var sidebar_vbox = $Layout/Sidebar/Margin/Scroll/VBox
 @onready var file_dialog = $FileDialog
 @onready var canvas_container = $Layout/Workspace/CanvasMargin/CanvasContainer
@@ -31,6 +32,7 @@ var chk_auto_derive: CheckBox = null
 var cursor_pos: Vector2 = Vector2()
 var brush_mode_active: bool = false
 var btn_brush: Button = null
+var current_tool: String = "brush"
 
 var cv_params = {
     "preset": "Balanced Semantic",
@@ -410,7 +412,7 @@ func _build_ui():
     _add_slider("Feature Density", "feature_density", 0, 100, sec_derive)
     _add_slider("Hazard Density", "hazard_density", 0, 100, sec_derive)
 
-    var sec_preprocess = _create_section("Postprocess", sidebar_vbox, true)
+    var sec_preprocess = _create_section("Post-Process", sidebar_vbox, true)
     
     var chk_invert = CheckBox.new()
     chk_invert.text = "Invert Roles (Walls<->Paths)"
@@ -422,6 +424,34 @@ func _build_ui():
     )
     sec_preprocess.add_child(chk_invert)
     
+    var lbl_preset_swap = Label.new()
+    lbl_preset_swap.text = "Color Swap Presets"
+    lbl_preset_swap.add_theme_font_size_override("font_size", 12)
+    lbl_preset_swap.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+    sec_preprocess.add_child(lbl_preset_swap)
+    
+    var opt_swap = OptionButton.new()
+    opt_swap.add_item("Select Preset...")
+    opt_swap.add_item("Invert Walls & Paths")
+    opt_swap.add_item("Hazardous Roads")
+    opt_swap.add_item("Platforms to Walls")
+    opt_swap.add_item("Hazards to Walls")
+    opt_swap.add_item("Clear All Hazards")
+    opt_swap.add_item("Clear Pickups & Tracking")
+    _style_option_button(opt_swap)
+    sec_preprocess.add_child(opt_swap)
+    
+    var btn_apply_swap = Button.new()
+    btn_apply_swap.text = "Apply Color Swap"
+    btn_apply_swap.pressed.connect(func():
+        var idx = opt_swap.selected
+        if idx > 0:
+            _save_undo_buffer()
+            _apply_preset_color_swap(idx)
+    )
+    _style_button(btn_apply_swap)
+    sec_preprocess.add_child(btn_apply_swap)
+    
     var sec_brush = _create_section("Brush & Palette", sidebar_vbox, true)
     
     btn_brush = Button.new()
@@ -431,6 +461,25 @@ func _build_ui():
     )
     _style_button(btn_brush)
     sec_brush.add_child(btn_brush)
+    
+    var lbl_tool = Label.new()
+    lbl_tool.text = "Drawing Tool"
+    lbl_tool.add_theme_font_size_override("font_size", 12)
+    lbl_tool.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+    sec_brush.add_child(lbl_tool)
+    
+    var opt_tool = OptionButton.new()
+    opt_tool.add_item("Paint Brush")
+    opt_tool.add_item("Bucket Fill (Contiguous)")
+    opt_tool.add_item("Global Color Swap")
+    opt_tool.item_selected.connect(func(idx):
+        match idx:
+            0: current_tool = "brush"
+            1: current_tool = "bucket_fill"
+            2: current_tool = "global_swap"
+    )
+    _style_option_button(opt_tool)
+    sec_brush.add_child(opt_tool)
     
     var sld_sem_opacity = HSlider.new()
     sld_sem_opacity.min_value = 0.0
@@ -565,6 +614,8 @@ func _rebuild_focus():
     
     for i in range(focusable.size()):
         var node = focusable[i]
+        if not node.focus_entered.is_connected(_snap_to_focused_control):
+            node.focus_entered.connect(_snap_to_focused_control)
         
         var in_grid = (node.get_parent() is GridContainer)
         
@@ -636,6 +687,18 @@ func _gather_focusable(node: Node, arr: Array):
     for child in node.get_children():
         _gather_focusable(child, arr)
 
+func _snap_to_focused_control():
+    var control = get_viewport().gui_get_focus_owner()
+    if control and is_instance_valid(sidebar_scroll) and sidebar_scroll.is_ancestor_of(control):
+        var offset = (control.global_position.y + control.size.y / 2.0) - (sidebar_scroll.global_position.y + sidebar_scroll.size.y / 2.0)
+        var target_scroll = sidebar_scroll.scroll_vertical + offset
+        var max_scroll = sidebar_scroll.get_v_scroll_bar().max_value - sidebar_scroll.size.y
+        target_scroll = clamp(target_scroll, 0, max_scroll)
+        if target_scroll < 0: target_scroll = 0
+        
+        var tween = sidebar_scroll.create_tween()
+        tween.tween_property(sidebar_scroll, "scroll_vertical", target_scroll, 0.15).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
 func _select_class(cid: int):
     current_class_id = cid
     for i in range(class_buttons.size()):
@@ -688,7 +751,8 @@ func _update_opacity():
         bg_rect.modulate.a = opacity
     else:
         bg_rect.modulate.a = 0.0
-    semantic_rect.modulate.a = semantic_opacity
+    semantic_rect.modulate.a = 1.0
+    semantic_rect.self_modulate.a = semantic_opacity
 
 func _get_downsampled_resolution() -> Vector2i:
     if original_image_width == 0 or original_image_height == 0:
@@ -760,6 +824,7 @@ func _apply_resolution_setting():
         
     _update_opacity()
     _update_resolution_label()
+    _sync_preview_overlay_to_semantic_image()
     _mark_preview_source_dirty(true)
 
 func _trigger_derive():
@@ -850,6 +915,10 @@ func _finish_derive_process(apply_result: bool):
         _trigger_derive()
 
 func _input(event):
+    if not brush_mode_active and not preview_active and preview_tab_menu == null:
+        if event.is_action_pressed("ui_up") or event.is_action_pressed("ui_down") or event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right") or event.is_action_pressed("ui_focus_next") or event.is_action_pressed("ui_focus_prev"):
+            call_deferred("_snap_to_focused_control")
+
     # Preview toggle / game-cycle is always reachable, controller + keyboard,
     # even while the secondary-controls overlay is open (it forwards to
     # tab_menu itself for its own grammar).
@@ -897,7 +966,7 @@ func _input(event):
 
     if event is InputEventMouseMotion:
         cursor_pos = semantic_rect.get_local_mouse_position()
-        if is_painting:
+        if is_painting and current_tool == "brush":
             _paint_at_cursor()
     elif event is InputEventMouseButton:
         if event.button_index == MOUSE_BUTTON_LEFT:
@@ -905,19 +974,30 @@ func _input(event):
                 # Only start painting if the click originated on the canvas
                 if semantic_rect.get_global_rect().has_point(event.global_position):
                     _save_undo_buffer()
-                    is_painting = true
                     cursor_pos = semantic_rect.get_local_mouse_position()
-                    _paint_at_cursor()
+                    if current_tool == "brush":
+                        is_painting = true
+                        _paint_at_cursor()
+                    elif current_tool == "bucket_fill":
+                        _bucket_fill_at_cursor()
+                    elif current_tool == "global_swap":
+                        _global_swap_at_cursor()
             else:
                 is_painting = false
 
     elif brush_mode_active and event is InputEventJoypadButton:
         if event.button_index == JOY_BUTTON_A:
-            if event.pressed and not is_painting:
+            if event.pressed:
                 _save_undo_buffer()
-            is_painting = event.pressed
-            if is_painting:
-                _paint_at_cursor()
+                if current_tool == "brush":
+                    is_painting = true
+                    _paint_at_cursor()
+                elif current_tool == "bucket_fill":
+                    _bucket_fill_at_cursor()
+                elif current_tool == "global_swap":
+                    _global_swap_at_cursor()
+            else:
+                is_painting = false
         elif event.button_index == JOY_BUTTON_X and event.pressed:
             _swap_undo_buffer()
         elif event.button_index == JOY_BUTTON_B:
@@ -932,17 +1012,27 @@ func _input(event):
             _select_class((current_class_id - 1 + Palette.CLASSES.size()) % Palette.CLASSES.size())
         elif event.button_index == JOY_BUTTON_RIGHT_SHOULDER and event.pressed:
             brush_size = min(100, brush_size + 5)
-            virtual_cursor.size = Vector2(brush_size*2, brush_size*2)
+            if current_tool == "brush":
+                virtual_cursor.size = Vector2(brush_size*2, brush_size*2)
         elif event.button_index == JOY_BUTTON_LEFT_SHOULDER and event.pressed:
             brush_size = max(1, brush_size - 5)
-            virtual_cursor.size = Vector2(brush_size*2, brush_size*2)
+            if current_tool == "brush":
+                virtual_cursor.size = Vector2(brush_size*2, brush_size*2)
         elif event.button_index == JOY_BUTTON_BACK and event.pressed: # Select
             show_bg = !show_bg
             _update_opacity()
 
 func _process(delta):
     _poll_derive_process()
+    if preview_active:
+        _sync_preview_overlay_to_semantic_image()
     
+    if not brush_mode_active and not preview_active and preview_tab_menu == null and not is_deriving:
+        var rs_y = Input.get_joy_axis(0, JOY_AXIS_RIGHT_Y)
+        if abs(rs_y) > 0.15:
+            if sidebar_scroll:
+                sidebar_scroll.scroll_vertical += int(rs_y * 1200.0 * delta)
+
     if brush_mode_active and not preview_active and preview_tab_menu == null and not is_deriving:
         var ls_x = Input.get_joy_axis(0, JOY_AXIS_LEFT_X)
         var ls_y = Input.get_joy_axis(0, JOY_AXIS_LEFT_Y)
@@ -955,7 +1045,8 @@ func _process(delta):
             var current_f = float(brush_size)
             current_f += -rs_y * 100.0 * delta
             brush_size = clamp(int(round(current_f)), 1, 100)
-            virtual_cursor.size = Vector2(brush_size*2, brush_size*2)
+            if current_tool == "brush":
+                virtual_cursor.size = Vector2(brush_size*2, brush_size*2)
 
     # While the preview overlay owns the screen, freeze paint input entirely.
     if preview_tab_menu != null:
@@ -965,11 +1056,17 @@ func _process(delta):
 
     if virtual_cursor:
         virtual_cursor.visible = not preview_active and brush_mode_active
-        virtual_cursor.position = cursor_pos - Vector2(brush_size, brush_size)
+        if current_tool == "brush":
+            virtual_cursor.position = cursor_pos - Vector2(brush_size, brush_size)
+            virtual_cursor.size = Vector2(brush_size * 2, brush_size * 2)
+        else:
+            var fixed_size = 12.0
+            virtual_cursor.position = cursor_pos - Vector2(fixed_size / 2.0, fixed_size / 2.0)
+            virtual_cursor.size = Vector2(fixed_size, fixed_size)
         virtual_cursor.color = Color(Palette.CLASSES[current_class_id]["authoring_color"])
         virtual_cursor.color.a = 0.5
 
-    if not preview_active and ((brush_mode_active and Input.is_joy_button_pressed(0, JOY_BUTTON_A)) or is_painting):
+    if not preview_active and ((brush_mode_active and Input.is_joy_button_pressed(0, JOY_BUTTON_A) and current_tool == "brush") or (is_painting and current_tool == "brush")):
         _paint_at_cursor()
 
     # Clamp cursor
@@ -1021,6 +1118,185 @@ func _paint_at_cursor():
     if painted:
         semantic_texture.update(semantic_image)
         _mark_preview_source_dirty(false)
+
+func _bucket_fill_at_cursor():
+    if not semantic_image or not semantic_rect.texture: return
+    
+    # Map control coordinates to image coordinates considering KEEP_ASPECT_CENTERED
+    var img_w = semantic_image.get_width()
+    var img_h = semantic_image.get_height()
+    var rect_w = semantic_rect.size.x
+    var rect_h = semantic_rect.size.y
+    
+    var scale: float
+    var offset_x = 0.0
+    var offset_y = 0.0
+    
+    if img_w / float(img_h) > rect_w / float(rect_h):
+        var new_h = rect_w * (img_h / float(img_w))
+        offset_y = (rect_h - new_h) / 2.0
+        scale = img_w / float(rect_w)
+    else:
+        var new_w = rect_h * (img_w / float(img_h))
+        offset_x = (rect_w - new_w) / 2.0
+        scale = img_h / float(rect_h)
+        
+    var ix = int((cursor_pos.x - offset_x) * scale)
+    var iy = int((cursor_pos.y - offset_y) * scale)
+    
+    if ix < 0 or ix >= img_w or iy < 0 or iy >= img_h:
+        return
+        
+    var clicked_color = semantic_image.get_pixel(ix, iy)
+    var replacement_color = Color(Palette.CLASSES[current_class_id]["authoring_color"])
+    replacement_color.a = 1.0 # Force full opacity
+    
+    _flood_fill(ix, iy, clicked_color, replacement_color)
+    semantic_texture.update(semantic_image)
+    _mark_preview_source_dirty(false)
+
+func _global_swap_at_cursor():
+    if not semantic_image or not semantic_rect.texture: return
+    
+    # Map control coordinates to image coordinates considering KEEP_ASPECT_CENTERED
+    var img_w = semantic_image.get_width()
+    var img_h = semantic_image.get_height()
+    var rect_w = semantic_rect.size.x
+    var rect_h = semantic_rect.size.y
+    
+    var scale: float
+    var offset_x = 0.0
+    var offset_y = 0.0
+    
+    if img_w / float(img_h) > rect_w / float(rect_h):
+        var new_h = rect_w * (img_h / float(img_w))
+        offset_y = (rect_h - new_h) / 2.0
+        scale = img_w / float(rect_w)
+    else:
+        var new_w = rect_h * (img_w / float(img_h))
+        offset_x = (rect_w - new_w) / 2.0
+        scale = img_h / float(rect_h)
+        
+    var ix = int((cursor_pos.x - offset_x) * scale)
+    var iy = int((cursor_pos.y - offset_y) * scale)
+    
+    if ix < 0 or ix >= img_w or iy < 0 or iy >= img_h:
+        return
+        
+    var clicked_color = semantic_image.get_pixel(ix, iy)
+    var replacement_color = Color(Palette.CLASSES[current_class_id]["authoring_color"])
+    replacement_color.a = 1.0 # Force full opacity
+    
+    _global_color_swap(clicked_color, replacement_color)
+    semantic_texture.update(semantic_image)
+    _mark_preview_source_dirty(false)
+
+func _flood_fill(start_x: int, start_y: int, target_color: Color, replacement_color: Color):
+    var target_hex = target_color.to_html(false)
+    var replacement_hex = replacement_color.to_html(false)
+    if target_hex == replacement_hex:
+        return
+    var w = semantic_image.get_width()
+    var h = semantic_image.get_height()
+    
+    var queue = [Vector2i(start_x, start_y)]
+    var visited = {}
+    visited[start_y * w + start_x] = true
+    
+    semantic_image.set_pixel(start_x, start_y, replacement_color)
+    
+    var head = 0
+    while head < queue.size():
+        var p = queue[head]
+        head += 1
+        
+        # Check 4 neighbors
+        var neighbors = [
+            Vector2i(p.x + 1, p.y),
+            Vector2i(p.x - 1, p.y),
+            Vector2i(p.x, p.y + 1),
+            Vector2i(p.x, p.y - 1)
+        ]
+        
+        for n in neighbors:
+            if n.x >= 0 and n.x < w and n.y >= 0 and n.y < h:
+                var key = n.y * w + n.x
+                if not visited.has(key):
+                    visited[key] = true
+                    var c = semantic_image.get_pixel(n.x, n.y)
+                    if c.to_html(false) == target_hex:
+                        semantic_image.set_pixel(n.x, n.y, replacement_color)
+                        queue.append(n)
+
+func _global_color_swap(target_color: Color, replacement_color: Color):
+    var target_hex = target_color.to_html(false)
+    var replacement_hex = replacement_color.to_html(false)
+    if target_hex == replacement_hex:
+        return
+    var w = semantic_image.get_width()
+    var h = semantic_image.get_height()
+    
+    for y in range(h):
+        for x in range(w):
+            var c = semantic_image.get_pixel(x, y)
+            if c.to_html(false) == target_hex:
+                semantic_image.set_pixel(x, y, replacement_color)
+
+func _apply_preset_color_swap(preset_idx: int):
+    if not semantic_image: return
+    
+    var col_solid = Color(Palette.CLASSES[1]["authoring_color"])
+    var col_path = Color(Palette.CLASSES[2]["authoring_color"])
+    var col_platform = Color(Palette.CLASSES[3]["authoring_color"])
+    var col_hazard = Color(Palette.CLASSES[4]["authoring_color"])
+    var col_pickup = Color(Palette.CLASSES[7]["authoring_color"])
+    var col_tracking = Color(Palette.CLASSES[8]["authoring_color"])
+    
+    var hex_solid = col_solid.to_html(false)
+    var hex_path = col_path.to_html(false)
+    var hex_platform = col_platform.to_html(false)
+    var hex_hazard = col_hazard.to_html(false)
+    var hex_pickup = col_pickup.to_html(false)
+    var hex_tracking = col_tracking.to_html(false)
+    
+    var w = semantic_image.get_width()
+    var h = semantic_image.get_height()
+    
+    for y in range(h):
+        for x in range(w):
+            var c = semantic_image.get_pixel(x, y)
+            var hex = c.to_html(false)
+            
+            match preset_idx:
+                1: # Invert Walls & Paths
+                    if hex == hex_solid:
+                        semantic_image.set_pixel(x, y, col_path)
+                    elif hex == hex_path:
+                        semantic_image.set_pixel(x, y, col_solid)
+                2: # Hazardous Roads
+                    if hex == hex_path:
+                        semantic_image.set_pixel(x, y, col_hazard)
+                    elif hex == hex_hazard:
+                        semantic_image.set_pixel(x, y, col_path)
+                3: # Platforms to Walls
+                    if hex == hex_platform:
+                        semantic_image.set_pixel(x, y, col_solid)
+                    elif hex == hex_solid:
+                        semantic_image.set_pixel(x, y, col_platform)
+                4: # Hazards to Walls
+                    if hex == hex_hazard:
+                        semantic_image.set_pixel(x, y, col_solid)
+                    elif hex == hex_solid:
+                        semantic_image.set_pixel(x, y, col_hazard)
+                5: # Clear All Hazards
+                    if hex == hex_hazard:
+                        semantic_image.set_pixel(x, y, col_path)
+                6: # Clear Pickups & Tracking
+                    if hex == hex_pickup or hex == hex_tracking:
+                        semantic_image.set_pixel(x, y, col_path)
+                        
+    semantic_texture.update(semantic_image)
+    _mark_preview_source_dirty(true)
 
 func _save_undo_buffer():
     if semantic_image:
@@ -1201,13 +1477,36 @@ func _preset_display_label(preset: String) -> String:
 func _build_preview_overlay():
     preview_overlay = Control.new()
     preview_overlay.name = "PreviewOverlay"
-    preview_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     preview_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
     preview_overlay.visible = false
+    preview_overlay.clip_contents = true
     preview_overlay.draw.connect(_draw_preview_overlay)
-    canvas_container.add_child(preview_overlay)
-    # Keep it above the paint layer and virtual cursor.
-    canvas_container.move_child(preview_overlay, canvas_container.get_child_count() - 1)
+    semantic_rect.add_child(preview_overlay)
+    _sync_preview_overlay_to_semantic_image()
+
+func _semantic_image_draw_rect() -> Rect2:
+    if semantic_rect == null:
+        return Rect2()
+    var rect_size = semantic_rect.size
+    if semantic_image == null:
+        return Rect2(Vector2.ZERO, rect_size)
+    var img_w = float(semantic_image.get_width())
+    var img_h = float(semantic_image.get_height())
+    if img_w <= 0.0 or img_h <= 0.0 or rect_size.x <= 0.0 or rect_size.y <= 0.0:
+        return Rect2(Vector2.ZERO, rect_size)
+    var scale = min(rect_size.x / img_w, rect_size.y / img_h)
+    var draw_size = Vector2(img_w, img_h) * scale
+    var draw_pos = (rect_size - draw_size) * 0.5
+    return Rect2(draw_pos, draw_size)
+
+func _sync_preview_overlay_to_semantic_image() -> void:
+    if preview_overlay == null or semantic_rect == null:
+        return
+    var image_rect = _semantic_image_draw_rect()
+    if preview_overlay.position != image_rect.position or preview_overlay.size != image_rect.size:
+        preview_overlay.position = image_rect.position
+        preview_overlay.size = image_rect.size
+        preview_overlay.queue_redraw()
 
 func _toggle_preview():
     if preview_active:
@@ -1222,6 +1521,7 @@ func _start_preview():
             main_node._show_placeholder("PREVIEW UNAVAILABLE\nLoad or paint a map first.")
         return
     preview_active = true
+    _sync_preview_overlay_to_semantic_image()
     preview_overlay.visible = true
     _set_preview_toggle_label("Disable Preview")
     _refresh_preview()
@@ -1281,7 +1581,7 @@ func _derive_preview_scratch_dir() -> String:
     DirAccess.make_dir_recursive_absolute(scratch_abs)
     _clear_preview_derived_dir(scratch_abs)
     var map_path = scratch_abs.path_join("semantic_map.png")
-    _save_semantic_map(map_path)
+    var preview_semantic_ok = _write_preview_semantic_map(map_path)
 
     var level_yaml_path = scratch_abs.path_join("level.yaml")
     var yml_str = "schema: level\nversion: 1.0.0\nlevel_id: preview_scratch\nscene_id: scene_preview_scratch\nname: Preview Scratch\nsemantic_map: semantic_map.png\nstatus: draft\n"
@@ -1289,22 +1589,14 @@ func _derive_preview_scratch_dir() -> String:
     f.store_string(yml_str)
     f.close()
 
-    var py_script = _get_repo_root().path_join("app/tools/arena_compiler/compile_level.py")
-    var cmds = [
-        {"cmd": "python", "args": [py_script, scratch_abs]},
-        {"cmd": "py", "args": ["-3", py_script, scratch_abs]},
-        {"cmd": "python3", "args": [py_script, scratch_abs]}
-    ]
     var exit_code = -1
     var full_output = ""
-    for c in cmds:
-        var output = []
-        exit_code = OS.execute(c.cmd, c.args, output, true)
-        var out_str = output[0] if output.size() > 0 else ""
-        full_output = out_str
-        if out_str.find("is not recognized") != -1 or out_str.find("not found") != -1:
-            continue
-        break
+    if preview_semantic_ok:
+        var compile_result = _run_compile_level(scratch_abs)
+        exit_code = compile_result.get("exit_code", -1)
+        full_output = compile_result.get("output", "")
+    else:
+        full_output = "Preview semantic map could not be generated."
 
     var grid_path = scratch_abs.path_join("derived").path_join("grid.json")
     preview_last_derive_ok = (exit_code == 0) and FileAccess.file_exists(grid_path)
@@ -1325,6 +1617,65 @@ func _clear_preview_derived_dir(scratch_abs: String) -> void:
     for file_name in dir.get_files():
         DirAccess.remove_absolute(derived_dir.path_join(file_name))
 
+func _write_preview_semantic_map(map_path: String) -> bool:
+    if _semantic_image_has_content():
+        _save_semantic_map(map_path)
+        return FileAccess.file_exists(map_path)
+    if current_image_path == "":
+        return false
+    return _derive_semantic_map_from_background(map_path)
+
+func _semantic_image_has_content() -> bool:
+    if semantic_image == null:
+        return false
+    var width = semantic_image.get_width()
+    var height = semantic_image.get_height()
+    if width <= 0 or height <= 0:
+        return false
+    for y in range(height):
+        for x in range(width):
+            var px = semantic_image.get_pixel(x, y)
+            if px.a > 0.0 and (px.r > 0.0 or px.g > 0.0 or px.b > 0.0):
+                return true
+    return false
+
+func _derive_semantic_map_from_background(output_map_path: String) -> bool:
+    var preview_args = cv_params.duplicate(true)
+    preview_args["source_img_path"] = current_image_path
+    preview_args["output_map_path"] = output_map_path
+    preview_args["invert_output"] = invert_source
+    var args_path = ProjectSettings.globalize_path("user://temp_preview_author_args.json")
+    var file = FileAccess.open(args_path, FileAccess.WRITE)
+    if file == null:
+        return false
+    file.store_string(JSON.stringify(preview_args))
+    file.close()
+    var py_script = _get_repo_root().path_join("app/tools/level_authoring/author_backend.py")
+    var result = _run_python_script(py_script, [args_path])
+    return result.get("exit_code", -1) == 0 and FileAccess.file_exists(output_map_path)
+
+func _run_compile_level(level_dir: String) -> Dictionary:
+    var py_script = _get_repo_root().path_join("app/tools/arena_compiler/compile_level.py")
+    return _run_python_script(py_script, [level_dir])
+
+func _run_python_script(script_path: String, script_args: Array) -> Dictionary:
+    var cmds = [
+        {"cmd": "python", "args": PackedStringArray([script_path] + script_args)},
+        {"cmd": "py", "args": PackedStringArray(["-3", script_path] + script_args)},
+        {"cmd": "python3", "args": PackedStringArray([script_path] + script_args)}
+    ]
+    var exit_code = -1
+    var full_output = ""
+    for c in cmds:
+        var output = []
+        exit_code = OS.execute(c.cmd, c.args, output, true)
+        var out_str = output[0] if output.size() > 0 else ""
+        full_output = out_str
+        if out_str.find("is not recognized") != -1 or out_str.find("not found") != -1:
+            continue
+        break
+    return {"exit_code": exit_code, "output": full_output}
+
 func _mark_preview_source_dirty(refresh_now: bool) -> void:
     current_level_dir = ""
     preview_dirty_since_derive = true
@@ -1335,6 +1686,7 @@ func _mark_preview_source_dirty(refresh_now: bool) -> void:
 func _refresh_preview():
     if not preview_active or not semantic_image:
         return
+    _sync_preview_overlay_to_semantic_image()
     preview_level_dir = _resolve_preview_level_dir()
     var game = PREVIEW_GAMES[preview_game_idx]
 
@@ -1423,6 +1775,7 @@ func _on_preview_controls_closed():
 func _draw_preview_overlay():
     if not preview_active or preview_layout.is_empty():
         return
+    _sync_preview_overlay_to_semantic_image()
     var xform = _preview_map_to_canvas_xform()
     var neon = Color(0.0, 0.9, 1.0, 0.85)      # cyan-led neon, design-system accent
     var neon_dim = Color(0.0, 0.9, 1.0, 0.35)
@@ -1443,34 +1796,26 @@ func _draw_preview_overlay():
     elif preview_layout.has("well_polygon") or preview_layout.has("cells"):
         _draw_well_fill_layout(xform, neon, neon_dim, accent)
 
-## Maps semantic-map pixel space to the SemanticRect's on-screen rect,
-## honoring the same KEEP_ASPECT_CENTERED math used by _paint_at_cursor().
+## Maps semantic-map pixel space into PreviewOverlay local space. The overlay
+## itself is locked to SemanticRect's fitted texture rect and clipped there.
 func _preview_map_to_canvas_xform() -> Dictionary:
     var img_w = 1920.0
     var img_h = 1080.0
     if semantic_image:
         img_w = semantic_image.get_width()
         img_h = semantic_image.get_height()
-    var rect_w = semantic_rect.size.x
-    var rect_h = semantic_rect.size.y
-
-    var scale: float
-    var offset_x = 0.0
-    var offset_y = 0.0
-    if img_w / max(img_h, 0.001) > rect_w / max(rect_h, 0.001):
-        var new_h = rect_w * (img_h / img_w)
-        offset_y = (rect_h - new_h) / 2.0
-        scale = rect_w / img_w
-    else:
-        var new_w = rect_h * (img_w / img_h)
-        offset_x = (rect_w - new_w) / 2.0
-        scale = rect_h / img_h
-
-    var origin = semantic_rect.position
-    return {"scale": scale, "offset": Vector2(offset_x, offset_y) + origin}
+    var overlay_size = preview_overlay.size if preview_overlay else _semantic_image_draw_rect().size
+    var scale = Vector2(
+        overlay_size.x / max(img_w, 0.001),
+        overlay_size.y / max(img_h, 0.001)
+    )
+    return {"scale": scale, "offset": Vector2.ZERO}
 
 func _p2c(xform: Dictionary, pt: Vector2) -> Vector2:
-    return pt * xform["scale"] + xform["offset"]
+    var scale = xform["scale"]
+    if scale is Vector2:
+        return pt * scale + xform["offset"]
+    return pt * float(scale) + xform["offset"]
 
 func _draw_maze_layout(xform: Dictionary, neon: Color, neon_dim: Color, accent: Color):
     var nodes_by_id = {}
@@ -1550,7 +1895,9 @@ func _draw_well_fill_layout(xform: Dictionary, neon: Color, neon_dim: Color, acc
     if b is Rect2:
         _draw_rect_outline(xform, b, neon, 2.5)
     var cell_size = float(preview_layout.get("cell_size", 16.0))
-    var half = Vector2(cell_size, cell_size) * xform["scale"] * 0.5
+    var xform_scale = xform["scale"]
+    var cell_scale = xform_scale if xform_scale is Vector2 else Vector2(float(xform_scale), float(xform_scale))
+    var half = Vector2(cell_size, cell_size) * cell_scale * 0.5
     for cell in preview_layout.get("cells", []):
         var center = _p2c(xform, Vector2(cell.x, cell.y))
         preview_overlay.draw_rect(Rect2(center - half, half * 2.0), neon_dim, true)

@@ -3,7 +3,7 @@
   "scene_level": "scene_demo_wall/Car-CRV_260630_235222",
   "schema": "cartridge_level_edit_adjustments",
   "settings": {
-    "background_view": "collision",
+    "background_view": "photo",
     "block_region": false,
     "bounds_clamp": true,
     "collision_mode": "grid",

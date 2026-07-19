@@ -521,7 +521,7 @@ func _setup_tempest():
 func _input(event):
     if overlay_mode != "" and _handle_menu_input(event):
         return
-	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
+	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A]:
 		if get("game_state") != null and get("game_state") != "playing":
 			if has_method("_reset_game"): call("_reset_game")
 			elif has_method("reset_game"): call("reset_game")
@@ -529,7 +529,7 @@ func _input(event):
 			if has_method("_reset_game"): call("_reset_game")
 			elif has_method("reset_game"): call("reset_game")
 
-	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
+	if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A]:
 		if get("game_state") != null and get("game_state") != "playing":
 			if has_method("_reset_game"): call("_reset_game")
 			elif has_method("reset_game"): call("reset_game")

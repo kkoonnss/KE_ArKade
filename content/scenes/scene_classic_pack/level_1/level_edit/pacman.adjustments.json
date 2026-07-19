@@ -1,0 +1,29 @@
+{
+  "cartridge_id": "pacman",
+  "scene_level": "scene_classic_pack/level_1",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "background_view": "final",
+    "grid_scale": 1,
+    "invert_main_solid": false,
+    "players": 1,
+    "reference": false,
+    "reference_opacity": 0.15,
+    "show_debug_grid": false,
+    "skin": "classic",
+    "tunnel_fill": 0,
+    "wall_width": 1
+  },
+  "ui_state": {
+    "collapsed_groups": {
+      "Actions": true,
+      "Collision": true,
+      "Gameplay": true,
+      "General": true,
+      "Preview": true,
+      "Secondary": true
+    },
+    "version": "tab_menu_layout_v1"
+  },
+  "version": "1.0.0"
+}

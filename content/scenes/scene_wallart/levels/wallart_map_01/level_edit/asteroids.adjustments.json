@@ -1,0 +1,28 @@
+{
+  "cartridge_id": "asteroids",
+  "scene_level": "scene_demo_wall/scene_wallart",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "background_view": "final",
+    "block_region": false,
+    "bounds_clamp": true,
+    "collision_mode": "grid",
+    "grid_expand_px": 0,
+    "grid_resolution": 2.75,
+    "invert_grid": false,
+    "invert_lanes": false,
+    "lane_expand_px": 0,
+    "organic_boundary": false,
+    "organic_rounding_px": 18,
+    "reference": true,
+    "reference_opacity": 0.3,
+    "secondary_fill_alpha": 0.32,
+    "secondary_lane_alpha": 0.24,
+    "secondary_outline_px": 2,
+    "secondary_photo_mix": 0.18,
+    "secondary_strength": 0.75,
+    "ship_scale": 0.35,
+    "show_debug_grid": true
+  },
+  "version": "1.0.0"
+}

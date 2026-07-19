@@ -7,6 +7,22 @@ __pycache__/
 out_*
 app/tools/tests/out_*
 
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Packaged builds and local virtual environments
+/build/
+/dist/
+/exports/
+/venv/
+/.venv/
+
 # ============================================================
 # RECOVERY / SCRATCH (added 2026-06-30 governance pass)
 # Origin: Jun 28-30 hub corruption left ~100 throwaway scripts and
@@ -16,6 +32,7 @@ app/tools/tests/out_*
 
 # Throwaway recovery/patch scripts at repo root
 /fix_*.py
+/fix_git_index.bat
 /patch_*.py
 /recover*.py
 /stitch*.py
@@ -39,6 +56,11 @@ app/tools/tests/out_*
 /find_main_gd_history.py
 /debug_runner.py
 /remove_duplicate.py
+/find_enter.py
+/joypad_patch*.py
+/make_flag.py
+/move_preprocess.py
+/remove_bad_blocks.py
 
 # Recovery artifacts at repo root
 /recovered_*.gd
@@ -47,6 +69,10 @@ app/tools/tests/out_*
 /main_dump*.txt
 /extracted_funcs.txt
 /recover_log.txt
+/temp*.gd
+/tetris_diff.txt
+/tetris_reconstructed.gd
+/broken_commit.diff
 
 # Diagnostic output dumps at repo root
 /*_err.txt
@@ -65,6 +91,10 @@ app/tools/tests/out_*
 /syntax_out*.txt
 /pg_err*.txt
 /pg_out*.txt
+/err*.txt
+/out*.txt
+/run_log.txt
+*.log
 
 # Test scaffolds at repo root (scratch, not production)
 /test_*.gd
@@ -74,6 +104,7 @@ app/tools/tests/out_*
 /test_crash.gd
 /test_pacman_gal.gd
 /test_dk_classic.gd
+/test.gd
 
 # IDE and OS junk
 .vs/
@@ -82,6 +113,9 @@ app/tools/tests/out_*
 Thumbs.db
 .DS_Store
 
+# Obsidian application state is machine-specific; vault content remains tracked
+.obsidian/
+
 # Scratch directory (intentional throwaway space — see 03_RECOVERY_PROTOCOL.md §4.5)
 scratch/
 
@@ -89,9 +123,13 @@ scratch/
 app/hub/main_backup.gd
 app/hub/main_dump*.txt
 app/hub/test_hub.gd
+app/hub/test_*.gd
 
 # Orchestrator sandbox test artifacts
 vault/35-locks/_test_write.tmp
+
+# Backup execution output is local state, not project source
+_Briefs/governance/scripts/logs/
 
 # Large binaries that are installed locally, not committed
 # (see 07_GIT_GOVERNANCE.md §5 and README.md install steps)

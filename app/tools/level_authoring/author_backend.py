@@ -108,6 +108,9 @@ class AuthoringBackend:
         if source_img_bgr is None:
             raise ValueError(f"Could not read image: {source_img_path}")
             
+        if self.args.get("invert_output", False):
+            source_img_bgr = cv2.bitwise_not(source_img_bgr)
+            
         h, w = source_img_bgr.shape[:2]
         map_bgr = np.zeros((h, w, 3), dtype=np.uint8)
 

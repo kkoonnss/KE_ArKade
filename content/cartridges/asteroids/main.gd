@@ -494,7 +494,7 @@ func _menu_line(index: int) -> String:
     return prefix + str(menu_items[index].get("label", ""))
 
 func _handle_menu_input(event) -> bool:
-    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
+    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A]:
         if get("game_state") != null and get("game_state") != "playing":
             if has_method("_reset_game"): call("_reset_game")
             elif has_method("reset_game"): call("reset_game")
@@ -537,7 +537,7 @@ func _handle_menu_input(event) -> bool:
         if event.button_index == JOY_BUTTON_DPAD_RIGHT:
             _menu_adjust(1)
             return true
-        if event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
+        if event.button_index in [JOY_BUTTON_A]:
             _menu_accept()
             return true
         if event.button_index in [JOY_BUTTON_B, JOY_BUTTON_BACK]:
@@ -1004,7 +1004,7 @@ func _setup_tank():
 func _input(event):
     if _shared_menu_open():
         return
-    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
+    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A]:
         if get("game_state") != null and get("game_state") != "playing":
             if has_method("_reset_game"): call("_reset_game")
             elif has_method("reset_game"): call("reset_game")
@@ -1012,7 +1012,7 @@ func _input(event):
             if has_method("_reset_game"): call("_reset_game")
             elif has_method("reset_game"): call("reset_game")
 
-    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A, JOY_BUTTON_START]:
+    if event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_A]:
         if get("game_state") != null and get("game_state") != "playing":
             if has_method("_reset_game"): call("_reset_game")
             elif has_method("reset_game"): call("reset_game")

@@ -1,0 +1,31 @@
+filters:
+  and:
+    - 'file.inFolder("20-architecture") || file.inFolder("40-agent-runs") || file.inFolder("30-tasks")'
+    - 'file.hasTag("backup") || file.hasTag("github") || file.hasTag("restore")'
+
+formulas:
+  status_label: 'if(backup_status, backup_status, if(status, status, ""))'
+  verified: 'if(last_verified, date(last_verified).format("YYYY-MM-DD"), "")'
+
+properties:
+  project:
+    displayName: "Project"
+  formula.status_label:
+    displayName: "Status"
+  repo_url:
+    displayName: "Repo"
+  formula.verified:
+    displayName: "Verified"
+  file.mtime:
+    displayName: "Updated"
+
+views:
+  - type: table
+    name: "Backup Notes"
+    order:
+      - file.name
+      - project
+      - formula.status_label
+      - repo_url
+      - formula.verified
+      - file.mtime
