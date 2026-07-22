@@ -1,0 +1,25 @@
+{
+  "cartridge_id": "frogger",
+  "scene_level": "levels/american_flag",
+  "schema": "cartridge_level_edit_adjustments",
+  "settings": {
+    "bounds_clamp": true,
+    "density": 1,
+    "grid_scale": 1,
+    "invert": false,
+    "reference": false,
+    "reference_opacity": 0.15
+  },
+  "ui_state": {
+    "collapsed_groups": {
+      "Actions": false,
+      "Collision": true,
+      "Gameplay": true,
+      "General": true,
+      "Preview": true,
+      "Secondary": true
+    },
+    "version": "tab_menu_layout_v1"
+  },
+  "version": "1.0.0"
+}
